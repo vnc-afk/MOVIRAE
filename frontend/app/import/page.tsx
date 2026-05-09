@@ -34,7 +34,7 @@ export default function ImportExport() {
             <FileText className="h-5 w-5 text-primary" />
             <h1 className="font-display text-2xl font-bold text-foreground">Import / Export</h1>
           </div>
-          <p className="text-sm text-muted-foreground">Bring your data in from IMDb or export your CineLog lists.</p>
+          <p className="text-sm text-muted-foreground">Bring your data in from IMDb or export your MOVIRIE lists.</p>
         </motion.div>
 
         {/* Export */}

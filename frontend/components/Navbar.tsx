@@ -30,7 +30,7 @@ export function Navbar() {
         <div className="container flex items-center justify-between h-16 gap-4">
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
             <Film className="h-6 w-6 text-primary" />
-            <span className="font-display text-lg font-bold text-foreground">CineLog</span>
+            <span className="font-display text-lg font-bold text-foreground">MOVIRIE</span>
           </Link>
 
           {/* Desktop nav links */}

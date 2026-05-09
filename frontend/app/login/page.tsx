@@ -22,7 +22,7 @@ export default function LoginPage() {
       >
         <div className="flex items-center justify-center gap-2 mb-8">
           <Film className="h-7 w-7 text-primary" />
-          <span className="font-display text-xl font-bold text-foreground">CineLog</span>
+          <span className="font-display text-xl font-bold text-foreground">MOVIRIE</span>
         </div>
 
         <h1 className="font-display text-2xl font-bold text-foreground text-center">
