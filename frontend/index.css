@@ -1,0 +1,160 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 15% 96%;
+    --foreground: 220 20% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+
+    --primary: 36 90% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 12% 90%;
+    --secondary-foreground: 220 20% 15%;
+
+    --muted: 220 10% 92%;
+    --muted-foreground: 220 10% 45%;
+
+    --accent: 150 50% 40%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 12% 88%;
+    --input: 220 12% 88%;
+    --ring: 36 90% 50%;
+
+    --radius: 0.75rem;
+
+    --cinema-gradient: linear-gradient(135deg, hsl(220 20% 10%) 0%, hsl(220 15% 18%) 100%);
+    --card-shadow: 0 2px 16px -4px hsl(220 20% 10% / 0.08);
+    --card-shadow-hover: 0 8px 32px -8px hsl(220 20% 10% / 0.15);
+    --poster-shadow: 0 4px 24px -6px hsl(0 0% 0% / 0.3);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 10%;
+    --sidebar-primary: 36 90% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 12% 94%;
+    --sidebar-accent-foreground: 220 20% 10%;
+    --sidebar-border: 220 12% 88%;
+    --sidebar-ring: 36 90% 50%;
+  }
+
+  .dark {
+    --background: 220 20% 7%;
+    --foreground: 220 10% 92%;
+
+    --card: 220 18% 11%;
+    --card-foreground: 220 10% 92%;
+
+    --popover: 220 18% 11%;
+    --popover-foreground: 220 10% 92%;
+
+    --primary: 36 90% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 15% 16%;
+    --secondary-foreground: 220 10% 85%;
+
+    --muted: 220 15% 16%;
+    --muted-foreground: 220 10% 55%;
+
+    --accent: 150 50% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 36 90% 50%;
+
+    --cinema-gradient: linear-gradient(135deg, hsl(220 20% 4%) 0%, hsl(220 15% 10%) 100%);
+    --card-shadow: 0 2px 16px -4px hsl(0 0% 0% / 0.3);
+    --card-shadow-hover: 0 8px 32px -8px hsl(0 0% 0% / 0.5);
+    --poster-shadow: 0 4px 24px -6px hsl(0 0% 0% / 0.6);
+
+    --sidebar-background: 220 20% 7%;
+    --sidebar-foreground: 220 10% 92%;
+    --sidebar-primary: 36 90% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 14%;
+    --sidebar-accent-foreground: 220 10% 92%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 36 90% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: "Libre Baskerville", Georgia, serif;
+  }
+}
+
+@layer components {
+  .cinema-gradient {
+    background: var(--cinema-gradient);
+  }
+
+  .card-shadow {
+    box-shadow: var(--card-shadow);
+  }
+
+  .card-shadow-hover {
+    box-shadow: var(--card-shadow-hover);
+  }
+
+  .poster-shadow {
+    box-shadow: var(--poster-shadow);
+  }
+
+  .glass-surface {
+    @apply bg-card/80 backdrop-blur-xl border border-border/50;
+  }
+
+  .star-filled {
+    @apply text-primary;
+  }
+
+  .star-empty {
+    @apply text-muted-foreground/30;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Libre Baskerville", Georgia, serif;
+  }
+
+  .hover-lift {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--card-shadow-hover);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+  }
+}
