@@ -5,6 +5,17 @@ import poster4 from "@/assets/poster4.jpg";
 import poster5 from "@/assets/poster5.jpg";
 import poster6 from "@/assets/poster6.jpg";
 
+export type WatchPlatform = "Cinema" | "Netflix" | "Amazon Prime" | "Hulu" | "Disney+" | "Apple TV+" | "HBO Max" | "Blu-ray" | "DVD";
+export type WatchContext = "Solo" | "With Friends" | "Date Night" | "Family" | "Movie Club";
+export type Mood = "Thrilling" | "Relaxing" | "Romantic" | "Dark" | "Uplifting" | "Thought-Provoking" | "Fun" | "Intense";
+
+export interface WatchEntry {
+  platform: WatchPlatform;
+  context: WatchContext;
+  date: string;
+  mood: Mood;
+}
+
 export interface Movie {
   id: string;
   title: string;
@@ -19,6 +30,9 @@ export interface Movie {
   tags: string[];
   streamingOn: string[];
   runtime: number;
+  language: string;
+  country: string;
+  moods: Mood[];
 }
 
 export interface CastMember {
@@ -144,6 +158,7 @@ const castPool: CastMember[] = [
   { name: "Dev Patel", role: "Supporting", avatar: avatarUrl("dev") },
   { name: "Saoirse Ronan", role: "Lead", avatar: avatarUrl("saoirse") },
   { name: "Pedro Pascal", role: "Supporting", avatar: avatarUrl("pedro") },
+  
 ];
 
 const streamingPlatforms = ["Netflix", "Amazon Prime", "Hulu", "Disney+", "Apple TV+", "HBO Max"];
@@ -164,6 +179,9 @@ export const movies: Movie[] = [
     tags: ["atmospheric", "dark", "gripping"],
     streamingOn: ["Netflix", "Amazon Prime"],
     runtime: 142,
+    language: "English",
+    country: "USA",
+    moods: ["Thrilling", "Dark", "Intense"],
   },
   {
     id: "2",
@@ -179,6 +197,9 @@ export const movies: Movie[] = [
     tags: ["feel-good", "emotional", "visually-stunning"],
     streamingOn: ["Hulu", "Apple TV+"],
     runtime: 118,
+    language: "English",
+    country: "USA",
+    moods: ["Romantic", "Uplifting", "Relaxing"],
   },
   {
     id: "3",
@@ -194,6 +215,9 @@ export const movies: Movie[] = [
     tags: ["mind-bending", "visually-stunning", "slow-burn"],
     streamingOn: ["HBO Max"],
     runtime: 169,
+    language: "English",
+    country: "UK",
+    moods: ["Thought-Provoking", "Intense", "Thrilling"],
   },
   {
     id: "4",
@@ -209,6 +233,9 @@ export const movies: Movie[] = [
     tags: ["dark", "atmospheric", "slow-burn"],
     streamingOn: ["Amazon Prime", "Hulu"],
     runtime: 131,
+    language: "English",
+    country: "USA",
+    moods: ["Dark", "Intense", "Thought-Provoking"],
   },
   {
     id: "5",
@@ -224,6 +251,9 @@ export const movies: Movie[] = [
     tags: ["feel-good", "visually-stunning", "emotional"],
     streamingOn: ["Disney+", "Netflix"],
     runtime: 105,
+    language: "Japanese",
+    country: "Japan",
+    moods: ["Uplifting", "Fun", "Relaxing"],
   },
   {
     id: "6",
@@ -239,6 +269,9 @@ export const movies: Movie[] = [
     tags: ["action-packed", "gripping", "visually-stunning"],
     streamingOn: ["Apple TV+", "HBO Max"],
     runtime: 128,
+    language: "English",
+    country: "Australia",
+    moods: ["Fun", "Thrilling", "Intense"],
   },
 ];
 
@@ -324,12 +357,35 @@ export const messages: Message[] = [
   { id: "m4", from: users[0], text: "OK you've convinced me. Watching tonight! 🎬", date: "10:40 AM" },
 ];
 
+export const watchHistory: (WatchEntry & { movieId: string })[] = [
+  { movieId: "1", platform: "Cinema", context: "Date Night", date: "2025-03-10", mood: "Thrilling" },
+  { movieId: "2", platform: "Netflix", context: "Solo", date: "2025-02-14", mood: "Romantic" },
+  { movieId: "3", platform: "Cinema", context: "With Friends", date: "2025-01-20", mood: "Thought-Provoking" },
+  { movieId: "4", platform: "Amazon Prime", context: "Solo", date: "2024-10-31", mood: "Dark" },
+  { movieId: "5", platform: "Disney+", context: "Family", date: "2025-03-01", mood: "Uplifting" },
+  { movieId: "6", platform: "Apple TV+", context: "Movie Club", date: "2024-12-15", mood: "Fun" },
+];
+
+export interface FilterPreset {
+  id: string;
+  name: string;
+  filters: { moods?: Mood[]; genres?: string[]; minRuntime?: number; maxRuntime?: number };
+}
+
+export const savedFilterPresets: FilterPreset[] = [
+  { id: "fp1", name: "Cozy Night In", filters: { moods: ["Relaxing", "Uplifting"], maxRuntime: 120 } },
+  { id: "fp2", name: "Epic Cinema", filters: { moods: ["Intense", "Thrilling"], minRuntime: 140 } },
+  { id: "fp3", name: "Date Night Picks", filters: { moods: ["Romantic", "Fun"], genres: ["Romance"] } },
+];
+
 export const userStats = {
   totalWatched: 187,
   totalHours: 412,
   avgRating: 3.8,
   favoriteGenre: "Thriller",
   topDirector: "Denis Villeneuve",
+  longestStreak: 14,
+  countriesExplored: 12,
   monthlyBreakdown: [
     { month: "Jan", count: 12 },
     { month: "Feb", count: 15 },
@@ -360,6 +416,41 @@ export const userStats = {
     { stars: 4, count: 85 },
     { stars: 5, count: 47 },
   ],
+  moodBreakdown: [
+    { mood: "Thrilling", count: 45 },
+    { mood: "Relaxing", count: 28 },
+    { mood: "Thought-Provoking", count: 35 },
+    { mood: "Dark", count: 22 },
+    { mood: "Uplifting", count: 30 },
+    { mood: "Fun", count: 18 },
+    { mood: "Romantic", count: 9 },
+  ],
+  platformBreakdown: [
+    { platform: "Cinema", count: 24 },
+    { platform: "Netflix", count: 52 },
+    { platform: "Amazon Prime", count: 31 },
+    { platform: "HBO Max", count: 28 },
+    { platform: "Disney+", count: 18 },
+    { platform: "Apple TV+", count: 15 },
+    { platform: "Hulu", count: 12 },
+    { platform: "Blu-ray", count: 7 },
+  ],
+  contextBreakdown: [
+    { context: "Solo", count: 98 },
+    { context: "With Friends", count: 42 },
+    { context: "Date Night", count: 18 },
+    { context: "Family", count: 15 },
+    { context: "Movie Club", count: 14 },
+  ],
+  weekdayBreakdown: [
+    { day: "Mon", count: 18 },
+    { day: "Tue", count: 15 },
+    { day: "Wed", count: 20 },
+    { day: "Thu", count: 16 },
+    { day: "Fri", count: 35 },
+    { day: "Sat", count: 48 },
+    { day: "Sun", count: 35 },
+  ],
 };
 
 export function getSimilarMovies(movieId: string): Movie[] {
@@ -376,3 +467,6 @@ export function getRecommendations(): Movie[] {
 
 export const allTags = [...new Set(movies.flatMap((m) => m.tags))];
 export const allGenres = [...new Set(movies.map((m) => m.genre))];
+export const allMoods: Mood[] = ["Thrilling", "Relaxing", "Romantic", "Dark", "Uplifting", "Thought-Provoking", "Fun", "Intense"];
+export const allLanguages = [...new Set(movies.map((m) => m.language))];
+export const allCountries = [...new Set(movies.map((m) => m.country))];
