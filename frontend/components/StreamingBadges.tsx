@@ -24,16 +24,20 @@ export function StreamingBadges({ platforms }: StreamingBadgesProps) {
           Available on
         </span>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {platforms.map((p) => (
-          <span
-            key={p}
-            className={`text-xs px-2.5 py-1 rounded-full border ${platformColors[p] || "bg-secondary text-foreground border-border"}`}
-          >
-            {p}
-          </span>
-        ))}
-      </div>
+      {platforms.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {platforms.map((p) => (
+            <span
+              key={p}
+              className={`text-xs px-2.5 py-1 rounded-full border ${platformColors[p] || "bg-secondary text-foreground border-border"}`}
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">No streaming availability found.</p>
+      )}
     </div>
   );
 }
