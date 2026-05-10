@@ -1,10 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { motion } from "framer-motion";
-import { BarChart3, Clock, Film, Star, TrendingUp, Award, Calendar } from "lucide-react";
-import { userStats, movies } from "@/data/mockData";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-
+import { BarChart3, Clock, Film, Star, TrendingUp, Award, Calendar, Monitor, Users, Sparkles, MapPin } from "lucide-react";
+import { userStats } from "@/data/mockData";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 const COLORS = [
   "hsl(36, 90%, 50%)",
   "hsl(150, 50%, 40%)",
@@ -13,40 +13,52 @@ const COLORS = [
   "hsl(280, 60%, 50%)",
   "hsl(45, 80%, 50%)",
   "hsl(180, 50%, 45%)",
+  "hsl(330, 60%, 50%)",
 ];
+
+const tooltipStyle = {
+  backgroundColor: "hsl(var(--card))",
+  border: "1px solid hsl(var(--border))",
+  borderRadius: "8px",
+  fontSize: "12px",
+};
+
 
 export default function UserStats() {
   return (
     <div className="pb-20 md:pb-0">
       <div className="container py-8 space-y-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <h1 className="font-display text-2xl font-bold text-foreground">
-              Your Stats
-            </h1>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <h1 className="font-display text-2xl font-bold text-foreground">Your Stats</h1>
+            </div>
+            <Link
+              href="/wrapped"
+              className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors font-medium flex items-center gap-1"
+            >
+              <Sparkles className="h-3 w-3" /> View Wrapped
+            </Link>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Your year in review — films watched, genres explored, time spent.
-          </p>
+          <p className="text-sm text-muted-foreground">Your year in review — films, habits, moods, and more.</p>
         </motion.div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {[
             { icon: Film, label: "Films Watched", value: userStats.totalWatched.toString() },
             { icon: Clock, label: "Hours Watched", value: `${userStats.totalHours}h` },
             { icon: Star, label: "Avg Rating", value: userStats.avgRating.toFixed(1) },
             { icon: Award, label: "Fave Genre", value: userStats.favoriteGenre },
+            { icon: TrendingUp, label: "Longest Streak", value: `${userStats.longestStreak}d` },
+            { icon: MapPin, label: "Countries", value: userStats.countriesExplored.toString() },
           ].map(({ icon: Icon, label, value }, i) => (
             <motion.div
               key={label}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
+              transition={{ delay: i * 0.08 }}
               className="rounded-xl bg-card p-5 card-shadow text-center"
             >
               <Icon className="h-5 w-5 text-primary mx-auto mb-2" />
@@ -60,23 +72,14 @@ export default function UserStats() {
         <div className="rounded-xl bg-card p-6 card-shadow">
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="h-4 w-4 text-primary" />
-            <h2 className="font-display text-lg font-bold text-foreground">
-              Films Per Month
-            </h2>
+            <h2 className="font-display text-lg font-bold text-foreground">Films Per Month</h2>
           </div>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={userStats.monthlyBreakdown}>
                 <XAxis dataKey="month" tickLine={false} axisLine={false} className="text-xs" />
                 <YAxis tickLine={false} axisLine={false} className="text-xs" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                />
+                <Tooltip contentStyle={tooltipStyle} />
                 <Bar dataKey="count" fill="hsl(36, 90%, 50%)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -88,58 +91,130 @@ export default function UserStats() {
           <div className="rounded-xl bg-card p-6 card-shadow">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="h-4 w-4 text-primary" />
-              <h2 className="font-display text-lg font-bold text-foreground">
-                Genre Breakdown
-              </h2>
+              <h2 className="font-display text-lg font-bold text-foreground">Genre Breakdown</h2>
             </div>
             <div className="h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={userStats.genreBreakdown}
-                    dataKey="count"
-                    nameKey="genre"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    innerRadius={40}
-                    paddingAngle={3}
-                  >
+                  <Pie data={userStats.genreBreakdown} dataKey="count" nameKey="genre" cx="50%" cy="50%" outerRadius={80} innerRadius={40} paddingAngle={3}>
                     {userStats.genreBreakdown.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                  />
+                   <Tooltip contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
             <div className="flex flex-wrap gap-2 mt-2">
               {userStats.genreBreakdown.map((g, i) => (
                 <span key={g.genre} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                  />
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
                   {g.genre} ({g.pct}%)
                 </span>
               ))}
             </div>
           </div>
 
+          {/* Mood radar */}
+          <div className="rounded-xl bg-card p-6 card-shadow">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-lg font-bold text-foreground">Mood Patterns</h2>
+            </div>
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={userStats.moodBreakdown.map((m) => ({ mood: m.mood, value: m.count }))}>
+                  <PolarGrid stroke="hsl(var(--border))" />
+                  <PolarAngleAxis dataKey="mood" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+                  <Radar dataKey="value" stroke="hsl(36, 90%, 50%)" fill="hsl(36, 90%, 50%)" fillOpacity={0.25} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Platform breakdown */}
+          <div className="rounded-xl bg-card p-6 card-shadow">
+            <div className="flex items-center gap-2 mb-4">
+              <Monitor className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-lg font-bold text-foreground">Where You Watch</h2>
+            </div>
+            <div className="space-y-2.5">
+              {userStats.platformBreakdown.map((p, i) => {
+                const maxCount = Math.max(...userStats.platformBreakdown.map((x) => x.count));
+                return (
+                  <div key={p.platform} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-20 text-right truncate">{p.platform}</span>
+                    <div className="flex-1 h-5 bg-secondary rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(p.count / maxCount) * 100}%` }}
+                        transition={{ duration: 0.6, delay: i * 0.08 }}
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-6">{p.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Watch context */}
+          <div className="rounded-xl bg-card p-6 card-shadow">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-lg font-bold text-foreground">Who You Watch With</h2>
+            </div>
+            <div className="space-y-2.5">
+              {userStats.contextBreakdown.map((c, i) => {
+                const maxCount = Math.max(...userStats.contextBreakdown.map((x) => x.count));
+                return (
+                  <div key={c.context} className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-20 text-right truncate">{c.context}</span>
+                    <div className="flex-1 h-5 bg-secondary rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${(c.count / maxCount) * 100}%` }}
+                        transition={{ duration: 0.6, delay: i * 0.08 }}
+                        className="h-full bg-accent rounded-full"
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-6">{c.count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Weekday + Rating distribution */}
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="rounded-xl bg-card p-6 card-shadow">
+            <div className="flex items-center gap-2 mb-4">
+              <Calendar className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-lg font-bold text-foreground">Viewing Rhythm</h2>
+            </div>
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={userStats.weekdayBreakdown}>
+                  <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="count" fill="hsl(150, 50%, 40%)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+
           {/* Rating distribution */}
           <div className="rounded-xl bg-card p-6 card-shadow">
             <div className="flex items-center gap-2 mb-4">
               <Star className="h-4 w-4 text-primary" />
-              <h2 className="font-display text-lg font-bold text-foreground">
-                Rating Distribution
-              </h2>
+              <h2 className="font-display text-lg font-bold text-foreground">Rating Distribution</h2>
             </div>
             <div className="space-y-3">
               {userStats.ratingDistribution.map((d) => {
@@ -147,9 +222,7 @@ export default function UserStats() {
                 const pct = (d.count / maxCount) * 100;
                 return (
                   <div key={d.stars} className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-6 text-right">
-                      {d.stars}★
-                    </span>
+                    <span className="text-xs text-muted-foreground w-6 text-right">{d.stars}★</span>
                     <div className="flex-1 h-6 bg-secondary rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
@@ -158,9 +231,7 @@ export default function UserStats() {
                         className="h-full bg-primary rounded-full"
                       />
                     </div>
-                    <span className="text-xs text-muted-foreground w-8">
-                      {d.count}
-                    </span>
+                    <span className="text-xs text-muted-foreground w-8">{d.count}</span>
                   </div>
                 );
               })}
