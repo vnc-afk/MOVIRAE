@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Film, Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift } from "lucide-react";
+import { Film, Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus } from "lucide-react";
 import { SearchInput } from "./SearchInput";
 import { ThemeToggle } from "./ThemeToggle";
 import {
@@ -19,6 +19,7 @@ const navLinks = [
   { label: "Groups", path: "/groups", icon: Users },
   { label: "Stats", path: "/stats", icon: BarChart3 },
   { label: "Wrapped", path: "/wrapped", icon: Gift },
+  { label: "Shared Lists", path: "/shared-lists", icon: ListPlus },
 ];
 
 export function Navbar() {
