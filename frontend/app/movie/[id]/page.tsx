@@ -1,16 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, Eye, Heart, ListPlus, Play } from "lucide-react";
-import { use, useState } from "react";
-import { movies, getSimilarMovies } from "@/data/mockData";
+import { use } from "react";
+import { getMovieDetails, getSimilarMovies } from "@/lib/tmdb";
+import { getStreamingPlatforms } from "@/lib/watchmode";
+import type { Movie } from "@/data/mockData";
 import { StarRating } from "@/components/StarRating";
 import { CastCarousel } from "@/components/CastCarousel";
 import { ReviewCard } from "@/components/ReviewCard";
 import { TrailerModal } from "@/components/TrailerModal";
 import { StreamingBadges } from "@/components/StreamingBadges";
 import { SimilarMovies } from "@/components/SimilarMovies";
+import { HowYouWatched } from "@/components/HowYouWatched";
 import { Button } from "@/components/ui/button";
 
 type MovieDetailPageProps = {
@@ -21,8 +25,47 @@ type MovieDetailPageProps = {
 
 export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const resolvedParams = use(params);
-  const movie = movies.find((m) => m.id === resolvedParams.id);
+  const [movie, setMovie] = useState<Movie | null>(null);
+  const [similar, setSimilar] = useState<Movie[]>([]);
+  const [streamingOn, setStreamingOn] = useState<string[]>([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchMovieData() {
+      try {
+        const movieData = await getMovieDetails(resolvedParams.id);
+        if (movieData) {
+          setMovie(movieData);
+
+          // Fetch similar movies
+          const similarMovies = await getSimilarMovies(resolvedParams.id);
+          setSimilar(similarMovies.slice(0, 6));
+
+          // Fetch streaming platforms
+          const platforms = await getStreamingPlatforms(resolvedParams.id);
+          setStreamingOn(platforms);
+
+          // Update movie with streaming info
+          movieData.streamingOn = platforms;
+        }
+      } catch (error) {
+        console.error("Failed to fetch movie data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchMovieData();
+  }, [resolvedParams.id]);
+
+  if (loading) {
+    return (
+      <div className="container py-20 text-center">
+        <p className="text-muted-foreground">Loading movie details...</p>
+      </div>
+    );
+  }
 
   if (!movie) {
     return (
@@ -34,8 +77,6 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       </div>
     );
   }
-
-  const similar = getSimilarMovies(movie.id);
 
   return (
     <div className="pb-20 md:pb-0">
@@ -149,6 +190,11 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
             ))}
           </div>
         </section>
+
+        <section className="mt-10 max-w-md">
+          <HowYouWatched movieTitle={movie.title} />
+        </section>
+
 
         <SimilarMovies movies={similar} />
       </div>
