@@ -17,6 +17,7 @@ interface TMDBMovie {
   director?: string;
   credits?: {
     cast: Array<{ name: string; character: string; profile_path: string }>;
+    crew?: Array<{ name: string; job: string; department: string }>;
   };
 }
 
@@ -191,6 +192,12 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
         : `https://api.dicebear.com/7.x/avataaars/svg?seed=${actor.name}`,
     }));
 
+  // Extract director from crew
+  const director =
+    tmdbMovie.credits?.crew
+      ?.find((member: any) => member.job === "Director")
+      ?.name || "Unknown";
+
   const year = new Date(tmdbMovie.release_date).getFullYear() || new Date().getFullYear();
 
   return {
@@ -203,7 +210,7 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
       : "Unknown",
     poster: posterUrl,
     synopsis: tmdbMovie.overview || "No synopsis available",
-    director: "Director info unavailable", // TMDB doesn't include director in standard response
+    director,
     cast,
     reviews: [], // Reviews will be empty from API, user-generated reviews can be stored separately
     tags: tmdbMovie.genres?.map((g: any) => g.name) || [],

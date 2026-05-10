@@ -47,6 +47,59 @@ function buildRegionQuery(region?: string) {
   return region ? `&regions=${encodeURIComponent(region)}` : "";
 }
 
+/**
+ * Fetch with timeout support
+ */
+async function fetchWithTimeout(url: string, timeout = 8000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Retry helper for temporary server errors (502, 504)
+ */
+async function fetchWithRetry(
+  url: string,
+  maxRetries = 2,
+  timeout = 8000
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetchWithTimeout(url, timeout);
+      
+      // Success or non-retryable error
+      if (response.ok || ![502, 504].includes(response.status)) {
+        return response;
+      }
+
+      // Retryable error (502, 504) - only retry if not the last attempt
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 500; // 500ms, 1s, 2s...
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      // Network or timeout error - retry if not the last attempt
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 500;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("Max retries exceeded");
+}
+
 async function getTmdbWatchProviders(tmdbId: string, region = "US") {
   if (!TMDB_API_KEY) {
     return [];
@@ -84,16 +137,17 @@ export async function getStreamingPlatforms(
   }
 
   try {
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${WATCHMODE_BASE_URL}/search/?apiKey=${WATCHMODE_API_KEY}&search_field=tmdb_movie_id&search_value=${encodeURIComponent(tmdbId)}&types=movie`
     );
 
     if (!response.ok) {
-      console.error(
-        "WatchMode search failed:",
-        response.status,
-        response.statusText
-      );
+      // Only log if it's not a temporary error or after retries are exhausted
+      if (![502, 504].includes(response.status)) {
+        console.warn(
+          "WatchMode search unavailable (status: " + response.status + "), using TMDB fallback"
+        );
+      }
       return await getTmdbWatchProviders(tmdbId, region);
     }
 
@@ -104,7 +158,7 @@ export async function getStreamingPlatforms(
       return await getTmdbWatchProviders(tmdbId, region);
     }
 
-    const sourcesResponse = await fetch(
+    const sourcesResponse = await fetchWithRetry(
       `${WATCHMODE_BASE_URL}/title/${watchModeTitleId}/sources/?apiKey=${WATCHMODE_API_KEY}${buildRegionQuery(region)}`
     );
 
@@ -124,7 +178,7 @@ export async function getStreamingPlatforms(
     const results = Array.from(platforms);
     return results.length > 0 ? results : await getTmdbWatchProviders(tmdbId, region);
   } catch (error) {
-    console.error("Failed to fetch streaming platforms:", error);
+    console.warn("Streaming platform fetch failed, using TMDB fallback");
     return await getTmdbWatchProviders(tmdbId, region);
   }
 }
@@ -142,7 +196,7 @@ export async function getAllSources(
   }
 
   try {
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${WATCHMODE_BASE_URL}/title/${toWatchModeTitleId(tmdbId)}/sources/?apiKey=${WATCHMODE_API_KEY}${buildRegionQuery(region)}`
     );
 
@@ -150,7 +204,7 @@ export async function getAllSources(
 
     return await response.json();
   } catch (error) {
-    console.error("Failed to fetch all sources:", error);
+    console.warn("Failed to fetch all sources, returning empty list");
     return [];
   }
 }
@@ -167,7 +221,7 @@ export async function getAvailableRegions(): Promise<
   }
 
   try {
-    const response = await fetch(
+    const response = await fetchWithRetry(
       `${WATCHMODE_BASE_URL}/regions/?apiKey=${WATCHMODE_API_KEY}`
     );
 
@@ -175,7 +229,7 @@ export async function getAvailableRegions(): Promise<
 
     return await response.json();
   } catch (error) {
-    console.error("Failed to fetch regions:", error);
+    console.warn("Failed to fetch regions, returning empty list");
     return [];
   }
 }
