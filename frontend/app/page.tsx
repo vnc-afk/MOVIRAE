@@ -1,13 +1,34 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { MovieCard } from "@/components/MovieCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { SearchInput } from "@/components/SearchInput";
-import { movies, activityFeed } from "@/data/mockData";
+import { activityFeed } from "@/data/mockData";
+import { getTrendingMovies } from "@/lib/tmdb";
+import type { Movie } from "@/data/mockData";
 import heroBackdrop from "@/assets/hero-backdrop.jpg";
 
 export default function Home() {
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchTrending() {
+      try {
+        const trendingMovies = await getTrendingMovies();
+        setMovies(trendingMovies);
+      } catch (error) {
+        console.error("Failed to fetch trending movies:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchTrending();
+  }, []);
+
   return (
     <div className="pb-20 md:pb-0">
       {/* Hero section */}
@@ -59,11 +80,22 @@ export default function Home() {
               See all
             </button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {movies.map((movie, i) => (
-              <MovieCard key={movie.id} movie={movie} index={i} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="bg-secondary h-48 rounded-lg animate-pulse"
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {movies.map((movie, i) => (
+                <MovieCard key={movie.id} movie={movie} index={i} />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Activity feed */}
