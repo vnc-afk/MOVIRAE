@@ -33,11 +33,15 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
             key={item.id}
             className="flex gap-3 rounded-lg bg-card p-4 card-shadow hover:card-shadow-hover transition-shadow duration-300"
           >
-            <img
-              src={item.user.avatar}
-              alt={item.user.displayName}
-              className="h-9 w-9 rounded-full bg-muted flex-shrink-0"
-            />
+            {item.user.avatar ? (
+              <img
+                src={item.user.avatar}
+                alt={item.user.displayName}
+                className="h-9 w-9 rounded-full bg-muted flex-shrink-0"
+              />
+            ) : (
+              <div className="h-9 w-9 rounded-full bg-muted flex-shrink-0" />
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm">
                 <span className="font-semibold text-foreground">
@@ -68,11 +72,15 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
                 <span>{item.date}</span>
               </div>
             </div>
-            <img
-              src={item.movie.poster}
-              alt={item.movie.title}
-              className="h-16 w-11 rounded object-cover flex-shrink-0 poster-shadow"
-            />
+            {item.movie.poster ? (
+              <img
+                src={item.movie.poster}
+                alt={item.movie.title}
+                className="h-16 w-11 rounded object-cover flex-shrink-0 poster-shadow"
+              />
+            ) : (
+              <div className="h-16 w-11 rounded bg-muted flex-shrink-0 poster-shadow" />
+            )}
           </div>
         );
       })}

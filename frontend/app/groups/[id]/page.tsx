@@ -158,7 +158,11 @@ export default function GroupDetail() {
           </Link>
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col md:flex-row md:items-center gap-6">
-            <img src={group.avatar} alt={group.name} className="h-24 w-24 rounded-2xl bg-muted ring-2 ring-primary/20" />
+            {group.avatar ? (
+              <img src={group.avatar} alt={group.name} className="h-24 w-24 rounded-2xl bg-muted ring-2 ring-primary/20" />
+            ) : (
+              <div className="h-24 w-24 rounded-2xl bg-muted ring-2 ring-primary/20" />
+            )}
             <div className="flex-1 min-w-0">
               <h1 className="font-display text-3xl font-bold text-foreground">{group.name}</h1>
               <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{group.description}</p>
@@ -203,7 +207,11 @@ export default function GroupDetail() {
                 return (
                   <motion.div key={discussion.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="rounded-xl bg-card p-5 card-shadow hover:card-shadow-hover transition-shadow">
                     <div className="flex items-start gap-3">
-                      <img src={discussion.author.avatar} alt={discussion.author.displayName} className="h-10 w-10 rounded-full bg-muted" />
+                      {discussion.author.avatar ? (
+                        <img src={discussion.author.avatar} alt={discussion.author.displayName} className="h-10 w-10 rounded-full bg-muted" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-muted" />
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium text-foreground">{discussion.author.displayName}</span>
@@ -214,7 +222,11 @@ export default function GroupDetail() {
                         <p className="text-sm text-muted-foreground mt-1">{discussion.body}</p>
                         {movie && (
                           <Link href={`/movie/${movie.id}`} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-muted/50 p-2 hover:bg-muted transition-colors">
-                            <img src={movie.poster} alt={movie.title} className="h-10 w-7 rounded object-cover" />
+                            {movie.poster ? (
+                              <img src={movie.poster} alt={movie.title} className="h-10 w-7 rounded object-cover" />
+                            ) : (
+                              <div className="h-10 w-7 rounded bg-muted" />
+                            )}
                             <span className="text-xs font-medium text-foreground">{movie.title} ({movie.year})</span>
                           </Link>
                         )}
@@ -240,7 +252,11 @@ export default function GroupDetail() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {group.sharedList.map((movie) => (
                   <Link key={movie.id} href={`/movie/${movie.id}`} className="block">
-                    <img src={movie.poster} alt={movie.title} className="w-full rounded-lg object-cover poster-shadow" />
+                    {movie.poster ? (
+                      <img src={movie.poster} alt={movie.title} className="w-full rounded-lg object-cover poster-shadow" />
+                    ) : (
+                      <div className="w-full rounded-lg h-28 bg-muted poster-shadow" />
+                    )}
                     <p className="mt-2 text-xs text-foreground truncate">{movie.title}</p>
                   </Link>
                 ))}
@@ -251,7 +267,11 @@ export default function GroupDetail() {
           <TabsContent value="members" className="space-y-3">
             {group.members.map((member) => (
               <div key={member.id} className="rounded-xl bg-card p-4 card-shadow flex items-center gap-3">
-                <img src={member.avatar} alt={member.displayName} className="h-10 w-10 rounded-full bg-muted" />
+                    {member.avatar ? (
+                      <img src={member.avatar} alt={member.displayName} className="h-10 w-10 rounded-full bg-muted" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-muted" />
+                    )}
                 <div>
                   <p className="font-semibold text-foreground">{member.displayName}</p>
                   <p className="text-xs text-muted-foreground">@{member.username}</p>

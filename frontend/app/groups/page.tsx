@@ -139,7 +139,11 @@ export default function Groups() {
               <motion.div key={group.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="rounded-xl bg-card p-6 card-shadow hover:card-shadow-hover transition-shadow duration-300">
                 <Link href={`/groups/${group.id}`} className="block">
                   <div className="flex items-start gap-4">
-                    <img src={group.avatar} alt={group.name} className="h-14 w-14 rounded-xl bg-muted" />
+                    {group.avatar ? (
+                      <img src={group.avatar} alt={group.name} className="h-14 w-14 rounded-xl bg-muted" />
+                    ) : (
+                      <div className="h-14 w-14 rounded-xl bg-muted" />
+                    )}
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground hover:text-primary transition-colors">{group.name}</h3>
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{group.description}</p>
@@ -154,7 +158,11 @@ export default function Groups() {
                   <div className="flex items-center mt-4">
                     <div className="flex -space-x-2">
                       {group.members.slice(0, 3).map((member) => (
-                        <img key={member.id} src={member.avatar} alt={member.displayName} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
+                        member.avatar ? (
+                          <img key={member.id} src={member.avatar} alt={member.displayName} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
+                        ) : (
+                          <div key={member.id} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
+                        )
                       ))}
                     </div>
                     {group.memberCount > 3 && <span className="ml-2 text-xs text-muted-foreground">+{group.memberCount - 3} more</span>}
@@ -163,7 +171,11 @@ export default function Groups() {
                   {group.sharedList.length > 0 && (
                     <div className="flex gap-2 mt-4">
                       {group.sharedList.slice(0, 3).map((movie) => (
-                        <img key={movie.id} src={movie.poster} alt={movie.title} className="h-16 w-11 rounded object-cover poster-shadow" />
+                        movie.poster ? (
+                          <img key={movie.id} src={movie.poster} alt={movie.title} className="h-16 w-11 rounded object-cover poster-shadow" />
+                        ) : (
+                          <div key={movie.id} className="h-16 w-11 rounded bg-muted poster-shadow" />
+                        )
                       ))}
                     </div>
                   )}
