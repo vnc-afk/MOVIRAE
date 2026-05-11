@@ -472,6 +472,95 @@ async function getUserWatchlist(userId: string) {
   return watchlist.map((item) => item.tmdbId);
 }
 
+async function getUserFavorites(userId: string) {
+  const favorites = await prisma.userFavoriteMovie.findMany({
+    where: { userId },
+    orderBy: { addedAt: "desc" },
+  });
+  return favorites.map((item) => item.tmdbId);
+}
+
+async function getUserWatched(userId: string) {
+  const key = `user-watched-${userId}`;
+  const data = await prisma.appData.findUnique({ where: { key } });
+  if (!data?.value || !Array.isArray(data.value)) {
+    return [];
+  }
+  return data.value.filter((item: unknown) => typeof item === "string").map(String);
+}
+
+function extractTogglePayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const movieId = typeof (payload as any).movieId === "string" ? (payload as any).movieId : undefined;
+  const active = typeof (payload as any).active === "boolean" ? (payload as any).active : undefined;
+
+  if (!movieId || typeof active !== "boolean") {
+    return null;
+  }
+
+  return { movieId, active };
+}
+
+async function setUserWatchlist(movieId: string, active: boolean, userId: string) {
+  if (active) {
+    try {
+      await prisma.userWatchlistItem.create({
+        data: { userId, tmdbId: movieId },
+      });
+    } catch (error) {
+      // Ignore unique constraint errors when item already exists.
+    }
+  } else {
+    await prisma.userWatchlistItem.deleteMany({
+      where: { userId, tmdbId: movieId },
+    });
+  }
+
+  return getUserWatchlist(userId);
+}
+
+async function setUserFavorites(movieId: string, active: boolean, userId: string) {
+  if (active) {
+    try {
+      await prisma.userFavoriteMovie.create({
+        data: { userId, tmdbId: movieId },
+      });
+    } catch (error) {
+      // Ignore unique constraint errors when item already exists.
+    }
+  } else {
+    await prisma.userFavoriteMovie.deleteMany({
+      where: { userId, tmdbId: movieId },
+    });
+  }
+
+  return getUserFavorites(userId);
+}
+
+async function setUserWatched(movieId: string, active: boolean, userId: string) {
+  const key = `user-watched-${userId}`;
+  const current = await getUserWatched(userId);
+  const normalized = new Set(current);
+
+  if (active) {
+    normalized.add(movieId);
+  } else {
+    normalized.delete(movieId);
+  }
+
+  const value = Array.from(normalized);
+  await prisma.appData.upsert({
+    where: { key },
+    create: { key, value },
+    update: { value },
+  });
+
+  return value;
+}
+
 async function getUserReviews(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
   if (!currentUser) return [];
 
@@ -515,6 +604,10 @@ export async function GET(
       return NextResponse.json({ value: await getUserMessages(currentUser) });
     case key === "user-watchlist-current":
       return NextResponse.json({ value: currentUser ? await getUserWatchlist(currentUser.id) : [] });
+    case key === "user-watched-current":
+      return NextResponse.json({ value: currentUser ? await getUserWatched(currentUser.id) : [] });
+    case key === "user-favorites-current":
+      return NextResponse.json({ value: currentUser ? await getUserFavorites(currentUser.id) : [] });
     case key.startsWith("user-watchlist-"):
       return NextResponse.json({ value: await getUserWatchlist(key.replace("user-watchlist-", "")) });
     case key === "user-reviews-current":
@@ -549,6 +642,27 @@ export async function PUT(
       return NextResponse.json({ value: await setUserNotifications(payload, currentUser) });
     case key === "user-messages":
       return NextResponse.json({ value: await setUserMessages(payload, currentUser) });
+    case key === "user-watchlist-current": {
+      const togglePayload = extractTogglePayload(payload);
+      if (!togglePayload) {
+        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      }
+      return NextResponse.json({ value: await setUserWatchlist(togglePayload.movieId, togglePayload.active, currentUser.id) });
+    }
+    case key === "user-favorites-current": {
+      const togglePayload = extractTogglePayload(payload);
+      if (!togglePayload) {
+        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      }
+      return NextResponse.json({ value: await setUserFavorites(togglePayload.movieId, togglePayload.active, currentUser.id) });
+    }
+    case key === "user-watched-current": {
+      const togglePayload = extractTogglePayload(payload);
+      if (!togglePayload) {
+        return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+      }
+      return NextResponse.json({ value: await setUserWatched(togglePayload.movieId, togglePayload.active, currentUser.id) });
+    }
     default:
       return NextResponse.json({ error: "Unknown or read-only data key" }, { status: 400 });
   }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { ArrowLeft, Eye, Heart, ListPlus, Play } from "lucide-react";
 import { use } from "react";
@@ -25,11 +26,16 @@ type MovieDetailPageProps = {
 
 export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const resolvedParams = use(params);
+  const { data: session } = useSession();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [similar, setSimilar] = useState<Movie[]>([]);
   const [streamingOn, setStreamingOn] = useState<string[]>([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isWatched, setIsWatched] = useState(false);
+  const [isWatchlist, setIsWatchlist] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+  const [buttonLoading, setButtonLoading] = useState({ watched: false, watchlist: false, liked: false });
 
   useEffect(() => {
     async function fetchMovieData() {
@@ -58,6 +64,88 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
     fetchMovieData();
   }, [resolvedParams.id]);
+
+  useEffect(() => {
+    if (!movie) {
+      return;
+    }
+
+    const movieId = movie.id;
+
+    async function fetchUserMovieState() {
+      try {
+        const responses = await Promise.all([
+          fetch("/api/data/user-watchlist-current"),
+          fetch("/api/data/user-favorites-current"),
+          fetch("/api/data/user-watched-current"),
+        ]);
+
+        const data = await Promise.all(responses.map(async (response) => {
+          if (!response.ok) {
+            return [] as string[];
+          }
+          const json = await response.json().catch(() => null);
+          return Array.isArray(json?.value) ? json.value : [];
+        }));
+
+        const [watchlistIds, favoriteIds, watchedIds] = data;
+        setIsWatchlist(watchlistIds.includes(movieId));
+        setIsLiked(favoriteIds.includes(movieId));
+        setIsWatched(watchedIds.includes(movieId));
+      } catch (error) {
+        console.error("Failed to load movie action state:", error);
+      }
+    }
+
+    fetchUserMovieState();
+  }, [movie?.id, session?.user?.email]);
+
+  async function updateMovieAction(key: string, active: boolean) {
+    const response = await fetch(`/api/data/${key}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ movieId: movie?.id, active }),
+    });
+
+    if (!response.ok) {
+      const json = await response.json().catch(() => null);
+      console.error("Movie action failed:", json?.error || response.statusText);
+      return null;
+    }
+
+    const json = await response.json().catch(() => null);
+    return Array.isArray(json?.value) ? json.value : null;
+  }
+
+  const handleToggleWatchlist = async () => {
+    if (!movie) return;
+    setButtonLoading((prev) => ({ ...prev, watchlist: true }));
+    const value = await updateMovieAction("user-watchlist-current", !isWatchlist);
+    setButtonLoading((prev) => ({ ...prev, watchlist: false }));
+    if (Array.isArray(value)) {
+      setIsWatchlist(value.includes(movie.id));
+    }
+  };
+
+  const handleToggleLiked = async () => {
+    if (!movie) return;
+    setButtonLoading((prev) => ({ ...prev, liked: true }));
+    const value = await updateMovieAction("user-favorites-current", !isLiked);
+    setButtonLoading((prev) => ({ ...prev, liked: false }));
+    if (Array.isArray(value)) {
+      setIsLiked(value.includes(movie.id));
+    }
+  };
+
+  const handleToggleWatched = async () => {
+    if (!movie) return;
+    setButtonLoading((prev) => ({ ...prev, watched: true }));
+    const value = await updateMovieAction("user-watched-current", !isWatched);
+    setButtonLoading((prev) => ({ ...prev, watched: false }));
+    if (Array.isArray(value)) {
+      setIsWatched(value.includes(movie.id));
+    }
+  };
 
   if (loading) {
     return (
@@ -160,14 +248,29 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
               <Button onClick={() => setTrailerOpen(true)} className="gap-2">
                 <Play className="h-4 w-4" /> Watch Trailer
               </Button>
-              <Button variant="secondary" className="gap-2">
-                <Eye className="h-4 w-4" /> Watched
+              <Button
+                variant="secondary"
+                className={`gap-2 ${isWatched ? "bg-primary text-primary-foreground" : ""}`}
+                onClick={handleToggleWatched}
+                disabled={!session?.user?.email || buttonLoading.watched}
+              >
+                <Eye className="h-4 w-4" /> {isWatched ? "Watched" : "Mark Watched"}
               </Button>
-              <Button variant="secondary" className="gap-2">
-                <ListPlus className="h-4 w-4" /> Watchlist
+              <Button
+                variant="secondary"
+                className={`gap-2 ${isWatchlist ? "bg-primary text-primary-foreground" : ""}`}
+                onClick={handleToggleWatchlist}
+                disabled={!session?.user?.email || buttonLoading.watchlist}
+              >
+                <ListPlus className="h-4 w-4" /> {isWatchlist ? "In Watchlist" : "Watchlist"}
               </Button>
-              <Button variant="secondary" className="gap-2">
-                <Heart className="h-4 w-4" /> Like
+              <Button
+                variant="secondary"
+                className={`gap-2 ${isLiked ? "bg-primary text-primary-foreground" : ""}`}
+                onClick={handleToggleLiked}
+                disabled={!session?.user?.email || buttonLoading.liked}
+              >
+                <Heart className="h-4 w-4" /> {isLiked ? "Liked" : "Like"}
               </Button>
             </div>
 
