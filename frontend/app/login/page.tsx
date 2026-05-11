@@ -15,6 +15,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl") || "/";
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -43,11 +45,15 @@ export default function LoginPage() {
         email: email.trim(),
         password,
         redirect: false,
+        callbackUrl,
       });
 
       if (result?.error) {
         setError("Invalid email or password.");
+        return;
       }
+
+      window.location.href = callbackUrl;
     } catch (signupError) {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -146,7 +152,7 @@ export default function LoginPage() {
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => signIn("google")}
+            onClick={() => signIn("google", { callbackUrl })}
             className="flex-1 rounded-lg border border-border bg-secondary py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
             disabled={isLoading}
           >
