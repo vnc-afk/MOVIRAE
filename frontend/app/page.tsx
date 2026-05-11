@@ -5,28 +5,33 @@ import { motion } from "framer-motion";
 import { MovieCard } from "@/components/MovieCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { SearchInput } from "@/components/SearchInput";
-import { activityFeed } from "@/data/mockData";
 import { getTrendingMovies } from "@/lib/tmdb";
-import type { Movie } from "@/data/mockData";
+import type { ActivityItem, Movie } from "@/lib/types";
 import heroBackdrop from "@/assets/hero-backdrop.jpg";
 
 export default function Home() {
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchTrending() {
+    async function fetchHomeData() {
       try {
-        const trendingMovies = await getTrendingMovies();
+        const [trendingMovies, feedResponse] = await Promise.all([
+          getTrendingMovies(),
+          fetch("/api/data/home-activity-feed").then((response) => response.json()),
+        ]);
+
         setMovies(trendingMovies);
+        setActivities(Array.isArray(feedResponse?.value) ? feedResponse.value : []);
       } catch (error) {
-        console.error("Failed to fetch trending movies:", error);
+        console.error("Failed to fetch home data:", error);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchTrending();
+    fetchHomeData();
   }, []);
 
   return (
@@ -104,7 +109,7 @@ export default function Home() {
             Friends Activity
           </h2>
           <div className="max-w-2xl">
-            <ActivityFeed activities={activityFeed} />
+            <ActivityFeed activities={activities} />
           </div>
         </section>
       </div>
