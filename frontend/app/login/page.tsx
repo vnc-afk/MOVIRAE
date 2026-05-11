@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Film, Eye, EyeOff, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export default function LoginPage() {
@@ -11,6 +12,48 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      if (isSignup) {
+        const response = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim() || undefined,
+            email: email.trim(),
+            password,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          setError(data?.error ?? "Signup failed. Please try again.");
+          return;
+        }
+      }
+
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        setError("Invalid email or password.");
+      }
+    } catch (signupError) {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 cinema-gradient">
@@ -32,7 +75,7 @@ export default function LoginPage() {
           {isSignup ? "Start tracking your film journey" : "Sign in to continue"}
         </p>
 
-        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           {isSignup && (
             <div className="relative">
               <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -75,8 +118,18 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <Button className="w-full gap-2 py-3">
-            {isSignup ? "Create Account" : "Sign In"}
+          {error && (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {error}
+            </p>
+          )}
+
+          <Button className="w-full gap-2 py-3" disabled={isLoading}>
+            {isLoading
+              ? "Please wait..."
+              : isSignup
+              ? "Create Account"
+              : "Sign In"}
             <ArrowRight className="h-4 w-4" />
           </Button>
         </form>
@@ -91,14 +144,14 @@ export default function LoginPage() {
         </div>
 
         <div className="flex gap-3">
-          {['Google', 'Apple', 'X'].map((provider) => (
-            <button
-              key={provider}
-              className="flex-1 rounded-lg border border-border bg-secondary py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
-            >
-              {provider}
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => signIn("google")}
+            className="flex-1 rounded-lg border border-border bg-secondary py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+            disabled={isLoading}
+          >
+            Google
+          </button>
         </div>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
