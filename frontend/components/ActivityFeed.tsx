@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Eye, Heart, ListPlus, MessageCircle } from "lucide-react";
 import { StarRating } from "./StarRating";
-import type { ActivityItem } from "@/data/mockData";
+import type { ActivityItem } from "@/lib/types";
 
 const actionIcons = {
   reviewed: MessageCircle,

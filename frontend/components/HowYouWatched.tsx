@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Monitor, Users, Heart, Popcorn, Clapperboard, Check } from "lucide-react";
-import type { WatchPlatform, WatchContext, Mood } from "@/data/mockData";
+import type { WatchPlatform, WatchContext, Mood } from "@/lib/types";
 
 const platforms: { value: WatchPlatform; icon: React.ReactNode; label: string }[] = [
   { value: "Cinema", icon: <Clapperboard className="h-4 w-4" />, label: "Cinema" },

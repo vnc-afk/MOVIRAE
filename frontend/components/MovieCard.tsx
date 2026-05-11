@@ -4,7 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Eye, Plus } from "lucide-react";
 import { StarRating } from "./StarRating";
-import type { Movie } from "@/data/mockData";
+import type { Movie } from "@/lib/types";
 
 interface MovieCardProps {
   movie: Movie;

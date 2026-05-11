@@ -1,7 +1,7 @@
 "use client";
 
 import { MovieCard } from "./MovieCard";
-import type { Movie } from "@/data/mockData";
+import type { Movie } from "@/lib/types";
 
 interface SimilarMoviesProps {
   movies: Movie[];

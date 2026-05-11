@@ -1,7 +1,7 @@
 "use client";
 
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import type { CastMember } from "@/data/mockData";
+import type { CastMember } from "@/lib/types";
 
 interface CastCarouselProps {
   cast: CastMember[];

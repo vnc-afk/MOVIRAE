@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Heart, MessageCircle, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { StarRating } from "./StarRating";
-import type { Review } from "@/data/mockData";
+import type { Review } from "@/lib/types";
 
 interface ReviewCardProps {
   review: Review;
