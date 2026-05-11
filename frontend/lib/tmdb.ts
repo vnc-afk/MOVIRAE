@@ -1,4 +1,4 @@
-import type { Movie, CastMember } from "@/data/mockData";
+import type { Movie, CastMember } from "@/lib/types";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
@@ -8,8 +8,9 @@ interface TMDBMovie {
   title: string;
   release_date: string;
   vote_average: number;
-  genres: { id: number; name: string }[];
-  poster_path: string;
+  genres?: { id: number; name: string }[];
+  genre_ids?: number[];
+  poster_path: string | null;
   overview: string;
   runtime: number;
   spoken_languages: { name: string }[];
@@ -32,10 +33,19 @@ const genreMap = new Map<number, string>();
  * Initialize genre map from TMDB
  */
 export async function initializeGenreMap() {
+  if (!TMDB_API_KEY) {
+    return;
+  }
+
   try {
     const response = await fetch(
       `${TMDB_BASE_URL}/genre/movie/list?api_key=${TMDB_API_KEY}`
     );
+
+    if (!response.ok) {
+      return;
+    }
+
     const data = await response.json();
     data.genres.forEach((genre: TMDBGenre) => {
       genreMap.set(genre.id, genre.name);
@@ -58,6 +68,11 @@ export async function getGenres(): Promise<TMDBGenre[]> {
     const response = await fetch(
       `${TMDB_BASE_URL}/genre/movie/list?api_key=${TMDB_API_KEY}`
     );
+
+    if (!response.ok) {
+      return [];
+    }
+
     const data = await response.json();
 
     return Array.isArray(data?.genres) ? data.genres : [];
@@ -87,6 +102,11 @@ export async function getTrendingMovies(page = 1): Promise<Movie[]> {
     const response = await fetch(
       `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&page=${page}`
     );
+
+    if (!response.ok) {
+      return [];
+    }
+
     const data = await response.json();
 
     if (!data.results) return [];
@@ -113,6 +133,11 @@ export async function searchMovies(query: string, page = 1): Promise<Movie[]> {
     const response = await fetch(
       `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}`
     );
+
+    if (!response.ok) {
+      return [];
+    }
+
     const data = await response.json();
 
     if (!data.results) return [];
@@ -139,6 +164,11 @@ export async function getMovieDetails(movieId: string): Promise<Movie | null> {
     const response = await fetch(
       `${TMDB_BASE_URL}/movie/${movieId}?api_key=${TMDB_API_KEY}&append_to_response=credits`
     );
+
+    if (!response.ok) {
+      return null;
+    }
+
     const movie = await response.json();
 
     return transformTMDBMovie(movie);
@@ -161,6 +191,11 @@ export async function getSimilarMovies(movieId: string): Promise<Movie[]> {
     const response = await fetch(
       `${TMDB_BASE_URL}/movie/${movieId}/similar?api_key=${TMDB_API_KEY}`
     );
+
+    if (!response.ok) {
+      return [];
+    }
+
     const data = await response.json();
 
     if (!data.results) return [];
@@ -180,7 +215,11 @@ export async function getSimilarMovies(movieId: string): Promise<Movie[]> {
 async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
   const posterUrl = tmdbMovie.poster_path
     ? `https://image.tmdb.org/t/p/w500${tmdbMovie.poster_path}`
-    : "https://via.placeholder.com/300x450?text=No+Poster";
+    : "";
+
+  const movieGenres = Array.isArray(tmdbMovie.genres)
+    ? tmdbMovie.genres
+    : (tmdbMovie.genre_ids || []).map((id) => ({ id, name: getGenreName(id) }));
 
   const cast: CastMember[] = (tmdbMovie.credits?.cast || [])
     .slice(0, 6)
@@ -205,15 +244,15 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
     title: tmdbMovie.title,
     year,
     rating: Math.round((tmdbMovie.vote_average / 2) * 10) / 10, // Convert 0-10 to 0-5
-    genre: tmdbMovie.genres?.[0]
-      ? getGenreName(tmdbMovie.genres[0].id)
+    genre: movieGenres[0]
+      ? movieGenres[0].name
       : "Unknown",
     poster: posterUrl,
     synopsis: tmdbMovie.overview || "No synopsis available",
     director,
     cast,
     reviews: [], // Reviews will be empty from API, user-generated reviews can be stored separately
-    tags: tmdbMovie.genres?.map((g: any) => g.name) || [],
+    tags: movieGenres.map((genre) => genre.name),
     streamingOn: [], // WatchMode will provide this
     runtime: tmdbMovie.runtime || 0,
     language: tmdbMovie.spoken_languages?.[0]?.name || "Unknown",
@@ -238,6 +277,11 @@ export async function getMoviesByGenre(
     const response = await fetch(
       `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}`
     );
+
+    if (!response.ok) {
+      return [];
+    }
+
     const data = await response.json();
 
     if (!data.results) return [];
