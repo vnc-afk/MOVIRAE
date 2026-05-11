@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Film, Eye, EyeOff, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { signIn } from "next-auth/react";
@@ -14,8 +14,13 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [callbackUrl, setCallbackUrl] = useState("/");
 
-  const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl") || "/";
+  useEffect(() => {
+    const nextCallbackUrl =
+      new URLSearchParams(window.location.search).get("callbackUrl") || "/";
+    setCallbackUrl(nextCallbackUrl);
+  }, []);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
