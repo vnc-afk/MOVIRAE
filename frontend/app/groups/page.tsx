@@ -17,6 +17,26 @@ const avatarUrl = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?
 
 type GroupRecord = Group & { joined?: boolean };
 
+async function fetchJsonValue<T>(url: string): Promise<T | null> {
+  try {
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      console.error(`fetchJsonValue: ${url} returned ${response.status}: ${errText}`);
+      return null;
+    }
+
+    const text = await response.text();
+    if (!text.trim()) return null;
+
+    return JSON.parse(text) as T;
+  } catch (err) {
+    console.error("fetchJsonValue error for", url, err);
+    return null;
+  }
+}
+
 export default function Groups() {
   const router = useRouter();
   const [groups, setGroups] = useState<GroupRecord[]>([]);
@@ -27,12 +47,12 @@ export default function Groups() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/data/groups").then((response) => response.json()),
-      fetch("/api/users").then((response) => response.json()),
+      fetchJsonValue<{ value: GroupRecord[] }>("/api/data/groups"),
+      fetchJsonValue<{ value: UserProfile[] }>("/api/users"),
     ])
       .then(([groupsResponse, usersResponse]) => {
-        setGroups(Array.isArray(groupsResponse.value) ? groupsResponse.value : []);
-        setUsers(Array.isArray(usersResponse.value) ? usersResponse.value : []);
+        setGroups(Array.isArray(groupsResponse?.value) ? groupsResponse.value : []);
+        setUsers(Array.isArray(usersResponse?.value) ? usersResponse.value : []);
       })
       .catch((error) => console.error("Failed to load groups:", error));
   }, []);
@@ -41,24 +61,57 @@ export default function Groups() {
 
   const persistGroups = async (nextGroups: GroupRecord[]) => {
     setGroups(nextGroups);
-    await fetch("/api/data/groups", {
+
+    const response = await fetch("/api/data/groups", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(nextGroups),
     });
+
+    if (!response.ok) {
+      throw new Error(`Failed to persist groups: ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const savedGroups = Array.isArray(payload.value) ? payload.value as GroupRecord[] : nextGroups;
+    setGroups(savedGroups);
+    return savedGroups;
+  };
+
+  const applyMembership = (group: GroupRecord, shouldJoin: boolean) => {
+    if (!currentUser) return group;
+
+    const alreadyMember = group.members.some((member) => member.id === currentUser.id);
+    const members = shouldJoin
+      ? alreadyMember
+        ? group.members
+        : [currentUser, ...group.members]
+      : group.members.filter((member) => member.id !== currentUser.id);
+
+    return {
+      ...group,
+      members,
+      memberCount: members.length,
+      joined: shouldJoin,
+    };
   };
 
   const handleJoin = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    const nextGroups = groups.map((group) =>
-      group.id === id ? { ...group, joined: !group.joined } : group
-    );
-    await persistGroups(nextGroups);
+    if (!currentUser) {
+      toast.error("Sign in to join a group.");
+      return;
+    }
 
-    const group = groups.find((item) => item.id === id);
-    toast.success(group?.joined ? `Left ${group.name}` : `Joined ${group?.name}!`);
+    const nextGroups = groups.map((group) =>
+      group.id === id ? applyMembership(group, !group.joined) : group
+    );
+    const savedGroups = await persistGroups(nextGroups);
+
+    const group = savedGroups.find((item) => item.id === id);
+    toast.success(group?.joined ? `Joined ${group.name}!` : `Left ${group?.name}`);
   };
 
   const handleCreate = async () => {
@@ -83,12 +136,13 @@ export default function Groups() {
       joined: true,
     };
 
-    await persistGroups([newGroup, ...groups]);
+    const savedGroups = await persistGroups([newGroup, ...groups]);
+    const createdGroup = savedGroups.find((group) => group.id === newGroup.id) ?? savedGroups[0] ?? newGroup;
     setOpen(false);
     setName("");
     setDescription("");
-    toast.success(`${newGroup.name} created!`);
-    router.push(`/groups/${newGroup.id}`);
+    toast.success(`${createdGroup.name} created!`);
+    router.push(`/groups/${createdGroup.id}`);
   };
 
   return (
