@@ -1,25 +1,61 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeftRight, Check, X } from "lucide-react";
-import { users, movies } from "@/data/mockData";
-import type { Movie } from "@/data/mockData";
-
-const user1Movies = [movies[0], movies[1], movies[2], movies[4]];
-const user2Movies = [movies[0], movies[2], movies[3], movies[5]];
+import { getMovieDetails } from "@/lib/tmdb";
+import type { Movie, UserProfile } from "@/lib/types";
 
 export default function CompareWatchlists() {
-  const [selectedUser, setSelectedUser] = useState(users[1]);
-  const currentUser = users[0];
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [currentUserMovies, setCurrentUserMovies] = useState<Movie[]>([]);
+  const [selectedUserMovies, setSelectedUserMovies] = useState<Movie[]>([]);
 
-  const both = user1Movies.filter((m) => user2Movies.some((m2) => m2.id === m.id));
-  const onlyMe = user1Movies.filter((m) => !user2Movies.some((m2) => m2.id === m.id));
-  const onlyThem = user2Movies.filter((m) => !user1Movies.some((m2) => m2.id === m.id));
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/users").then((response) => response.json()),
+      fetch("/api/data/user-watchlist-current").then((response) => response.json()),
+    ])
+      .then(async ([usersResponse, watchlistResponse]) => {
+        const userList = Array.isArray(usersResponse.value) ? usersResponse.value : [];
+        setUsers(userList);
+        setSelectedUser(userList[1] ?? userList[0] ?? null);
+
+        const currentIds = Array.isArray(watchlistResponse.value) ? watchlistResponse.value : [];
+        const currentMovies = await Promise.all(currentIds.map((movieId: string) => getMovieDetails(movieId)));
+        setCurrentUserMovies(currentMovies.filter((movie): movie is Movie => movie !== null));
+      })
+      .catch((error) => console.error("Failed to load comparison data:", error));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedUser) {
+      setSelectedUserMovies([]);
+      return;
+    }
+
+    fetch(`/api/data/user-watchlist-${selectedUser.id}`)
+      .then((response) => response.json())
+      .then(async (data) => {
+        const ids = Array.isArray(data.value) ? data.value : [];
+        const movies = await Promise.all(ids.map((movieId: string) => getMovieDetails(movieId)));
+        setSelectedUserMovies(movies.filter((movie): movie is Movie => movie !== null));
+      })
+      .catch((error) => console.error("Failed to load selected watchlist:", error));
+  }, [selectedUser]);
+
+  const both = currentUserMovies.filter((movie) => selectedUserMovies.some((other) => other.id === movie.id));
+  const onlyMe = currentUserMovies.filter((movie) => !selectedUserMovies.some((other) => other.id === movie.id));
+  const onlyThem = selectedUserMovies.filter((movie) => !currentUserMovies.some((other) => other.id === movie.id));
 
   const MovieRow = ({ movie, status }: { movie: Movie; status: "both" | "me" | "them" }) => (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-card card-shadow">
-      <img src={movie.poster} alt={movie.title} className="h-14 w-10 rounded object-cover poster-shadow" />
+      {movie.poster ? (
+        <img src={movie.poster} alt={movie.title} className="h-14 w-10 rounded object-cover poster-shadow" />
+      ) : (
+        <div className="h-14 w-10 rounded bg-secondary" />
+      )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-foreground truncate">{movie.title}</p>
         <p className="text-xs text-muted-foreground">{movie.year} · {movie.genre}</p>
@@ -46,28 +82,26 @@ export default function CompareWatchlists() {
           <p className="text-sm text-muted-foreground">See what you and your friends have in common.</p>
         </motion.div>
 
-        {/* User selector */}
         <div className="flex items-center justify-center gap-6 py-4">
           <div className="flex flex-col items-center gap-2">
-            <img src={currentUser.avatar} alt={currentUser.displayName} className="h-14 w-14 rounded-full border-2 border-primary bg-muted" />
+            <div className="h-14 w-14 rounded-full border-2 border-primary bg-muted" />
             <span className="text-xs font-semibold text-foreground">You</span>
           </div>
           <ArrowLeftRight className="h-5 w-5 text-muted-foreground" />
           <div className="flex flex-col items-center gap-2">
-            <img src={selectedUser.avatar} alt={selectedUser.displayName} className="h-14 w-14 rounded-full border-2 border-accent bg-muted" />
+            <div className="h-14 w-14 rounded-full border-2 border-accent bg-muted" />
             <select
-              value={selectedUser.id}
-              onChange={(e) => setSelectedUser(users.find((u) => u.id === e.target.value) || users[1])}
+              value={selectedUser?.id || ""}
+              onChange={(e) => setSelectedUser(users.find((user) => user.id === e.target.value) || null)}
               className="text-xs rounded-lg bg-secondary border border-border px-2 py-1 text-foreground outline-none"
             >
-              {users.filter((u) => u.id !== currentUser.id).map((u) => (
-                <option key={u.id} value={u.id}>{u.displayName}</option>
+              {users.filter((user) => !users[0] || user.id !== users[0].id).map((user) => (
+                <option key={user.id} value={user.id}>{user.displayName}</option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-3 gap-3 text-center">
           <div className="rounded-lg bg-card p-4 card-shadow">
             <p className="text-xl font-bold text-accent">{both.length}</p>
@@ -83,17 +117,15 @@ export default function CompareWatchlists() {
           </div>
         </div>
 
-        {/* Column headers */}
         <div className="flex items-center justify-end gap-3 px-3 text-xs text-muted-foreground">
           <span className="w-6 text-center">You</span>
           <span className="w-6 text-center">Them</span>
         </div>
 
-        {/* Lists */}
         <div className="space-y-2">
-          {both.map((m) => <MovieRow key={m.id} movie={m} status="both" />)}
-          {onlyMe.map((m) => <MovieRow key={m.id} movie={m} status="me" />)}
-          {onlyThem.map((m) => <MovieRow key={m.id} movie={m} status="them" />)}
+          {both.map((movie) => <MovieRow key={movie.id} movie={movie} status="both" />)}
+          {onlyMe.map((movie) => <MovieRow key={movie.id} movie={movie} status="me" />)}
+          {onlyThem.map((movie) => <MovieRow key={movie.id} movie={movie} status="them" />)}
         </div>
       </div>
     </div>

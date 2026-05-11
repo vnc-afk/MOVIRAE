@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Download, Upload, FileText, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { movies } from "@/data/mockData";
+import { getTrendingMovies } from "@/lib/tmdb";
+import type { Movie } from "@/lib/types";
 
 export default function ImportExport() {
   const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
+  const [movieCount, setMovieCount] = useState(0);
+
+  useEffect(() => {
+    getTrendingMovies().then((list: Movie[]) => setMovieCount(list.length)).catch(() => setMovieCount(0));
+  }, []);
 
   const handleExportCSV = () => {
-    const header = "Title,Year,Rating,Genre,Director\n";
-    const rows = movies.map((m) => `"${m.title}",${m.year},${m.rating},"${m.genre}","${m.director}"`).join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv" });
+    const blob = new Blob(["Title,Year,Rating,Genre,Director\n"], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -52,7 +56,7 @@ export default function ImportExport() {
               <Download className="h-4 w-4" /> Export as JSON
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">{movies.length} films will be exported.</p>
+          <p className="text-xs text-muted-foreground">{movieCount} films will be exported.</p>
         </div>
 
         {/* Import */}

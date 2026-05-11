@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Bell, Heart, MessageCircle, UserPlus, Users, Sparkles, Check } from "lucide-react";
-import { useState } from "react";
-import { notifications, messages, users } from "@/data/mockData";
+import { useEffect, useState } from "react";
+import type { Message, NotificationItem, UserProfile } from "@/lib/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const typeIcons = {
@@ -16,8 +16,24 @@ const typeIcons = {
 };
 
 export default function Notifications() {
-  const [items, setItems] = useState(notifications);
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [messageText, setMessageText] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/data/user-notifications").then((response) => response.json()),
+      fetch("/api/data/user-messages").then((response) => response.json()),
+      fetch("/api/users").then((response) => response.json()),
+    ])
+      .then(([notificationsResponse, messagesResponse, usersResponse]) => {
+        setItems(Array.isArray(notificationsResponse.value) ? notificationsResponse.value : []);
+        setMessages(Array.isArray(messagesResponse.value) ? messagesResponse.value : []);
+        setUsers(Array.isArray(usersResponse.value) ? usersResponse.value : []);
+      })
+      .catch((error) => console.error("Failed to load notifications:", error));
+  }, []);
 
   const markAllRead = () => setItems(items.map((n) => ({ ...n, read: true })));
 
@@ -104,14 +120,18 @@ export default function Notifications() {
             <div className="rounded-xl bg-card card-shadow overflow-hidden">
               {/* Chat header */}
               <div className="flex items-center gap-3 p-4 border-b border-border">
-                <img
-                  src={users[1].avatar}
-                  alt={users[1].displayName}
-                  className="h-9 w-9 rounded-full bg-muted"
-                />
+                {users[1] ? (
+                  <img
+                    src={users[1].avatar}
+                    alt={users[1].displayName}
+                    className="h-9 w-9 rounded-full bg-muted"
+                  />
+                ) : (
+                  <div className="h-9 w-9 rounded-full bg-muted" />
+                )}
                 <div>
                   <p className="font-semibold text-sm text-foreground">
-                    {users[1].displayName}
+                    {users[1]?.displayName || "Messages"}
                   </p>
                   <p className="text-[10px] text-accent">Online</p>
                 </div>
@@ -120,7 +140,7 @@ export default function Notifications() {
               {/* Messages */}
               <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
                 {messages.map((msg) => {
-                  const isMe = msg.from.id === users[0].id;
+                  const isMe = users[0] ? msg.from.id === users[0].id : false;
                   return (
                     <div
                       key={msg.id}

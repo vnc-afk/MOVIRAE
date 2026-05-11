@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, Film, Clock, Star, Award, MapPin, Heart, Users, Sparkles, BarChart3 } from "lucide-react";
-import { userStats, movies } from "@/data/mockData";
+import type { Movie, UserStats } from "@/lib/types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, PieChart, Pie, Cell } from "recharts";
 
 const COLORS = [
@@ -39,6 +39,32 @@ function Slide({ children, bgClass = "" }: SlideProps) {
 export default function Wrapped() {
   const [slideIndex, setSlideIndex] = useState(0);
   const totalSlides = 7;
+  const [stats, setStats] = useState<UserStats | null>(null);
+
+  useEffect(() => {
+    fetch("/api/data/user-wrapped")
+      .then((response) => response.json())
+      .then((data) => setStats(data.value ?? null))
+      .catch((error) => console.error("Failed to fetch wrapped stats:", error));
+  }, []);
+
+  const userStats: UserStats = stats ?? {
+    totalWatched: 0,
+    totalHours: 0,
+    avgRating: 0,
+    favoriteGenre: "",
+    topDirector: "",
+    longestStreak: 0,
+    countriesExplored: 0,
+    monthlyBreakdown: [],
+    genreBreakdown: [],
+    ratingDistribution: [],
+    moodBreakdown: [],
+    platformBreakdown: [],
+    contextBreakdown: [],
+    weekdayBreakdown: [],
+  };
+  const movies: Movie[] = [];
 
   const next = () => setSlideIndex((i) => Math.min(i + 1, totalSlides - 1));
   const prev = () => setSlideIndex((i) => Math.max(i - 1, 0));
@@ -257,7 +283,7 @@ export default function Wrapped() {
       <h2 className="font-display text-3xl font-bold text-foreground mb-3">You're a Cinema Connoisseur</h2>
       <p className="text-muted-foreground max-w-md mb-8">
         {userStats.totalWatched} films, {userStats.totalHours} hours, {userStats.countriesExplored} countries explored.
-        Your love for {userStats.favoriteGenre} defines your taste, and your {userStats.longestStreak}-day streak shows true dedication.
+        Your love for {userStats.favoriteGenre || "movies"} defines your taste, and your {userStats.longestStreak}-day streak shows true dedication.
       </p>
       <div className="flex flex-wrap gap-2 justify-center">
         {["🎬 Cinephile", "🔥 Streak Master", "🌍 World Explorer", `⭐ ${userStats.favoriteGenre} Fan`].map((badge) => (

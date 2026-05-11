@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Sparkles, TrendingUp, Clock, Star } from "lucide-react";
 import { MovieCard } from "@/components/MovieCard";
 import { getTrendingMovies, getMoviesByGenre } from "@/lib/tmdb";
-import type { Movie } from "@/data/mockData";
+import type { Movie } from "@/lib/types";
 
 export default function RecommendationsPage() {
   const [topPicks, setTopPicks] = useState<Movie[]>([]);

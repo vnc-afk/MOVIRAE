@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BarChart3, Clock, Film, Star, TrendingUp, Award, Calendar, Monitor, Users, Sparkles, MapPin } from "lucide-react";
-import { userStats } from "@/data/mockData";
+import type { UserStats } from "@/lib/types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 const COLORS = [
   "hsl(36, 90%, 50%)",
@@ -25,6 +26,32 @@ const tooltipStyle = {
 
 
 export default function UserStats() {
+  const [stats, setStats] = useState<UserStats | null>(null);
+
+  useEffect(() => {
+    fetch("/api/data/user-stats")
+      .then((response) => response.json())
+      .then((data) => setStats(data.value ?? null))
+      .catch((error) => console.error("Failed to fetch user stats:", error));
+  }, []);
+
+  const userStats = stats ?? {
+    totalWatched: 0,
+    totalHours: 0,
+    avgRating: 0,
+    favoriteGenre: "",
+    topDirector: "",
+    longestStreak: 0,
+    countriesExplored: 0,
+    monthlyBreakdown: [],
+    genreBreakdown: [],
+    ratingDistribution: [],
+    moodBreakdown: [],
+    platformBreakdown: [],
+    contextBreakdown: [],
+    weekdayBreakdown: [],
+  };
+
   return (
     <div className="pb-20 md:pb-0">
       <div className="container py-8 space-y-8">
@@ -50,7 +77,7 @@ export default function UserStats() {
             { icon: Film, label: "Films Watched", value: userStats.totalWatched.toString() },
             { icon: Clock, label: "Hours Watched", value: `${userStats.totalHours}h` },
             { icon: Star, label: "Avg Rating", value: userStats.avgRating.toFixed(1) },
-            { icon: Award, label: "Fave Genre", value: userStats.favoriteGenre },
+            { icon: Award, label: "Fave Genre", value: userStats.favoriteGenre || "-" },
             { icon: TrendingUp, label: "Longest Streak", value: `${userStats.longestStreak}d` },
             { icon: MapPin, label: "Countries", value: userStats.countriesExplored.toString() },
           ].map(({ icon: Icon, label, value }, i) => (
@@ -101,7 +128,7 @@ export default function UserStats() {
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                   <Tooltip contentStyle={tooltipStyle} />
+                  <Tooltip contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -123,7 +150,7 @@ export default function UserStats() {
             </div>
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={userStats.moodBreakdown.map((m) => ({ mood: m.mood, value: m.count }))}>
+                  <RadarChart data={userStats.moodBreakdown.map((m) => ({ mood: m.mood, value: m.count }))}>
                   <PolarGrid stroke="hsl(var(--border))" />
                   <PolarAngleAxis dataKey="mood" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                   <Radar dataKey="value" stroke="hsl(36, 90%, 50%)" fill="hsl(36, 90%, 50%)" fillOpacity={0.25} />

@@ -16,7 +16,7 @@ import {
 import { MovieCard } from "@/components/MovieCard";
 import { Slider } from "@/components/ui/slider";
 import { getGenres, getMoviesByGenre, getTrendingMovies, searchMovies } from "@/lib/tmdb";
-import type { Movie } from "@/data/mockData";
+import type { Movie } from "@/lib/types";
 
 interface FilterState {
   query: string;
@@ -47,30 +47,12 @@ const defaultFilters: FilterState = {
   sortBy: "rating",
 };
 
-const defaultPresets: FilterPreset[] = [
-  {
-    id: "fp1",
-    name: "Quick Picks",
-    filters: { maxRuntime: 120 },
-  },
-  {
-    id: "fp2",
-    name: "Epic Runtime",
-    filters: { minRuntime: 140 },
-  },
-  {
-    id: "fp3",
-    name: "Action Night",
-    filters: { genreId: "28" },
-  },
-];
-
 export default function Discover() {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [showSavePreset, setShowSavePreset] = useState(false);
-  const [userPresets, setUserPresets] = useState<FilterPreset[]>(defaultPresets);
+  const [userPresets, setUserPresets] = useState<FilterPreset[]>([]);
   const [genres, setGenres] = useState<GenreOption[]>([]);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +70,13 @@ export default function Discover() {
     }
 
     loadGenres();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/data/user-filter-presets")
+      .then((response) => response.json())
+      .then((data) => setUserPresets(Array.isArray(data.value) ? data.value : []))
+      .catch((error) => console.error("Failed to load saved presets:", error));
   }, []);
 
   useEffect(() => {
@@ -146,8 +135,8 @@ export default function Discover() {
   const savePreset = () => {
     if (!presetName.trim()) return;
 
-    setUserPresets((current) => [
-      ...current,
+    const nextPresets = [
+      ...userPresets,
       {
         id: `fp-${Date.now()}`,
         name: presetName,
@@ -157,7 +146,14 @@ export default function Discover() {
           maxRuntime: filters.runtimeRange[1],
         },
       },
-    ]);
+    ];
+
+    setUserPresets(nextPresets);
+    fetch("/api/data/user-filter-presets", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(nextPresets),
+    });
 
     setPresetName("");
     setShowSavePreset(false);

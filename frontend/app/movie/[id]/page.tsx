@@ -7,7 +7,7 @@ import { ArrowLeft, Eye, Heart, ListPlus, Play } from "lucide-react";
 import { use } from "react";
 import { getMovieDetails, getSimilarMovies } from "@/lib/tmdb";
 import { getStreamingPlatforms } from "@/lib/watchmode";
-import type { Movie } from "@/data/mockData";
+import type { Movie } from "@/lib/types";
 import { StarRating } from "@/components/StarRating";
 import { CastCarousel } from "@/components/CastCarousel";
 import { ReviewCard } from "@/components/ReviewCard";
