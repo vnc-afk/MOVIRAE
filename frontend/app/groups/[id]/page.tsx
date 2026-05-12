@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import {
   Users,
@@ -17,12 +17,28 @@ import {
   Pin,
   UserPlus,
   UserMinus,
+  Plus,
+  Search,
+  Clock,
+  X,
+  MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { searchMovies } from "@/lib/tmdb";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { Group, Movie, UserProfile } from "@/lib/types";
 
 interface DiscussionReply {
@@ -69,6 +85,19 @@ export default function GroupDetail() {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [moviesWithHover, setMoviesWithHover] = useState<Set<string>>(new Set());
+  const [createEventOpen, setCreateEventOpen] = useState(false);
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
+  const [eventLocation, setEventLocation] = useState("");
+  const [eventDescription, setEventDescription] = useState("");
+  const [events, setEvents] = useState<any[]>([]);
+  const [addMovieOpen, setAddMovieOpen] = useState(false);
+  const [movieSearch, setMovieSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   const loadCurrentUser = async () => {
     const response = await fetch("/api/users");
@@ -110,18 +139,42 @@ export default function GroupDetail() {
     return nextGroup;
   };
 
+  const checkAdminStatus = () => {
+    if (!group || !currentUser) {
+      setIsAdmin(false);
+      return;
+    }
+    // User is admin if they're the group creator
+    // The server will do full admin check (engagement + tenure) on event creation
+    setIsAdmin(currentUser.id === group.creatorId);
+  };
+
   useEffect(() => {
     let isActive = true;
     let eventSource: EventSource | null = null;
 
     setLoadState("loading");
 
-    Promise.all([loadGroup(true), loadCurrentUser()]).catch((error) => {
-      console.error("Failed to load group detail:", error);
-      if (isActive) {
-        setLoadState("error");
+    const loadData = async () => {
+      try {
+        await Promise.all([loadGroup(true), loadCurrentUser()]);
+        
+        // Load events
+        const eventsResponse = await fetch(`/api/groups/${id}/events?data=1`, { cache: "no-store" });
+        if (eventsResponse.ok && isActive) {
+          const eventsPayload = await eventsResponse.json();
+          const newEvents = Array.isArray(eventsPayload.value) ? eventsPayload.value : [];
+          setEvents(newEvents);
+        }
+      } catch (error) {
+        console.error("Failed to load group detail:", error);
+        if (isActive) {
+          setLoadState("error");
+        }
       }
-    });
+    };
+
+    loadData();
 
     eventSource = new EventSource(`/api/groups/${id}/events`);
     eventSource.addEventListener("group-updated", () => {
@@ -144,8 +197,35 @@ export default function GroupDetail() {
   useEffect(() => {
     if (group) {
       setJoined(Boolean(group.joined));
+      checkAdminStatus();
     }
-  }, [group]);
+  }, [group, currentUser]);
+
+  const handleSearchMovies = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const results = await searchMovies(query);
+      setSearchResults(results);
+    } catch (error) {
+      console.error("Search failed:", error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleSearchMovies(movieSearch);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [movieSearch, handleSearchMovies]);
 
   if (loadState === "loading") {
     return (
@@ -305,6 +385,117 @@ export default function GroupDetail() {
     toast.success("Reply posted!");
   };
 
+  const handleCreateEvent = async () => {
+    if (!eventTitle.trim() || !eventDate.trim() || !eventTime.trim()) {
+      toast.error("Please fill in the event title, date, and time.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/groups/${id}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: eventTitle,
+          description: eventDescription,
+          startDate: eventDate,
+          startTime: eventTime,
+          location: eventLocation,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        toast.error(errorPayload?.error || "Could not create event.");
+        return;
+      }
+
+      const eventsResponse = await fetch(`/api/groups/${id}/events?data=1`, { cache: "no-store" });
+      const eventsPayload = await eventsResponse.json();
+      const newEvents = Array.isArray(eventsPayload.value) ? eventsPayload.value : [];
+      setEvents(newEvents);
+
+      setEventTitle("");
+      setEventDate("");
+      setEventTime("");
+      setEventLocation("");
+      setEventDescription("");
+      setCreateEventOpen(false);
+      toast.success("Event created!");
+    } catch (error) {
+      toast.error("Failed to create event.");
+    }
+  };
+
+  const handleRemoveMovie = async (movieId: string) => {
+    try {
+      const response = await fetch(`/api/groups/${id}/movies/${movieId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        toast.error("Could not remove movie.");
+        return;
+      }
+
+      await loadGroup(false);
+      toast.success("Movie removed from shared list.");
+    } catch (error) {
+      toast.error("Failed to remove movie.");
+    }
+  };
+
+  const handleAddMovie = async (tmdbId: string) => {
+    try {
+      const response = await fetch(`/api/groups/${id}/movies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tmdbId }),
+      });
+
+      if (!response.ok) {
+        toast.error("Could not add movie.");
+        return;
+      }
+
+      await loadGroup(false);
+      toast.success("Movie added to shared watchlist!");
+      setAddMovieOpen(false);
+    } catch (error) {
+      toast.error("Failed to add movie.");
+    }
+  };
+
+  const handleRsvp = async (eventId: string, rsvpStatus: "yes" | "no" | "maybe" | "pending") => {
+    if (!currentUser) {
+      toast.error("Sign in to RSVP.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/groups/${id}/events/${eventId}/rsvp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rsvpStatus }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        toast.error(errorPayload?.error || "Could not update RSVP.");
+        return;
+      }
+
+      const eventsResponse = await fetch(`/api/groups/${id}/events?data=1`, { cache: "no-store" });
+      const eventsPayload = await eventsResponse.json();
+      const newEvents = Array.isArray(eventsPayload.value) ? eventsPayload.value : [];
+      setEvents(newEvents);
+      toast.success(rsvpStatus === "pending" ? "RSVP cleared." : `Marked as ${rsvpStatus}.`);
+    } catch (error) {
+      toast.error("Failed to update RSVP.");
+    }
+  };
+
   const movieLookup = new Map<string, Movie>(group.sharedList.map((movie) => [movie.id, movie]));
 
   return (
@@ -446,42 +637,320 @@ export default function GroupDetail() {
           </TabsContent>
 
           <TabsContent value="watchlist" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {group.sharedList.length} film{group.sharedList.length !== 1 ? "s" : ""} shared by the club
+              </p>
+              <Dialog open={addMovieOpen} onOpenChange={(open) => {
+                setAddMovieOpen(open);
+                if (!open) {
+                  setMovieSearch("");
+                  setSearchResults([]);
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-3.5 w-3.5" /> Add Movie
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Add a movie to the shared list</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-3 py-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search movies..."
+                        value={movieSearch}
+                        onChange={(e) => setMovieSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="grid gap-2 max-h-[400px] overflow-y-auto pr-1">
+                      {searchLoading ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          Searching...
+                        </p>
+                      ) : movieSearch.trim() === "" ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          Type to search for movies
+                        </p>
+                      ) : searchResults.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          No movies found
+                        </p>
+                      ) : (
+                        <AnimatePresence>
+                          {searchResults.map((movie) => {
+                            const alreadyAdded = group.sharedList.some(
+                              (m) => m.id === movie.id
+                            );
+                            return (
+                              <motion.div
+                                key={movie.id}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                className="flex items-center gap-3 rounded-lg bg-muted/40 p-2 hover:bg-muted/60 transition-colors"
+                              >
+                                {movie.poster ? (
+                                  <img
+                                    src={movie.poster}
+                                    alt={movie.title}
+                                    className="h-14 w-10 rounded object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-14 w-10 rounded bg-muted" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium text-foreground truncate">
+                                    {movie.title}
+                                  </p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {movie.year}
+                                  </p>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant={alreadyAdded ? "secondary" : "default"}
+                                  className="h-7 px-2 text-[10px]"
+                                  onClick={() => handleAddMovie(movie.id)}
+                                  disabled={alreadyAdded}
+                                >
+                                  {alreadyAdded ? "Added" : "Add"}
+                                </Button>
+                              </motion.div>
+                            );
+                          })}
+                        </AnimatePresence>
+                      )}
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setAddMovieOpen(false)}>
+                      Done
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
             {group.sharedList.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No shared watchlist items yet.</div>
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                No movies in the shared watchlist yet. Click "Add Movie" to get started!
+              </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {group.sharedList.map((movie) => (
-                  <Link key={movie.id} href={`/movie/${movie.id}`} className="block">
-                    {movie.poster ? (
-                      <img src={movie.poster} alt={movie.title} className="w-full rounded-lg object-cover poster-shadow" />
-                    ) : (
-                      <div className="w-full rounded-lg h-28 bg-muted poster-shadow" />
-                    )}
-                    <p className="mt-2 text-xs text-foreground truncate">{movie.title}</p>
-                  </Link>
+                {group.sharedList.map((m) => (
+                  <div key={m.id} className="group relative">
+                    <Link href={`/movie/${m.id}`} className="block">
+                      {m.poster ? (
+                        <img
+                          src={m.poster}
+                          alt={m.title}
+                          className="w-full aspect-[2/3] object-cover rounded-lg poster-shadow group-hover:scale-105 transition-transform"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[2/3] rounded-lg bg-muted" />
+                      )}
+                      <p className="text-xs font-medium text-foreground mt-2 truncate">
+                        {m.title}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">{m.year}</p>
+                    </Link>
+                    <button
+                      onClick={() => handleRemoveMovie(m.id)}
+                      className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-background/90 text-muted-foreground hover:text-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove from list"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
           </TabsContent>
 
-          <TabsContent value="members" className="space-y-3">
-            {group.members.map((member) => (
-              <div key={member.id} className="rounded-xl bg-card p-4 card-shadow flex items-center gap-3">
-                    {member.avatar ? (
-                      <img src={member.avatar} alt={member.displayName} className="h-10 w-10 rounded-full bg-muted" />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-muted" />
-                    )}
-                <div>
-                  <p className="font-semibold text-foreground">{member.displayName}</p>
-                  <p className="text-xs text-muted-foreground">@{member.username}</p>
+          <TabsContent value="members">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {group.members.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-3 rounded-xl bg-card p-4 card-shadow"
+                >
+                  {m.avatar ? (
+                    <img
+                      src={m.avatar}
+                      alt={m.displayName}
+                      className="h-12 w-12 rounded-full bg-muted"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded-full bg-muted" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">
+                      {m.displayName}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </TabsContent>
 
-          <TabsContent value="events">
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No upcoming events yet.</div>
+          <TabsContent value="events" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {events.length} upcoming event{events.length !== 1 ? "s" : ""}
+              </p>
+              <Dialog open={createEventOpen} onOpenChange={setCreateEventOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="gap-1.5">
+                    <Plus className="h-3.5 w-3.5" /> Create Event
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Create a group event</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ev-title">Event title</Label>
+                      <Input
+                        id="ev-title"
+                        value={eventTitle}
+                        onChange={(e) => setEventTitle(e.target.value)}
+                        placeholder="e.g. Watch Party: The Hollow"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ev-date">Date</Label>
+                        <Input
+                          id="ev-date"
+                          type="date"
+                          value={eventDate}
+                          onChange={(e) => setEventDate(e.target.value)}
+                          placeholder="YYYY-MM-DD"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ev-time">Time</Label>
+                        <Input
+                          id="ev-time"
+                          type="time"
+                          value={eventTime}
+                          onChange={(e) => setEventTime(e.target.value)}
+                          placeholder="HH:MM"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ev-location">Location / Platform</Label>
+                      <Input
+                        id="ev-location"
+                        value={eventLocation}
+                        onChange={(e) => setEventLocation(e.target.value)}
+                        placeholder="e.g. Discord, Cinema, Zoom"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ev-desc">Description</Label>
+                      <Textarea
+                        id="ev-desc"
+                        value={eventDescription}
+                        onChange={(e) => setEventDescription(e.target.value)}
+                        placeholder="What's happening?"
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setCreateEventOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateEvent}>Create Event</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            {events.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                No upcoming events. Create one to get the group together!
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {events.map((e: any, index: number) => (
+                  <motion.div
+                    key={e.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="flex items-start gap-4 rounded-xl bg-card p-4 card-shadow"
+                  >
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <Calendar className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">
+                          {e.title}
+                        </p>
+                        <Badge variant="secondary" className="text-[10px] gap-1">
+                          <Clock className="h-3 w-3" />
+                          {e.startDate} · {e.startTime}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Hosted by {e.creator?.displayName || e.creator?.username || "Unknown"}
+                      </p>
+                      {e.description && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {e.description}
+                        </p>
+                      )}
+                      {e.location && (
+                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                          <MapPin className="h-3 w-3" /> {e.location}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-3 mt-3">
+                        <span className="text-[10px] text-muted-foreground">
+                          {e.attendees?.filter((a: any) => a.rsvpStatus === "yes" || a.rsvpStatus === "maybe").length ?? 0} attending
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {(["yes", "maybe", "no"] as const).map((status) => {
+                          const currentRsvp = e.attendees?.find((attendee: any) => attendee.user?.id === currentUser?.id)?.rsvpStatus;
+                          const isActive = currentRsvp === status;
+
+                          return (
+                            <Button
+                              key={status}
+                              size="sm"
+                              variant={isActive ? "default" : "secondary"}
+                              className="h-7 px-3 text-xs capitalize"
+                              onClick={() => handleRsvp(e.id, status)}
+                            >
+                              {status}
+                            </Button>
+                          );
+                        })}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-3 text-xs"
+                          onClick={() => handleRsvp(e.id, "pending")}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
