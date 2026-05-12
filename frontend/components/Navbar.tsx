@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Film, Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
+import { Film, Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
 import { SearchInput } from "./SearchInput";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -24,6 +26,20 @@ const navLinks = [
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleSignOut() {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      await signOut({ redirect: false });
+      router.replace("/login");
+      router.refresh();
+    }
+  }
 
   return (
     <>
@@ -94,12 +110,23 @@ export function Navbar() {
               </span>
             </Link>
             <ThemeToggle />
-            <Link
-              href="/profile"
-              className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground"
-            >
-              <User className="h-4 w-4" />
-            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+                <User className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel>Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/profile" className="flex items-center gap-2">
+                    <User className="h-4 w-4" /> Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSignOut} className="flex items-center gap-2 text-destructive focus:text-destructive">
+                  <LogOut className="h-4 w-4" /> Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </nav>
