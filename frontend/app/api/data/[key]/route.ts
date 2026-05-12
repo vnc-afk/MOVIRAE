@@ -36,6 +36,25 @@ function buildUserProfile(user: any) {
   } satisfies UserProfile;
 }
 
+function normalizeDiscussionLikes(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function normalizeDiscussionReplies(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((reply) => ({
+      id: typeof reply.id === "string" ? reply.id : `reply-${Date.now()}`,
+      author: reply.author && typeof reply.author === "object" ? reply.author : null,
+      body: typeof reply.body === "string" ? reply.body : "",
+      date: typeof reply.date === "string" ? reply.date : new Date().toISOString(),
+    }));
+}
+
 async function getSharedLists() {
   const lists = await prisma.sharedList.findMany({
     include: {
@@ -113,39 +132,100 @@ async function setSharedLists(payload: unknown, currentUser: Awaited<ReturnType<
   return getSharedLists();
 }
 
-async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
-  const groups = await prisma.group.findMany({
-    include: {
-      members: { include: { user: true } },
-      movies: true,
-      discussions: { include: { author: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+async function normalizeGroupMovie(movie: any, index: number): Promise<any> {
+  const metadata = movie.metadata && typeof movie.metadata === "object" ? movie.metadata : null;
 
-  return groups.map((group) => ({
-    id: group.id,
-    name: group.name,
-    description: group.description || "",
-    memberCount: group.members.length,
-    avatar: group.avatar || "",
-    members: group.members
-      .map((member) => buildUserProfile(member.user))
-      .filter(Boolean),
-    sharedList: group.movies.map((movie) => movie.metadata ?? { id: movie.tmdbId }),
-    discussions: group.discussions.map((discussion) => ({
-      id: discussion.id,
-      author: buildUserProfile(discussion.author),
-      title: discussion.title,
-      body: discussion.body,
-      date: discussion.createdAt.toISOString(),
-      likes: discussion.likes,
-      replies: discussion.replies,
-      pinned: discussion.pinned,
-      movieId: discussion.movieId ?? undefined,
-    })),
-    joined: currentUser ? group.members.some((member) => member.userId === currentUser.id) : false,
-  }));
+  if (metadata && typeof metadata.poster === "string" && metadata.poster.trim() !== "") {
+    return metadata;
+  }
+
+  if (index < 3 && typeof movie.tmdbId === "string") {
+    const details = await getMovieDetails(movie.tmdbId);
+    if (details) {
+      return details;
+    }
+  }
+
+  return {
+    id: typeof movie.tmdbId === "string" ? movie.tmdbId : typeof metadata?.id === "string" ? metadata.id : "unknown",
+    title: typeof metadata?.title === "string" ? metadata.title : "Unknown",
+    year: typeof metadata?.year === "number" ? metadata.year : 0,
+    rating: typeof metadata?.rating === "number" ? metadata.rating : 0,
+    genre: typeof metadata?.genre === "string" ? metadata.genre : "Unknown",
+    poster: typeof metadata?.poster === "string" ? metadata.poster : "",
+    synopsis: typeof metadata?.synopsis === "string" ? metadata.synopsis : "",
+    director: typeof metadata?.director === "string" ? metadata.director : "Unknown",
+    cast: Array.isArray(metadata?.cast) ? metadata.cast : [],
+    reviews: Array.isArray(metadata?.reviews) ? metadata.reviews : [],
+    tags: Array.isArray(metadata?.tags) ? metadata.tags : [],
+    streamingOn: Array.isArray(metadata?.streamingOn) ? metadata.streamingOn : [],
+    runtime: typeof metadata?.runtime === "number" ? metadata.runtime : 0,
+    language: typeof metadata?.language === "string" ? metadata.language : "Unknown",
+    country: typeof metadata?.country === "string" ? metadata.country : "Unknown",
+    moods: Array.isArray(metadata?.moods) ? metadata.moods : [],
+  };
+}
+
+async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
+  try {
+    const groups = await prisma.group.findMany({
+      include: {
+        members: { include: { user: true } },
+        movies: true,
+        discussions: { include: { author: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return await Promise.all(groups.map(async (group) => ({
+      id: group.id,
+      name: group.name,
+      description: group.description || "",
+      memberCount: group.members.length,
+      avatar: group.avatar || "",
+      members: group.members
+        .map((member) => buildUserProfile(member.user))
+        .filter(Boolean),
+      sharedList: await Promise.all(
+        group.movies.map((movie, index) => normalizeGroupMovie(movie, index))
+      ),
+      discussions: group.discussions.map((discussion) => ({
+        id: discussion.id,
+        author: buildUserProfile(discussion.author),
+        title: discussion.title,
+        body: discussion.body,
+        date: discussion.createdAt.toISOString(),
+        likes: discussion.likes,
+        replies: discussion.replies,
+        likedBy: normalizeDiscussionLikes(discussion.likedBy),
+        replyItems: normalizeDiscussionReplies(discussion.replyItems),
+        pinned: discussion.pinned,
+        movieId: discussion.movieId ?? undefined,
+      })),
+      joined: currentUser ? group.members.some((member) => member.userId === currentUser.id) : false,
+    })));
+  } catch (err) {
+    // If the DB is missing recently added JSON columns (e.g. likedBy, replyItems),
+    // the prisma client will throw. Fall back to a safe raw query that only
+    // selects Group fields so the front-end can load without a 500 while
+    // migrations are applied.
+    console.error("getGroups: primary query failed, falling back to raw query:", err);
+
+    const rows: Array<{ id: string; name: string; description: string | null; avatar: string | null; createdAt: Date; updatedAt: Date }>
+      = await prisma.$queryRaw`SELECT id, name, description, avatar, "createdAt", "updatedAt" FROM "Group" ORDER BY "createdAt" DESC`;
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || "",
+      memberCount: 0,
+      avatar: row.avatar || "",
+      members: [],
+      sharedList: [],
+      discussions: [],
+      joined: false,
+    }));
+  }
 }
 
 async function setGroups(payload: unknown, currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
@@ -158,7 +238,12 @@ async function setGroups(payload: unknown, currentUser: Awaited<ReturnType<typeo
   for (const item of payload) {
     if (!item || typeof item !== "object") continue;
     const group = item as any;
-    const creatorId = typeof group.creator?.id === "string" ? group.creator.id : currentUser?.id;
+    const creatorId =
+      typeof group.creatorId === "string"
+        ? group.creatorId
+        : typeof group.creator?.id === "string"
+          ? group.creator.id
+          : currentUser?.id;
     if (!creatorId) continue;
 
     const creatorExists = await prisma.user.findUnique({ where: { id: creatorId } });
@@ -170,6 +255,7 @@ async function setGroups(payload: unknown, currentUser: Awaited<ReturnType<typeo
 
     await prisma.group.create({
       data: {
+        id: typeof group.id === "string" ? group.id : undefined,
         creatorId: creatorExists ? creatorId : currentUser!.id,
         name: group.name || "",
         description: group.description || "",
@@ -196,6 +282,8 @@ async function setGroups(payload: unknown, currentUser: Awaited<ReturnType<typeo
               body: discussion.body || "",
               likes: typeof discussion.likes === "number" ? discussion.likes : 0,
               replies: typeof discussion.replies === "number" ? discussion.replies : 0,
+              likedBy: normalizeDiscussionLikes(discussion.likedBy),
+              replyItems: normalizeDiscussionReplies(discussion.replyItems),
               pinned: Boolean(discussion.pinned),
               movieId: typeof discussion.movieId === "string" ? discussion.movieId : undefined,
             })),
@@ -570,10 +658,12 @@ async function getUserReviews(currentUser: Awaited<ReturnType<typeof getCurrentU
   });
 
   return reviews.map((review) => ({
+    id: review.id,
     movieId: review.tmdbId,
     rating: review.rating,
     comment: review.comment || "",
     date: review.createdAt.toISOString(),
+    likes: review.likes,
   }));
 }
 
@@ -581,39 +671,51 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ key: string }> }
 ) {
-  const { key } = await params;
-  const session = await getServerSession(authOptions);
-  const currentUser = await getCurrentUser(session);
+  try {
+    const { key } = await params;
+    const session = await getServerSession(authOptions);
+    const currentUser = await getCurrentUser(session);
 
-  switch (true) {
-    case key === "shared-lists":
-      return NextResponse.json({ value: await getSharedLists() });
-    case key === "groups":
-      return NextResponse.json({ value: await getGroups(currentUser) });
-    case key === "user-filter-presets":
-      return NextResponse.json({ value: await getUserFilterPresets(currentUser) });
-    case key === "user-stats":
-      return NextResponse.json({ value: await getUserStats(currentUser) });
-    case key === "user-wrapped":
-      return NextResponse.json({ value: await getUserStats(currentUser) });
-    case key === "home-activity-feed":
-      return NextResponse.json({ value: await getActivityFeed() });
-    case key === "user-notifications":
-      return NextResponse.json({ value: await getUserNotifications(currentUser) });
-    case key === "user-messages":
-      return NextResponse.json({ value: await getUserMessages(currentUser) });
-    case key === "user-watchlist-current":
-      return NextResponse.json({ value: currentUser ? await getUserWatchlist(currentUser.id) : [] });
-    case key === "user-watched-current":
-      return NextResponse.json({ value: currentUser ? await getUserWatched(currentUser.id) : [] });
-    case key === "user-favorites-current":
-      return NextResponse.json({ value: currentUser ? await getUserFavorites(currentUser.id) : [] });
-    case key.startsWith("user-watchlist-"):
-      return NextResponse.json({ value: await getUserWatchlist(key.replace("user-watchlist-", "")) });
-    case key === "user-reviews-current":
-      return NextResponse.json({ value: await getUserReviews(currentUser) });
-    default:
-      return NextResponse.json({ error: "Unknown data key" }, { status: 400 });
+    switch (true) {
+      case key === "shared-lists":
+        return NextResponse.json({ value: await getSharedLists() });
+      case key === "groups":
+        return NextResponse.json({
+          value: await getGroups(currentUser),
+          currentUser: buildUserProfile(currentUser),
+        });
+      case key === "user-filter-presets":
+        return NextResponse.json({ value: await getUserFilterPresets(currentUser) });
+      case key === "user-stats":
+        return NextResponse.json({ value: await getUserStats(currentUser) });
+      case key === "user-wrapped":
+        return NextResponse.json({ value: await getUserStats(currentUser) });
+      case key === "home-activity-feed":
+        return NextResponse.json({ value: await getActivityFeed() });
+      case key === "user-notifications":
+        return NextResponse.json({ value: await getUserNotifications(currentUser) });
+      case key === "user-messages":
+        return NextResponse.json({ value: await getUserMessages(currentUser) });
+      case key === "user-watchlist-current":
+        return NextResponse.json({ value: currentUser ? await getUserWatchlist(currentUser.id) : [] });
+      case key === "user-watched-current":
+        return NextResponse.json({ value: currentUser ? await getUserWatched(currentUser.id) : [] });
+      case key === "user-favorites-current":
+        return NextResponse.json({ value: currentUser ? await getUserFavorites(currentUser.id) : [] });
+      case key.startsWith("user-watchlist-"):
+        return NextResponse.json({ value: await getUserWatchlist(key.replace("user-watchlist-", "")) });
+      case key === "user-reviews-current":
+        return NextResponse.json({ value: await getUserReviews(currentUser) });
+      default:
+        return NextResponse.json({ error: "Unknown data key" }, { status: 400 });
+    }
+  } catch (err) {
+    // Log server-side error and return JSON body so clients can inspect the message.
+    // Avoid leaking sensitive details in production — this is intended for debugging.
+    // If you want to suppress details, replace err.message with a generic message.
+    console.error("/api/data/[key] GET error:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
