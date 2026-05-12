@@ -49,6 +49,7 @@ export interface Reply {
 
 export interface Review {
   id: string;
+  movieId?: string;
   user: UserProfile;
   rating: number;
   comment: string;
@@ -106,6 +107,7 @@ export interface Group {
   description: string;
   memberCount: number;
   avatar: string;
+  creatorId: string;
   members: UserProfile[];
   sharedList: Movie[];
 }
@@ -119,9 +121,20 @@ export interface SharedList {
   collaborators: UserProfile[];
   movies: Movie[];
   likes: number;
+  likedByMe?: boolean;
   comments: number;
+  commentItems?: SharedListComment[];
   createdAt: string;
   groupId?: string;
+}
+
+export interface SharedListComment {
+  id: string;
+  user: UserProfile;
+  body: string;
+  date: string;
+  parentId?: string | null;
+  replies: SharedListComment[];
 }
 
 export interface NotificationItem {
