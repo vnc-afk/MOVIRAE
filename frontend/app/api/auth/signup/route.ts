@@ -7,9 +7,17 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 const signupSchema = z.object({
-  name: z.string().min(2).max(80).optional(),
-  email: z.string().email(),
-  password: z.string().min(8).max(200),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters.")
+    .max(80, "Name must be 80 characters or less.")
+    .optional(),
+  email: z.string().trim().email("Enter a valid email address."),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .max(200, "Password must be 200 characters or less."),
 });
 
 export async function POST(request: Request) {
@@ -17,8 +25,10 @@ export async function POST(request: Request) {
   const parsed = signupSchema.safeParse(payload);
 
   if (!parsed.success) {
+    const firstIssue = parsed.error.issues[0];
+
     return NextResponse.json(
-      { error: "Invalid signup data." },
+      { error: firstIssue?.message ?? "Invalid signup data." },
       { status: 400 }
     );
   }

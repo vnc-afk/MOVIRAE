@@ -22,6 +22,34 @@ export default function LoginPage() {
     setCallbackUrl(nextCallbackUrl);
   }, []);
 
+  const validateSignupForm = () => {
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedEmail) {
+      return "Email is required.";
+    }
+
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(trimmedEmail)) {
+      return "Enter a valid email address.";
+    }
+
+    if (password.length < 8) {
+      return "Password must be at least 8 characters.";
+    }
+
+    if (trimmedName && trimmedName.length < 2) {
+      return "Name must be at least 2 characters.";
+    }
+
+    if (trimmedName.length > 80) {
+      return "Name must be 80 characters or less.";
+    }
+
+    return null;
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -29,6 +57,12 @@ export default function LoginPage() {
 
     try {
       if (isSignup) {
+        const validationError = validateSignupForm();
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+
         const response = await fetch("/api/auth/signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
