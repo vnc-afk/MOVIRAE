@@ -26,9 +26,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
     console.error("/api/groups/[groupId] GET error:", err);
 
     try {
-      const rows: Array<{ id: string; name: string; description: string | null; avatar: string | null; "createdAt": Date }>
+      const rows: Array<{ id: string; name: string; description: string | null; avatar: string | null; creatorId: string; "createdAt": Date }>
         = await prisma.$queryRaw`
-          SELECT id, name, description, avatar, "createdAt"
+          SELECT id, name, description, avatar, "creatorId", "createdAt"
           FROM "Group"
           WHERE id = ${groupId}
           LIMIT 1
@@ -46,6 +46,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
         description: row.description || "",
         memberCount: 0,
         avatar: row.avatar || "",
+        creatorId: row.creatorId,
         members: [],
         sharedList: [],
         discussions: [],
