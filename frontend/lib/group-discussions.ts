@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getMovieDetails } from "@/lib/tmdb";
 import type { Group, Movie, UserProfile } from "@/lib/types";
 
 type PrismaUser = Awaited<ReturnType<typeof prisma.user.findUnique>>;
@@ -109,6 +110,38 @@ function serializeDiscussion(discussion: any): DiscussionRecord {
   };
 }
 
+async function normalizeGroupMovie(movie: any): Promise<Movie> {
+  const metadata = movie.metadata && typeof movie.metadata === "object" ? movie.metadata : null;
+
+  if (metadata && typeof metadata.poster === "string" && metadata.poster.trim() !== "") {
+    return metadata as Movie;
+  }
+
+  const tmdbDetails = await getMovieDetails(movie.tmdbId);
+  if (tmdbDetails) {
+    return tmdbDetails;
+  }
+
+  return {
+    id: movie.tmdbId,
+    title: metadata?.title || "Unknown",
+    year: metadata?.year || 0,
+    rating: metadata?.rating || 0,
+    genre: metadata?.genre || "Unknown",
+    poster: metadata?.poster || "",
+    synopsis: metadata?.synopsis || "",
+    director: metadata?.director || "Unknown",
+    cast: metadata?.cast || [],
+    reviews: metadata?.reviews || [],
+    tags: metadata?.tags || [],
+    streamingOn: metadata?.streamingOn || [],
+    runtime: metadata?.runtime || 0,
+    language: metadata?.language || "Unknown",
+    country: metadata?.country || "Unknown",
+    moods: metadata?.moods || [],
+  };
+}
+
 export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser | null) {
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -125,14 +158,19 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
     .map((member) => buildUserProfile(member.user))
     .filter(Boolean) as UserProfile[];
 
+  const sharedList = await Promise.all(
+    group.movies.map((movie) => normalizeGroupMovie(movie))
+  );
+
   return {
     id: group.id,
     name: group.name,
     description: group.description || "",
     memberCount: group.members.length,
     avatar: group.avatar || "",
+    creatorId: group.creatorId,
     members,
-    sharedList: group.movies.map((movie) => movie.metadata ?? ({ id: movie.tmdbId } as Movie)) as Movie[],
+    sharedList,
     discussions: group.discussions.map(serializeDiscussion),
     joined: currentUser ? group.members.some((member) => member.userId === currentUser.id) : false,
   } satisfies GroupDetailRecord;
