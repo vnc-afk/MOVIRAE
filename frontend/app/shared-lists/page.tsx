@@ -1,114 +1,181 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ListPlus,
-  Plus,
-  Users,
-  Lock,
-  Globe,
-  Heart,
-  MessageCircle,
-  MoreHorizontal,
-  Trash2,
-  UserPlus,
-  Film,
-  Check,
-  X,
-  GripVertical,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { searchMovies } from "@/lib/tmdb";
 import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
+import { SharedListsView } from "./shared-lists-view";
 
-const visibilityConfig = {
-  public: { icon: Globe, label: "Public", color: "text-green-500" },
-  private: { icon: Lock, label: "Private", color: "text-amber-500" },
-  group: { icon: Users, label: "Group", color: "text-blue-500" },
+type SharedListsResponse = {
+  value?: SharedList[];
+  currentUser?: Pick<UserProfile, "id" | "email"> | null;
+  error?: string;
 };
 
 export default function SharedListsPage() {
   const [lists, setLists] = useState<SharedList[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
-  const [liked, setLiked] = useState<Record<string, boolean>>({});
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
 
   const [openCreate, setOpenCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newVisibility, setNewVisibility] = useState<"public" | "private" | "group">("public");
   const [newGroupId, setNewGroupId] = useState<string>("");
+  const [newCommentByList, setNewCommentByList] = useState<Record<string, string>>({});
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [openReplyFor, setOpenReplyFor] = useState<string | null>(null);
+  const [movieSearchQuery, setMovieSearchQuery] = useState("");
+  const [movieSearchResults, setMovieSearchResults] = useState<Movie[]>([]);
+  const [movieSearchLoading, setMovieSearchLoading] = useState(false);
+  const [movieSearchError, setMovieSearchError] = useState<string | null>(null);
+  const [addingMovieToListId, setAddingMovieToListId] = useState<string | null>(null);
+  const [removingMovieFromListId, setRemovingMovieFromListId] = useState<string | null>(null);
+
+  const selectedList = useMemo(
+    () => lists.find((list) => list.id === selectedListId) ?? null,
+    [lists, selectedListId]
+  );
+
+  const parseResponsePayload = async (response: Response) => {
+    const text = await response.text();
+    if (!text) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(text) as { value?: unknown; error?: string };
+    } catch {
+      throw new Error("Received an invalid server response.");
+    }
+  };
+
+  const loadSharedLists = async () => {
+    const response = await fetch("/api/shared-lists", { cache: "no-store" });
+    const payload = (await parseResponsePayload(response)) as SharedListsResponse | null;
+
+    if (!response.ok) {
+      throw new Error(payload?.error || "Failed to load shared lists.");
+    }
+
+    const nextLists = Array.isArray(payload?.value) ? payload.value : [];
+    setLists(nextLists);
+    setCurrentUser((existingUser) => {
+      const authenticatedUser = payload?.currentUser;
+      if (!authenticatedUser?.id) {
+        return null;
+      }
+
+      return (
+        nextLists.find((list) => list.owner.id === authenticatedUser.id)?.owner ??
+        nextLists
+          .flatMap((list) => list.collaborators)
+          .find((collaborator) => collaborator.id === authenticatedUser.id) ??
+        existingUser ?? {
+          id: authenticatedUser.id,
+          email: authenticatedUser.email,
+          username: authenticatedUser.email?.split("@")[0] ?? "user",
+          displayName: authenticatedUser.email?.split("@")[0] ?? "User",
+          avatar: "",
+          bio: "",
+          followers: 0,
+          following: 0,
+          reviewCount: 0,
+          watchlistCount: 0,
+          favoriteMovies: [],
+        }
+      );
+    });
+    return nextLists;
+  };
+
+  const loadSupportingData = async () => {
+    const groupsResponse = await fetch("/api/data/groups", { cache: "no-store" }).then((response) => response.json());
+    setGroups(Array.isArray(groupsResponse.value) ? groupsResponse.value : []);
+  };
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/data/shared-lists").then((response) => response.json()),
-      fetch("/api/users").then((response) => response.json()),
-      fetch("/api/data/groups").then((response) => response.json()),
-    ])
-      .then(([listsResponse, usersResponse, groupsResponse]) => {
-        setLists(Array.isArray(listsResponse.value) ? listsResponse.value : []);
-        setUsers(Array.isArray(usersResponse.value) ? usersResponse.value : []);
-        setGroups(Array.isArray(groupsResponse.value) ? groupsResponse.value : []);
-      })
-      .catch((error) => console.error("Failed to load shared lists:", error));
+    let isActive = true;
+    let eventSource: EventSource | null = null;
+
+    Promise.all([loadSharedLists(), loadSupportingData()]).catch((error) => {
+      console.error("Failed to load shared lists:", error);
+      if (isActive) {
+        toast.error("Failed to load shared lists.");
+      }
+    });
+
+    eventSource = new EventSource("/api/shared-lists/events");
+    eventSource.addEventListener("shared-list-updated", () => {
+      if (!isActive) return;
+
+      loadSharedLists().catch((error) => {
+        console.error("Failed to refresh shared lists:", error);
+      });
+    });
+    eventSource.onerror = () => {
+      // Browser retries automatically.
+    };
+
+    return () => {
+      isActive = false;
+      eventSource?.close();
+    };
   }, []);
 
-  const currentUser = users[0] ?? null;
+  useEffect(() => {
+    if (!selectedListId) {
+      setOpenReplyFor(null);
+      setMovieSearchQuery("");
+      setMovieSearchResults([]);
+      setMovieSearchError(null);
+      return;
+    }
 
-  const persistLists = async (nextLists: SharedList[]) => {
-    setLists(nextLists);
-    await fetch("/api/data/shared-lists", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(nextLists),
-    });
-  };
+    const listStillExists = lists.some((list) => list.id === selectedListId);
+    if (!listStillExists) {
+      setSelectedListId(null);
+    }
+  }, [lists, selectedListId]);
 
-  const removeList = async (id: string) => {
-    const nextLists = lists.filter((list) => list.id !== id);
-    await persistLists(nextLists);
-    toast.success("List removed");
-  };
+  useEffect(() => {
+    const trimmedQuery = movieSearchQuery.trim();
 
-  const toggleLike = async (list: SharedList) => {
-    const nowLiked = !liked[list.id];
-    setLiked((prev) => ({ ...prev, [list.id]: nowLiked }));
+    if (!selectedList || trimmedQuery.length < 2) {
+      setMovieSearchResults([]);
+      setMovieSearchLoading(false);
+      setMovieSearchError(null);
+      return;
+    }
 
-    const nextLists = lists.map((item) =>
-      item.id === list.id
-        ? { ...item, likes: item.likes + (nowLiked ? 1 : -1) }
-        : item
-    );
+    let active = true;
+    setMovieSearchLoading(true);
+    setMovieSearchError(null);
 
-    await persistLists(nextLists);
-  };
+    const timeoutId = setTimeout(() => {
+      searchMovies(trimmedQuery)
+        .then((results) => {
+          if (!active) return;
+          setMovieSearchResults(results.slice(0, 6));
+        })
+        .catch((error) => {
+          console.error("Failed to search movies:", error);
+          if (!active) return;
+          setMovieSearchError("Could not search movies right now.");
+        })
+        .finally(() => {
+          if (active) {
+            setMovieSearchLoading(false);
+          }
+        });
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+    };
+  }, [movieSearchQuery, selectedList]);
 
   const createList = async () => {
     if (!currentUser) {
@@ -126,21 +193,25 @@ export default function SharedListsPage() {
       return;
     }
 
-    const nextList: SharedList = {
-      id: `list-${Date.now()}`,
-      name: newName.trim(),
-      description: newDescription.trim() || "No description yet.",
-      visibility: newVisibility,
-      owner: currentUser,
-      collaborators: [],
-      movies: [],
-      likes: 0,
-      comments: 0,
-      createdAt: "Just now",
-      groupId: newVisibility === "group" ? newGroupId : undefined,
-    };
+    const response = await fetch("/api/shared-lists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: newName.trim(),
+        description: newDescription.trim(),
+        visibility: newVisibility,
+        groupId: newGroupId || undefined,
+      }),
+    });
 
-    await persistLists([nextList, ...lists]);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      toast.error(payload?.error || "Failed to create list.");
+      return;
+    }
+
+    const payload = await response.json();
+    setLists(Array.isArray(payload.value) ? payload.value : []);
 
     setNewName("");
     setNewDescription("");
@@ -151,216 +222,158 @@ export default function SharedListsPage() {
     toast.success("Shared list created");
   };
 
-  const mine = lists.filter((list) => list.owner.id === currentUser?.id);
-  const publicLists = lists.filter((list) => list.visibility === "public");
-  const groupLists = lists.filter((list) => list.visibility === "group");
+  const updateListsFromResponse = async (response: Response) => {
+    const payload = await parseResponsePayload(response);
+
+    if (!response.ok) {
+      throw new Error(payload?.error || "Request failed.");
+    }
+
+    const nextLists = Array.isArray(payload?.value) ? payload.value : [];
+    setLists(nextLists);
+    return nextLists;
+  };
+
+  const mutateList = async (listId: string, endpoint: string, body?: Record<string, unknown>) => {
+    const response = await fetch(`/api/shared-lists/${listId}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    return updateListsFromResponse(response);
+  };
+
+  const removeList = async (id: string) => {
+    try {
+      const response = await fetch(`/api/shared-lists/${id}`, { method: "DELETE" });
+      await updateListsFromResponse(response);
+
+      if (selectedListId === id) {
+        setSelectedListId(null);
+      }
+
+      toast.success("List removed");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not remove the list.";
+      toast.error(message);
+    }
+  };
+
+  const toggleLike = async (list: SharedList) => {
+    try {
+      await mutateList(list.id, "like");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not update the like.";
+      toast.error(message);
+    }
+  };
+
+  const addComment = async (listId: string, parentId?: string) => {
+    if (!currentUser) {
+      toast.error("Sign in to comment.");
+      return;
+    }
+
+    const body = (parentId ? replyDrafts[parentId] : newCommentByList[listId])?.trim();
+    try {
+      const response = await fetch(`/api/shared-lists/${listId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body, parentId }),
+      });
+
+      await updateListsFromResponse(response);
+
+      if (parentId) {
+        setReplyDrafts((current) => ({ ...current, [parentId]: "" }));
+        setOpenReplyFor(null);
+      } else {
+        setNewCommentByList((current) => ({ ...current, [listId]: "" }));
+      }
+
+      toast.success(parentId ? "Reply posted" : "Comment posted");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not post the comment.";
+      toast.error(message);
+    }
+  };
+
+  const addMovie = async (listId: string, movieId: string) => {
+    setAddingMovieToListId(listId);
+    try {
+      const response = await fetch(`/api/shared-lists/${listId}/movies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ movieId }),
+      });
+
+      await updateListsFromResponse(response);
+      toast.success("Movie added to list");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not add movie.";
+      toast.error(message);
+    } finally {
+      setAddingMovieToListId(null);
+    }
+  };
+
+  const removeMovie = async (listId: string, movieId: string) => {
+    setRemovingMovieFromListId(listId);
+    try {
+      const response = await fetch(`/api/shared-lists/${listId}/movies`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ movieId }),
+      });
+
+      await updateListsFromResponse(response);
+      toast.success("Movie removed from list");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not remove movie.";
+      toast.error(message);
+    } finally {
+      setRemovingMovieFromListId(null);
+    }
+  };
 
   return (
-    <div className="container py-8 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl md:text-4xl font-bold tracking-tight text-foreground">Shared Lists</h1>
-          <p className="text-sm text-muted-foreground mt-1">Build and share curated movie collections with friends and groups.</p>
-        </div>
-
-        <Dialog open={openCreate} onOpenChange={setOpenCreate}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><ListPlus className="h-4 w-4" /> New List</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Shared List</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <Input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="List name" />
-              <Textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} placeholder="Description" rows={3} />
-              <Select value={newVisibility} onValueChange={(value: "public" | "private" | "group") => setNewVisibility(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Visibility" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="public">Public</SelectItem>
-                  <SelectItem value="private">Private</SelectItem>
-                  <SelectItem value="group">Group</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {newVisibility === "group" && (
-                <Select value={newGroupId} onValueChange={setNewGroupId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groups.map((group) => (
-                      <SelectItem key={group.id} value={group.id}>{group.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" onClick={() => setOpenCreate(false)}><X className="h-4 w-4 mr-1" /> Cancel</Button>
-                <Button onClick={createList}><Check className="h-4 w-4 mr-1" /> Create</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <Tabs defaultValue="public" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="public">Public</TabsTrigger>
-          <TabsTrigger value="groups">Groups</TabsTrigger>
-          <TabsTrigger value="mine">Mine</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="public">
-          <ListGrid
-            lists={publicLists}
-            groups={groups}
-            liked={liked}
-            onLike={toggleLike}
-            onDelete={removeList}
-            showDelete={false}
-          />
-        </TabsContent>
-
-        <TabsContent value="groups">
-          <ListGrid
-            lists={groupLists}
-            groups={groups}
-            liked={liked}
-            onLike={toggleLike}
-            onDelete={removeList}
-            showDelete={false}
-          />
-        </TabsContent>
-
-        <TabsContent value="mine">
-          <ListGrid
-            lists={mine}
-            groups={groups}
-            liked={liked}
-            onLike={toggleLike}
-            onDelete={removeList}
-            showDelete={true}
-          />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-
-function ListGrid({
-  lists,
-  groups,
-  liked,
-  onLike,
-  onDelete,
-  showDelete,
-}: {
-  lists: SharedList[];
-  groups: Group[];
-  liked: Record<string, boolean>;
-  onLike: (list: SharedList) => void;
-  onDelete: (id: string) => void;
-  showDelete: boolean;
-}) {
-  if (lists.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
-        No lists here yet.
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-      <AnimatePresence>
-        {lists.map((list, index) => {
-          const config = visibilityConfig[list.visibility];
-          const VisibilityIcon = config.icon;
-          const group = list.groupId ? groups.find((item) => item.id === list.groupId) : null;
-
-          return (
-            <motion.article
-              key={list.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ delay: index * 0.03 }}
-              className="rounded-xl bg-card p-4 card-shadow hover:card-shadow-hover transition-shadow"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <VisibilityIcon className={`h-3.5 w-3.5 ${config.color}`} />
-                    {config.label}
-                    {group && <Badge variant="outline">{group.name}</Badge>}
-                  </div>
-                  <h3 className="font-semibold text-foreground mt-1">{list.name}</h3>
-                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{list.description}</p>
-                </div>
-
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <UserPlus className="h-4 w-4 mr-2" /> Invite collaborator
-                    </DropdownMenuItem>
-                    {showDelete && (
-                      <DropdownMenuItem onClick={() => onDelete(list.id)} className="text-destructive">
-                        <Trash2 className="h-4 w-4 mr-2" /> Delete list
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              <div className="flex items-center gap-2 mt-3">
-                <Avatar className="h-7 w-7">
-                  <AvatarImage src={list.owner.avatar} />
-                  <AvatarFallback>{list.owner.displayName.slice(0, 1)}</AvatarFallback>
-                </Avatar>
-                <p className="text-xs text-muted-foreground">by {list.owner.displayName}</p>
-              </div>
-
-              <div className="grid grid-cols-5 gap-2 mt-4">
-                {list.movies.slice(0, 5).map((movie) => (
-                  <Link key={movie.id} href={`/movie/${movie.id}`} className="block rounded-md overflow-hidden bg-muted">
-                    <img src={movie.poster} alt={movie.title} className="w-full h-20 object-cover" />
-                  </Link>
-                ))}
-                {list.movies.length === 0 && (
-                  <div className="col-span-5 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center gap-2">
-                    <Film className="h-3.5 w-3.5" /> No movies yet
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between mt-4 text-xs text-muted-foreground">
-                <div className="flex items-center gap-3">
-                  <button onClick={() => onLike(list)} className="flex items-center gap-1 hover:text-foreground transition-colors">
-                    <Heart className={`h-3.5 w-3.5 ${liked[list.id] ? "fill-primary text-primary" : ""}`} />
-                    {list.likes}
-                  </button>
-                  <span className="flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" /> {list.comments}</span>
-                  <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {list.collaborators.length + 1}</span>
-                </div>
-                <span>{list.createdAt}</span>
-              </div>
-
-              <div className="mt-3 flex justify-end">
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> Add movie
-                </Button>
-              </div>
-            </motion.article>
-          );
-        })}
-      </AnimatePresence>
-    </div>
+    <SharedListsView
+      lists={lists}
+      groups={groups}
+      currentUser={currentUser}
+      selectedList={selectedList}
+      openCreate={openCreate}
+      setOpenCreate={setOpenCreate}
+      newName={newName}
+      setNewName={setNewName}
+      newDescription={newDescription}
+      setNewDescription={setNewDescription}
+      newVisibility={newVisibility}
+      setNewVisibility={setNewVisibility}
+      newGroupId={newGroupId}
+      setNewGroupId={setNewGroupId}
+      createList={createList}
+      selectedListId={selectedListId}
+      setSelectedListId={setSelectedListId}
+      newCommentByList={newCommentByList}
+      setNewCommentByList={setNewCommentByList}
+      replyDrafts={replyDrafts}
+      setReplyDrafts={setReplyDrafts}
+      openReplyFor={openReplyFor}
+      setOpenReplyFor={setOpenReplyFor}
+      movieSearchQuery={movieSearchQuery}
+      setMovieSearchQuery={setMovieSearchQuery}
+      movieSearchResults={movieSearchResults}
+      movieSearchLoading={movieSearchLoading}
+      movieSearchError={movieSearchError}
+      addingMovieToListId={addingMovieToListId}
+      removingMovieFromListId={removingMovieFromListId}
+      toggleLike={toggleLike}
+      removeList={removeList}
+      addComment={addComment}
+      addMovie={addMovie}
+      removeMovie={removeMovie}
+    />
   );
 }
