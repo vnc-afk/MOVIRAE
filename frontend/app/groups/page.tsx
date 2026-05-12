@@ -16,6 +16,7 @@ import type { Group, UserProfile } from "@/lib/types";
 const avatarUrl = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
 
 type GroupRecord = Group & { joined?: boolean };
+type GroupsResponse = { value?: GroupRecord[]; currentUser?: UserProfile | null };
 
 async function fetchJsonValue<T>(url: string): Promise<T | null> {
   try {
@@ -40,24 +41,19 @@ async function fetchJsonValue<T>(url: string): Promise<T | null> {
 export default function Groups() {
   const router = useRouter();
   const [groups, setGroups] = useState<GroupRecord[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
   useEffect(() => {
-    Promise.all([
-      fetchJsonValue<{ value: GroupRecord[] }>("/api/data/groups"),
-      fetchJsonValue<{ value: UserProfile[] }>("/api/users"),
-    ])
-      .then(([groupsResponse, usersResponse]) => {
+    fetchJsonValue<GroupsResponse>("/api/data/groups")
+      .then((groupsResponse) => {
         setGroups(Array.isArray(groupsResponse?.value) ? groupsResponse.value : []);
-        setUsers(Array.isArray(usersResponse?.value) ? usersResponse.value : []);
+        setCurrentUser(groupsResponse?.currentUser ?? null);
       })
       .catch((error) => console.error("Failed to load groups:", error));
   }, []);
-
-  const currentUser = users[0] ?? null;
 
   const persistGroups = async (nextGroups: GroupRecord[]) => {
     setGroups(nextGroups);

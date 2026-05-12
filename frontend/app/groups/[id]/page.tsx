@@ -64,6 +64,7 @@ interface Discussion {
 
 type GroupRecord = Group & { discussions?: Discussion[]; joined?: boolean };
 type LoadState = "loading" | "ready" | "not-found" | "error";
+type GroupDetailResponse = { value?: GroupRecord | null; currentUser?: UserProfile | null };
 
 function formatDiscussionDate(date: string) {
   const parsedDate = new Date(date);
@@ -99,13 +100,6 @@ export default function GroupDetail() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
 
-  const loadCurrentUser = async () => {
-    const response = await fetch("/api/users");
-    const payload = await response.json();
-    const users = Array.isArray(payload.value) ? payload.value : [];
-    setCurrentUser(users[0] ?? null);
-  };
-
   const loadGroup = async (showLoadingState = false) => {
     if (showLoadingState) {
       setLoadState((current) => (current === "ready" ? current : "loading"));
@@ -130,10 +124,11 @@ export default function GroupDetail() {
       return null;
     }
 
-    const payload = await response.json();
+    const payload = (await response.json()) as GroupDetailResponse;
     const nextGroup = (payload.value ?? null) as GroupRecord | null;
 
     setGroup(nextGroup);
+    setCurrentUser(payload.currentUser ?? null);
     setJoined(Boolean(nextGroup?.joined));
     setLoadState(nextGroup ? "ready" : "not-found");
     return nextGroup;
@@ -157,7 +152,7 @@ export default function GroupDetail() {
 
     const loadData = async () => {
       try {
-        await Promise.all([loadGroup(true), loadCurrentUser()]);
+        await loadGroup(true);
         
         // Load events
         const eventsResponse = await fetch(`/api/groups/${id}/events?data=1`, { cache: "no-store" });

@@ -2,8 +2,30 @@ import { NextResponse } from "next/server";
 
 import { fetchGroupDetail, getCurrentUser } from "@/lib/group-discussions";
 import { prisma } from "@/lib/prisma";
+import type { UserProfile } from "@/lib/types";
 
 export const runtime = "nodejs";
+
+function buildUserProfile(user: any) {
+  if (!user) return null;
+
+  const displayName = user.displayName || user.name || user.email?.split("@")[0] || "Movie Lover";
+  const username = user.username || displayName.toLowerCase().replace(/\s+/g, "_");
+
+  return {
+    id: user.id,
+    email: user.email || undefined,
+    username,
+    displayName,
+    avatar: user.avatar || user.image || "",
+    bio: user.bio || "",
+    followers: 0,
+    following: 0,
+    reviewCount: 0,
+    watchlistCount: 0,
+    favoriteMovies: [],
+  } satisfies UserProfile;
+}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
@@ -18,7 +40,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
       return NextResponse.json({ error: "Group not found", availableIds: avail.map((r) => r.id) }, { status: 404 });
     }
 
-    return NextResponse.json({ value: group });
+    return NextResponse.json({ value: group, currentUser: buildUserProfile(currentUser) });
   } catch (err) {
     // If fetchGroupDetail fails (e.g. missing JSON columns in DB),
     // log and return a minimal group shape fetched via a raw query so
@@ -53,7 +75,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
         joined: false,
       };
 
-      return NextResponse.json({ value: minimal });
+      return NextResponse.json({ value: minimal, currentUser: buildUserProfile(currentUser) });
     } catch (rawErr) {
       console.error("/api/groups/[groupId] raw fallback failed:", rawErr);
       const message = rawErr instanceof Error ? rawErr.message : String(rawErr);
