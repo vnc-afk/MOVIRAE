@@ -18,6 +18,7 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
   const [isWatched, setIsWatched] = useState(false);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [loading, setLoading] = useState({ watched: false, watchlist: false });
+  const posterSrc = movie.poster.trim();
 
   useEffect(() => {
     if (!session?.user?.email) return;
@@ -93,14 +94,20 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
     >
       <Link href={`/movie/${movie.id}`} className="group block">
         <div className="relative overflow-hidden rounded-lg poster-shadow">
-          <img
-            src={movie.poster}
-            alt={movie.title}
-            loading="lazy"
-            width={640}
-            height={960}
-            className="w-full aspect-[2/3] object-cover transition-transform duration-500 group-hover:scale-105"
-          />
+          {posterSrc ? (
+            <img
+              src={posterSrc}
+              alt={movie.title}
+              loading="lazy"
+              width={640}
+              height={960}
+              className="w-full aspect-[2/3] object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex aspect-[2/3] w-full items-center justify-center bg-secondary text-center text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+              No Poster
+            </div>
+          )}
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
             <div className="flex gap-2 mb-3">
