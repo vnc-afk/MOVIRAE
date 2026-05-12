@@ -6,6 +6,9 @@ const PUBLIC_FILE = /\.(.*)$/;
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-pathname", pathname);
+  requestHeaders.set("x-search", req.nextUrl.search);
 
   if (
     pathname.startsWith("/login") ||
@@ -15,12 +18,20 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/favicon.ico") ||
     PUBLIC_FILE.test(pathname)
   ) {
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
   if (token) {
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
   const loginUrl = req.nextUrl.clone();
