@@ -131,6 +131,7 @@ export default function Groups() {
       description,
       memberCount: 1,
       avatar: avatarUrl(name),
+      creatorId: currentUser.id,
       members: [currentUser],
       sharedList: [],
       joined: true,
