@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
+import { format } from "date-fns";
 import { Heart, List, MessageCircle, BarChart3, ArrowLeftRight, FileText } from "lucide-react";
 import { MovieCard } from "@/components/MovieCard";
 import { StarRating } from "@/components/StarRating";
@@ -18,12 +19,20 @@ interface ReviewSummary {
   date: string;
 }
 
+function formatReviewDate(date: string) {
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return date;
+
+  return format(parsedDate, "PPp");
+}
+
 export default function ProfilePage() {
   const { data: session } = useSession();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [favoriteMovies, setFavoriteMovies] = useState<Movie[]>([]);
   const [watchlistMovies, setWatchlistMovies] = useState<Movie[]>([]);
   const [reviewSummaries, setReviewSummaries] = useState<ReviewSummary[]>([]);
+  const [reviewMovies, setReviewMovies] = useState<Record<string, Movie | null>>({});
 
   useEffect(() => {
     Promise.all([
@@ -44,7 +53,13 @@ export default function ProfilePage() {
         const watchlistResults = await Promise.all(watchlistIds.map((movieId: string) => getMovieDetails(movieId)));
         setWatchlistMovies(watchlistResults.filter((movie): movie is Movie => movie !== null));
 
-        setReviewSummaries(Array.isArray(reviewsResponse.value) ? reviewsResponse.value : []);
+        const reviewList = Array.isArray(reviewsResponse.value) ? reviewsResponse.value : [];
+        setReviewSummaries(reviewList);
+
+        const reviewedMovieResults = await Promise.all(
+          reviewList.map(async (review: ReviewSummary) => [review.movieId, await getMovieDetails(review.movieId)] as const)
+        );
+        setReviewMovies(Object.fromEntries(reviewedMovieResults));
       })
       .catch((error) => console.error("Failed to load profile data:", error));
   }, [session?.user?.name]);
@@ -122,16 +137,22 @@ export default function ProfilePage() {
             ) : (
               <div className="space-y-4 max-w-2xl">
                 {reviewSummaries.map((review) => {
-                  const movie = favoriteMovies.find((item) => item.id === review.movieId) ?? null;
+                  const movie = reviewMovies[review.movieId] ?? null;
+                  const movieHref = movie ? `/movie/${movie.id}` : `/movie/${review.movieId}`;
                   return (
-                    <div key={review.movieId} className="rounded-lg bg-card p-5 card-shadow flex gap-4">
+                    <Link
+                      key={review.movieId}
+                      href={movieHref}
+                      className="rounded-lg bg-card p-5 card-shadow flex gap-4 transition-transform transition-colors hover:-translate-y-0.5 hover:bg-card/90 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
                       {movie?.poster ? <img src={movie.poster} alt={movie.title} className="h-20 w-14 rounded object-cover poster-shadow flex-shrink-0" /> : <div className="h-20 w-14 rounded bg-secondary" />}
                       <div>
                         <h3 className="font-semibold text-sm text-foreground">{movie?.title || review.movieId}</h3>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">{formatReviewDate(review.date)}</p>
                         <StarRating rating={review.rating} size="sm" />
                         <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2">{review.comment}</p>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
