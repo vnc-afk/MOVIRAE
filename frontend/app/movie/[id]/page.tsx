@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye, Heart, ListPlus, Play } from "lucide-react";
+import { ArrowLeft, Eye, Heart, ListPlus, Play, Star } from "lucide-react";
 import { use } from "react";
 import { getMovieDetails, getSimilarMovies } from "@/lib/tmdb";
 import { getStreamingPlatforms } from "@/lib/watchmode";
-import type { Movie } from "@/lib/types";
+import type { Movie, Review } from "@/lib/types";
 import { StarRating } from "@/components/StarRating";
 import { CastCarousel } from "@/components/CastCarousel";
 import { ReviewCard } from "@/components/ReviewCard";
@@ -17,6 +17,9 @@ import { StreamingBadges } from "@/components/StreamingBadges";
 import { SimilarMovies } from "@/components/SimilarMovies";
 import { HowYouWatched } from "@/components/HowYouWatched";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 type MovieDetailPageProps = {
   params: Promise<{
@@ -30,7 +33,12 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [movie, setMovie] = useState<Movie | null>(null);
   const [similar, setSimilar] = useState<Movie[]>([]);
   const [streamingOn, setStreamingOn] = useState<string[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isWatched, setIsWatched] = useState(false);
   const [isWatchlist, setIsWatchlist] = useState(false);
@@ -38,6 +46,21 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [buttonLoading, setButtonLoading] = useState({ watched: false, watchlist: false, liked: false });
 
   useEffect(() => {
+    async function fetchReviews(movieId: string) {
+      try {
+        const response = await fetch(`/api/reviews/movie/${movieId}`);
+        const json = await response.json().catch(() => null);
+        if (response.ok && Array.isArray(json?.value)) {
+          setReviews(json.value);
+        } else {
+          setReviews([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch reviews:", error);
+        setReviews([]);
+      }
+    }
+
     async function fetchMovieData() {
       try {
         const movieData = await getMovieDetails(resolvedParams.id);
@@ -54,6 +77,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
           // Update movie with streaming info
           movieData.streamingOn = platforms;
+
+          await fetchReviews(movieData.id);
         }
       } catch (error) {
         console.error("Failed to fetch movie data:", error);
@@ -145,6 +170,80 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     if (Array.isArray(value)) {
       setIsWatched(value.includes(movie.id));
     }
+  };
+
+  const currentUserReview = reviews.find((review) => review.user.email && review.user.email === session?.user?.email) ?? null;
+
+  const refreshReviews = async () => {
+    if (!movie) return;
+
+    try {
+      const response = await fetch(`/api/reviews/movie/${movie.id}`);
+      const json = await response.json().catch(() => null);
+      setReviews(response.ok && Array.isArray(json?.value) ? json.value : []);
+    } catch (error) {
+      console.error("Failed to refresh reviews:", error);
+    }
+  };
+
+  const openReviewDialog = (review?: Review | null) => {
+    const targetReview = review ?? currentUserReview;
+    setReviewRating(targetReview?.rating ?? 0);
+    setReviewComment(targetReview?.comment ?? "");
+    setReviewDialogOpen(true);
+  };
+
+  const handleSaveReview = async () => {
+    if (!movie) return;
+
+    if (!reviewRating) {
+      toast.error("Choose a rating before saving your review.");
+      return;
+    }
+
+    const editing = Boolean(currentUserReview);
+    setReviewSubmitting(true);
+
+    const response = await fetch(editing ? `/api/reviews/${currentUserReview?.id}` : "/api/reviews", {
+      method: editing ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tmdbId: movie.id,
+        rating: reviewRating,
+        comment: reviewComment,
+      }),
+    });
+
+    const json = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      toast.error(json?.error || "Unable to save review.");
+      setReviewSubmitting(false);
+      return;
+    }
+
+    toast.success(editing ? "Review updated" : "Review posted");
+    setReviewDialogOpen(false);
+    setReviewRating(0);
+    setReviewComment("");
+    setReviewSubmitting(false);
+    await refreshReviews();
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    const confirmed = window.confirm("Delete this review?");
+    if (!confirmed) return;
+
+    const response = await fetch(`/api/reviews/${reviewId}`, { method: "DELETE" });
+    const json = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      toast.error(json?.error || "Unable to delete review.");
+      return;
+    }
+
+    toast.success("Review deleted");
+    await refreshReviews();
   };
 
   if (loading) {
@@ -272,6 +371,14 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
               >
                 <Heart className="h-4 w-4" /> {isLiked ? "Liked" : "Like"}
               </Button>
+              <Button
+                variant="secondary"
+                className="gap-2"
+                onClick={() => openReviewDialog()}
+                disabled={!session?.user?.email || (!isWatched && !currentUserReview)}
+              >
+                <Star className="h-4 w-4" /> {currentUserReview ? "Edit Review" : "Write Review"}
+              </Button>
             </div>
 
             <div className="mt-6">
@@ -287,10 +394,27 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
         <section className="mt-10">
           <h2 className="font-display text-lg font-bold text-foreground mb-4">Reviews</h2>
+          {!session?.user?.email && (
+            <p className="mb-4 text-sm text-muted-foreground">Sign in to write a review.</p>
+          )}
+          {session?.user?.email && !isWatched && !currentUserReview && (
+            <p className="mb-4 text-sm text-muted-foreground">Mark this movie as watched before reviewing it.</p>
+          )}
           <div className="space-y-4 max-w-2xl">
-            {movie.reviews.map((review) => (
-              <ReviewCard key={review.id} review={review} />
+            {reviews.map((review) => (
+              <ReviewCard
+                key={review.id}
+                review={review}
+                onEdit={openReviewDialog}
+                onDelete={handleDeleteReview}
+                onRefresh={refreshReviews}
+              />
             ))}
+            {reviews.length === 0 && (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                No reviews yet.
+              </div>
+            )}
           </div>
         </section>
 
@@ -303,6 +427,54 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       </div>
 
       <TrailerModal open={trailerOpen} onOpenChange={setTrailerOpen} title={movie.title} />
+
+      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{currentUserReview ? "Edit your review" : "Write a review"}</DialogTitle>
+            <DialogDescription>Share your rating and thoughts about {movie.title}.</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm font-medium text-foreground">Rating</p>
+              <div className="flex items-center gap-2">
+                {Array.from({ length: 5 }, (_, index) => index + 1).map((value) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={reviewRating >= value ? "default" : "secondary"}
+                    size="icon"
+                    onClick={() => setReviewRating(value)}
+                    className="h-10 w-10"
+                  >
+                    <Star className={reviewRating >= value ? "h-4 w-4 fill-current" : "h-4 w-4"} />
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-foreground">Comment</p>
+              <Textarea
+                value={reviewComment}
+                onChange={(event) => setReviewComment(event.target.value)}
+                placeholder="What did you think of the movie?"
+                className="min-h-[120px]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="secondary" type="button" onClick={() => setReviewDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveReview} disabled={reviewSubmitting || !reviewRating}>
+              {reviewSubmitting ? "Saving..." : currentUserReview ? "Update Review" : "Post Review"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
