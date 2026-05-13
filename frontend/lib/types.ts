@@ -55,6 +55,7 @@ export interface Review {
   comment: string;
   date: string;
   likes: number;
+  likedByMe?: boolean;
   replies: Reply[];
 }
 
