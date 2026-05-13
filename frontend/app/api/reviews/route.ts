@@ -1,0 +1,80 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { canReviewMovie, serializeReview } from "@/lib/reviews";
+
+export const runtime = "nodejs";
+
+async function getCurrentUser() {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email;
+
+  if (!email) {
+    return null;
+  }
+
+  return prisma.user.findUnique({ where: { email } });
+}
+
+export async function POST(request: Request) {
+  try {
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await request.json().catch(() => null);
+    const tmdbId = typeof payload?.tmdbId === "string" ? payload.tmdbId.trim() : "";
+    const rating = Number(payload?.rating);
+    const comment = typeof payload?.comment === "string" ? payload.comment.trim() : "";
+
+    if (!tmdbId) {
+      return NextResponse.json({ error: "Movie ID is required" }, { status: 400 });
+    }
+
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 });
+    }
+
+    const watched = await canReviewMovie(currentUser.id, tmdbId);
+    if (!watched) {
+      return NextResponse.json({ error: "Mark the movie as watched before reviewing it" }, { status: 403 });
+    }
+
+    const existing = await prisma.review.findFirst({
+      where: {
+        userId: currentUser.id,
+        tmdbId,
+      },
+      include: {
+        user: true,
+        replies: { include: { user: true }, orderBy: { createdAt: "asc" } },
+      },
+    });
+
+    if (existing) {
+      return NextResponse.json({ error: "You already reviewed this movie" }, { status: 409 });
+    }
+
+    const review = await prisma.review.create({
+      data: {
+        userId: currentUser.id,
+        tmdbId,
+        rating,
+        comment: comment || null,
+      },
+      include: {
+        user: true,
+        replies: { include: { user: true }, orderBy: { createdAt: "asc" } },
+      },
+    });
+
+    return NextResponse.json({ value: serializeReview(review) });
+  } catch (error) {
+    console.error("/api/reviews POST error:", error);
+    return NextResponse.json({ error: "Failed to create review" }, { status: 500 });
+  }
+}
