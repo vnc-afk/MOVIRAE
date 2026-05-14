@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
 import type { UserProfile } from "@/lib/types";
+import { getWatchExperienceStats } from "@/lib/watch-experiences";
 
 export const runtime = "nodejs";
 
@@ -367,23 +368,41 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     orderBy: { createdAt: "desc" },
   });
 
-  const totalWatched = reviews.length;
+  const watchExperienceStats = await getWatchExperienceStats(currentUser.id);
+  const watchedMovieIds = await getUserWatched(currentUser.id);
+  const totalWatched = new Set([
+    ...watchedMovieIds,
+    ...watchExperienceStats.records.map((entry) => entry.tmdbId),
+  ]).size;
   const avgRating = totalWatched > 0 ? reviews.reduce((sum, review) => sum + review.rating, 0) / totalWatched : 0;
 
-  const monthlyCounts = reviews.reduce<Record<string, number>>((acc, review) => {
-    const month = review.createdAt.toISOString().slice(0, 7);
-    acc[month] = (acc[month] ?? 0) + 1;
+  const monthlyCounts = watchExperienceStats.monthlyBreakdown.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.month] = entry.count;
+    return acc;
+  }, {});
+
+  const weekdayCounts = watchExperienceStats.weekdayBreakdown.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.day] = entry.count;
+    return acc;
+  }, {});
+
+  const platformCounts = watchExperienceStats.platformBreakdown.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.platform] = entry.count;
+    return acc;
+  }, {});
+
+  const contextCounts = watchExperienceStats.contextBreakdown.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.context] = entry.count;
+    return acc;
+  }, {});
+
+  const moodCounts = watchExperienceStats.moodBreakdown.reduce<Record<string, number>>((acc, entry) => {
+    acc[entry.mood] = entry.count;
     return acc;
   }, {});
 
   const ratingCounts = reviews.reduce<Record<number, number>>((acc, review) => {
     acc[review.rating] = (acc[review.rating] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  const weekdayCounts = reviews.reduce<Record<string, number>>((acc, review) => {
-    const day = review.createdAt.toLocaleDateString("en-US", { weekday: "long" });
-    acc[day] = (acc[day] ?? 0) + 1;
     return acc;
   }, {});
 
@@ -398,9 +417,9 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     monthlyBreakdown: Object.entries(monthlyCounts).map(([month, count]) => ({ month, count })),
     genreBreakdown: [],
     ratingDistribution: Object.entries(ratingCounts).map(([stars, count]) => ({ stars: Number(stars), count })),
-    moodBreakdown: [],
-    platformBreakdown: [],
-    contextBreakdown: [],
+    moodBreakdown: Object.entries(moodCounts).map(([mood, count]) => ({ mood: mood as any, count })),
+    platformBreakdown: Object.entries(platformCounts).map(([platform, count]) => ({ platform: platform as any, count })),
+    contextBreakdown: Object.entries(contextCounts).map(([context, count]) => ({ context: context as any, count })),
     weekdayBreakdown: Object.entries(weekdayCounts).map(([day, count]) => ({ day, count })),
   };
 }
