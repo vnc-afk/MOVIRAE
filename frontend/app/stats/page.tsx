@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BarChart3, Clock, Film, Star, TrendingUp, Award, Calendar, Monitor, Users, Sparkles, MapPin } from "lucide-react";
 import type { UserStats } from "@/lib/types";
+import { WATCH_MOODS } from "@/lib/watch-options";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 const COLORS = [
   "hsl(36, 90%, 50%)",
@@ -23,6 +24,18 @@ const tooltipStyle = {
   borderRadius: "8px",
   fontSize: "12px",
 };
+
+function formatMonthLabel(monthValue: string) {
+  const [year, month] = monthValue.split("-");
+  const yearNumber = Number(year);
+  const monthNumber = Number(month);
+
+  if (!Number.isInteger(yearNumber) || !Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+    return monthValue;
+  }
+
+  return new Date(Date.UTC(yearNumber, monthNumber - 1, 1)).toLocaleDateString("en-US", { month: "short" });
+}
 
 
 export default function UserStats() {
@@ -51,6 +64,20 @@ export default function UserStats() {
     contextBreakdown: [],
     weekdayBreakdown: [],
   };
+
+  const monthlyChartData = [...userStats.monthlyBreakdown]
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .map((entry) => ({ ...entry, monthLabel: formatMonthLabel(entry.month) }));
+
+  const moodCountMap = new Map(userStats.moodBreakdown.map((entry) => [entry.mood, entry.count]));
+  const moodChartData = WATCH_MOODS.map((mood) => ({
+    mood,
+    value: moodCountMap.get(mood) ?? 0,
+  }));
+
+  const maxPlatformCount = Math.max(0, ...userStats.platformBreakdown.map((entry) => entry.count));
+  const maxContextCount = Math.max(0, ...userStats.contextBreakdown.map((entry) => entry.count));
+  const maxRatingCount = Math.max(0, ...userStats.ratingDistribution.map((entry) => entry.count));
 
   return (
     <div className="pb-20 md:pb-0">
@@ -103,8 +130,8 @@ export default function UserStats() {
           </div>
           <div className="h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={userStats.monthlyBreakdown}>
-                <XAxis dataKey="month" tickLine={false} axisLine={false} className="text-xs" />
+              <BarChart data={monthlyChartData}>
+                <XAxis dataKey="monthLabel" tickLine={false} axisLine={false} className="text-xs" />
                 <YAxis tickLine={false} axisLine={false} className="text-xs" />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Bar dataKey="count" fill="hsl(36, 90%, 50%)" radius={[4, 4, 0, 0]} />
@@ -150,7 +177,7 @@ export default function UserStats() {
             </div>
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={userStats.moodBreakdown.map((m) => ({ mood: m.mood, value: m.count }))}>
+                  <RadarChart data={moodChartData}>
                   <PolarGrid stroke="hsl(var(--border))" />
                   <PolarAngleAxis dataKey="mood" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                   <Radar dataKey="value" stroke="hsl(36, 90%, 50%)" fill="hsl(36, 90%, 50%)" fillOpacity={0.25} />
@@ -169,14 +196,14 @@ export default function UserStats() {
             </div>
             <div className="space-y-2.5">
               {userStats.platformBreakdown.map((p, i) => {
-                const maxCount = Math.max(...userStats.platformBreakdown.map((x) => x.count));
+                const pct = maxPlatformCount > 0 ? (p.count / maxPlatformCount) * 100 : 0;
                 return (
                   <div key={p.platform} className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground w-20 text-right truncate">{p.platform}</span>
                     <div className="flex-1 h-5 bg-secondary rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${(p.count / maxCount) * 100}%` }}
+                        animate={{ width: `${pct}%` }}
                         transition={{ duration: 0.6, delay: i * 0.08 }}
                         className="h-full rounded-full"
                         style={{ backgroundColor: COLORS[i % COLORS.length] }}
@@ -197,14 +224,14 @@ export default function UserStats() {
             </div>
             <div className="space-y-2.5">
               {userStats.contextBreakdown.map((c, i) => {
-                const maxCount = Math.max(...userStats.contextBreakdown.map((x) => x.count));
+                const pct = maxContextCount > 0 ? (c.count / maxContextCount) * 100 : 0;
                 return (
                   <div key={c.context} className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground w-20 text-right truncate">{c.context}</span>
                     <div className="flex-1 h-5 bg-secondary rounded-full overflow-hidden">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${(c.count / maxCount) * 100}%` }}
+                        animate={{ width: `${pct}%` }}
                         transition={{ duration: 0.6, delay: i * 0.08 }}
                         className="h-full bg-accent rounded-full"
                       />
@@ -245,8 +272,7 @@ export default function UserStats() {
             </div>
             <div className="space-y-3">
               {userStats.ratingDistribution.map((d) => {
-                const maxCount = Math.max(...userStats.ratingDistribution.map((r) => r.count));
-                const pct = (d.count / maxCount) * 100;
+                const pct = maxRatingCount > 0 ? (d.count / maxRatingCount) * 100 : 0;
                 return (
                   <div key={d.stars} className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground w-6 text-right">{d.stars}★</span>
