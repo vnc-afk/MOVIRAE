@@ -90,6 +90,7 @@ export interface UserProfile {
   reviewCount: number;
   watchlistCount: number;
   favoriteMovies: string[];
+  isFollowing?: boolean;
 }
 
 export interface ActivityItem {
