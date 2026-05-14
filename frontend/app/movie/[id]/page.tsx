@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import type { WatchExperience } from "@/lib/types";
 
 type MovieDetailPageProps = {
   params: Promise<{
@@ -43,6 +44,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [isWatched, setIsWatched] = useState(false);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [watchExperience, setWatchExperience] = useState<WatchExperience | null>(null);
   const [buttonLoading, setButtonLoading] = useState({ watched: false, watchlist: false, liked: false });
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           fetch("/api/data/user-watchlist-current"),
           fetch("/api/data/user-favorites-current"),
           fetch("/api/data/user-watched-current"),
+          fetch(`/api/watch-experiences/${movieId}`),
         ]);
 
         const data = await Promise.all(responses.map(async (response) => {
@@ -117,6 +120,10 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         setIsWatchlist(watchlistIds.includes(movieId));
         setIsLiked(favoriteIds.includes(movieId));
         setIsWatched(watchedIds.includes(movieId));
+
+        const watchExperienceResponse = responses[3];
+        const watchExperienceJson = await watchExperienceResponse.json().catch(() => null);
+        setWatchExperience(watchExperienceResponse.ok ? watchExperienceJson?.value ?? null : null);
       } catch (error) {
         console.error("Failed to load movie action state:", error);
       }
@@ -170,6 +177,32 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     if (Array.isArray(value)) {
       setIsWatched(value.includes(movie.id));
     }
+  };
+
+  const handleSaveWatchExperience = async (experience: WatchExperience) => {
+    if (!movie) return;
+
+    if (!session?.user?.email) {
+      toast.error("Sign in to log how you watched this movie.");
+      return;
+    }
+
+    const response = await fetch(`/api/watch-experiences/${movie.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(experience),
+    });
+
+    const json = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      toast.error(json?.error || "Unable to save watch experience.");
+      return;
+    }
+
+    setWatchExperience(json?.value ?? experience);
+    setIsWatched(true);
+    toast.success("Watch experience saved");
   };
 
   const currentUserReview = reviews.find((review) => review.user.email && review.user.email === session?.user?.email) ?? null;
@@ -419,7 +452,12 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         </section>
 
         <section className="mt-10 max-w-md">
-          <HowYouWatched movieTitle={movie.title} />
+          <HowYouWatched
+            movieTitle={movie.title}
+            initialValue={watchExperience}
+            onSave={handleSaveWatchExperience}
+            disabled={!session?.user?.email}
+          />
         </section>
 
 
