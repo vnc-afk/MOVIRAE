@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
+import { buildUserProfile, isProfileUser } from "@/lib/user-profiles";
 import type { Group, Movie, UserProfile } from "@/lib/types";
 
 type PrismaUser = Awaited<ReturnType<typeof prisma.user.findUnique>>;
@@ -48,27 +49,6 @@ const fallbackProfile: UserProfile = {
   favoriteMovies: [],
 };
 
-export function buildUserProfile(user: any) {
-  if (!user) return null;
-
-  const displayName = user.displayName || user.name || user.email?.split("@")[0] || "Movie Lover";
-  const username = user.username || displayName.toLowerCase().replace(/\s+/g, "_");
-
-  return {
-    id: user.id,
-    email: user.email || undefined,
-    username,
-    displayName,
-    avatar: user.avatar || user.image || "",
-    bio: user.bio || "",
-    followers: 0,
-    following: 0,
-    reviewCount: 0,
-    watchlistCount: 0,
-    favoriteMovies: [],
-  } satisfies UserProfile;
-}
-
 export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
@@ -88,7 +68,16 @@ function normalizeReplyItems(value: unknown) {
     .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
     .map((reply, index) => ({
       id: typeof reply.id === "string" ? reply.id : `reply-${Date.now()}-${index}`,
-      author: buildUserProfile(reply.author) ?? buildUserProfile(reply.user) ?? buildUserProfile(reply.authorProfile) ?? fallbackProfile,
+      author:
+        (
+          isProfileUser(reply.author)
+            ? buildUserProfile(reply.author)
+            : isProfileUser(reply.user)
+            ? buildUserProfile(reply.user)
+            : isProfileUser(reply.authorProfile)
+            ? buildUserProfile(reply.authorProfile)
+            : null
+        ) ?? fallbackProfile,
       body: typeof reply.body === "string" ? reply.body : typeof reply.comment === "string" ? reply.comment : "",
       date: typeof reply.date === "string" ? reply.date : new Date().toISOString(),
     }));
@@ -97,7 +86,7 @@ function normalizeReplyItems(value: unknown) {
 function serializeDiscussion(discussion: any): DiscussionRecord {
   return {
     id: discussion.id,
-    author: buildUserProfile(discussion.author) ?? fallbackProfile,
+    author: (isProfileUser(discussion.author) ? buildUserProfile(discussion.author) : null) ?? fallbackProfile,
     title: discussion.title,
     body: discussion.body,
     date: discussion.createdAt.toISOString(),
@@ -146,7 +135,7 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
   const group = await prisma.group.findUnique({
     where: { id: groupId },
     include: {
-      members: { include: { user: true } },
+      members: { include: { user: { include: { _count: { select: { followers: true, followings: true, reviews: true, watchlist: true } } } } } },
       movies: true,
       discussions: { include: { author: true }, orderBy: { createdAt: "desc" } },
     },
@@ -154,8 +143,31 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
 
   if (!group) return null;
 
+  const memberIds = group.members.map((member) => member.userId);
+  const followingIds = currentUser
+    ? new Set(
+        (
+          await prisma.userFollow.findMany({
+            where: {
+              followerId: currentUser.id,
+              followingId: { in: memberIds },
+            },
+            select: { followingId: true },
+          })
+        ).map((follow) => follow.followingId)
+      )
+    : new Set<string>();
+
   const members = group.members
-    .map((member) => buildUserProfile(member.user))
+    .map((member) => {
+      const profile = buildUserProfile(member.user);
+      if (!profile) return null;
+
+      return {
+        ...profile,
+        isFollowing: followingIds.has(member.userId),
+      } as UserProfile;
+    })
     .filter(Boolean) as UserProfile[];
 
   const sharedList = await Promise.all(
