@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
-import type { UserProfile } from "@/lib/types";
+import type { Movie, UserProfile } from "@/lib/types";
 import { getWatchExperienceStats } from "@/lib/watch-experiences";
 
 export const runtime = "nodejs";
@@ -343,6 +343,44 @@ function formatDateString(value: Date | string | null | undefined) {
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 
+function normalizeLabel(value: string | null | undefined) {
+  if (!value) return "";
+  return value.trim();
+}
+
+function isKnownValue(value: string | null | undefined) {
+  const normalized = normalizeLabel(value);
+  return normalized !== "" && normalized.toLowerCase() !== "unknown";
+}
+
+function getDayKey(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+function computeLongestStreak(values: Date[]) {
+  const uniqueDays = Array.from(new Set(values.map((value) => getDayKey(value)))).sort();
+  if (uniqueDays.length === 0) return 0;
+
+  let longest = 1;
+  let current = 1;
+
+  for (let i = 1; i < uniqueDays.length; i += 1) {
+    const previous = new Date(`${uniqueDays[i - 1]}T00:00:00.000Z`).getTime();
+    const currentDay = new Date(`${uniqueDays[i]}T00:00:00.000Z`).getTime();
+    const dayDifference = (currentDay - previous) / (1000 * 60 * 60 * 24);
+
+    if (dayDifference === 1) {
+      current += 1;
+      longest = Math.max(longest, current);
+      continue;
+    }
+
+    current = 1;
+  }
+
+  return longest;
+}
+
 async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
   if (!currentUser) {
     return {
@@ -370,10 +408,17 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
 
   const watchExperienceStats = await getWatchExperienceStats(currentUser.id);
   const watchedMovieIds = await getUserWatched(currentUser.id);
-  const totalWatched = new Set([
+  const watchedMovieIdSet = new Set([
     ...watchedMovieIds,
     ...watchExperienceStats.records.map((entry) => entry.tmdbId),
-  ]).size;
+  ]);
+  const totalWatched = watchedMovieIdSet.size;
+
+  const watchedMovieDetails = await Promise.all(
+    Array.from(watchedMovieIdSet).map((tmdbId) => getMovieDetails(tmdbId))
+  );
+  const watchedMovies = watchedMovieDetails.filter((movie): movie is Movie => movie !== null);
+
   const avgRating = totalWatched > 0 ? reviews.reduce((sum, review) => sum + review.rating, 0) / totalWatched : 0;
 
   const monthlyCounts = watchExperienceStats.monthlyBreakdown.reduce<Record<string, number>>((acc, entry) => {
@@ -406,17 +451,68 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     return acc;
   }, {});
 
+  const totalRuntimeMinutes = watchedMovies.reduce((sum, movie) => {
+    if (!Number.isFinite(movie.runtime) || movie.runtime <= 0) return sum;
+    return sum + movie.runtime;
+  }, 0);
+
+  const genreCounts = watchedMovies.reduce<Record<string, number>>((acc, movie) => {
+    const sources = Array.isArray(movie.tags) && movie.tags.length > 0 ? movie.tags : [movie.genre];
+
+    for (const source of sources) {
+      const genre = normalizeLabel(source);
+      if (!isKnownValue(genre)) continue;
+      acc[genre] = (acc[genre] ?? 0) + 1;
+    }
+
+    return acc;
+  }, {});
+
+  const genreTotal = Object.values(genreCounts).reduce((sum, count) => sum + count, 0);
+  const genreBreakdown = Object.entries(genreCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([genre, count]) => ({
+      genre,
+      count,
+      pct: genreTotal > 0 ? Math.round((count / genreTotal) * 100) : 0,
+    }));
+
+  const directorCounts = watchedMovies.reduce<Record<string, number>>((acc, movie) => {
+    const director = normalizeLabel(movie.director);
+    if (!isKnownValue(director)) return acc;
+    acc[director] = (acc[director] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const topDirector = Object.entries(directorCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+
+  const countriesExplored = new Set(
+    watchedMovies
+      .map((movie) => normalizeLabel(movie.country))
+      .filter((country) => isKnownValue(country))
+  ).size;
+
+  const watchDates = watchExperienceStats.records
+    .map((record) => (record.watchedAt instanceof Date ? record.watchedAt : new Date(record.watchedAt)))
+    .filter((value) => !Number.isNaN(value.getTime()));
+
+  const longestStreak = computeLongestStreak(watchDates);
+
   return {
     totalWatched,
-    totalHours: 0,
+    totalHours: Math.round(totalRuntimeMinutes / 60),
     avgRating,
-    favoriteGenre: "",
-    topDirector: "",
-    longestStreak: 0,
-    countriesExplored: 0,
-    monthlyBreakdown: Object.entries(monthlyCounts).map(([month, count]) => ({ month, count })),
-    genreBreakdown: [],
-    ratingDistribution: Object.entries(ratingCounts).map(([stars, count]) => ({ stars: Number(stars), count })),
+    favoriteGenre: genreBreakdown[0]?.genre ?? "",
+    topDirector,
+    longestStreak,
+    countriesExplored,
+    monthlyBreakdown: Object.entries(monthlyCounts)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([month, count]) => ({ month, count })),
+    genreBreakdown,
+    ratingDistribution: Object.entries(ratingCounts)
+      .map(([stars, count]) => ({ stars: Number(stars), count }))
+      .sort((a, b) => a.stars - b.stars),
     moodBreakdown: Object.entries(moodCounts).map(([mood, count]) => ({ mood: mood as any, count })),
     platformBreakdown: Object.entries(platformCounts).map(([platform, count]) => ({ platform: platform as any, count })),
     contextBreakdown: Object.entries(contextCounts).map(([context, count]) => ({ context: context as any, count })),
