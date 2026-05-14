@@ -1,54 +1,74 @@
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Monitor, Users, Heart, Popcorn, Clapperboard, Check } from "lucide-react";
-import type { WatchPlatform, WatchContext, Mood } from "@/lib/types";
+import type { Mood, WatchContext, WatchExperience, WatchPlatform } from "@/lib/types";
+import { WATCH_CONTEXTS, WATCH_MOODS, WATCH_PLATFORMS } from "../lib/watch-options";
 
-const platforms: { value: WatchPlatform; icon: React.ReactNode; label: string }[] = [
-  { value: "Cinema", icon: <Clapperboard className="h-4 w-4" />, label: "Cinema" },
-  { value: "Netflix", icon: <Monitor className="h-4 w-4" />, label: "Netflix" },
-  { value: "Amazon Prime", icon: <Monitor className="h-4 w-4" />, label: "Prime" },
-  { value: "Disney+", icon: <Monitor className="h-4 w-4" />, label: "Disney+" },
-  { value: "HBO Max", icon: <Monitor className="h-4 w-4" />, label: "HBO" },
-  { value: "Apple TV+", icon: <Monitor className="h-4 w-4" />, label: "Apple TV+" },
-  { value: "Hulu", icon: <Monitor className="h-4 w-4" />, label: "Hulu" },
-  { value: "Blu-ray", icon: <Monitor className="h-4 w-4" />, label: "Blu-ray" },
+const platforms: { value: WatchPlatform; icon: ReactNode; label: string }[] = [
+  { value: WATCH_PLATFORMS[0], icon: <Clapperboard className="h-4 w-4" />, label: "Cinema" },
+  { value: WATCH_PLATFORMS[1], icon: <Monitor className="h-4 w-4" />, label: "Netflix" },
+  { value: WATCH_PLATFORMS[2], icon: <Monitor className="h-4 w-4" />, label: "Prime" },
+  { value: WATCH_PLATFORMS[4], icon: <Monitor className="h-4 w-4" />, label: "Disney+" },
+  { value: WATCH_PLATFORMS[6], icon: <Monitor className="h-4 w-4" />, label: "HBO" },
+  { value: WATCH_PLATFORMS[5], icon: <Monitor className="h-4 w-4" />, label: "Apple TV+" },
+  { value: WATCH_PLATFORMS[3], icon: <Monitor className="h-4 w-4" />, label: "Hulu" },
+  { value: WATCH_PLATFORMS[7], icon: <Monitor className="h-4 w-4" />, label: "Blu-ray" },
 ];
 
 const contexts: { value: WatchContext; emoji: string }[] = [
-  { value: "Solo", emoji: "🎧" },
-  { value: "With Friends", emoji: "👥" },
-  { value: "Date Night", emoji: "💑" },
-  { value: "Family", emoji: "👨‍👩‍👧" },
-  { value: "Movie Club", emoji: "🎬" },
+  { value: WATCH_CONTEXTS[0], emoji: "🎧" },
+  { value: WATCH_CONTEXTS[1], emoji: "👥" },
+  { value: WATCH_CONTEXTS[2], emoji: "💑" },
+  { value: WATCH_CONTEXTS[3], emoji: "👨‍👩‍👧" },
+  { value: WATCH_CONTEXTS[4], emoji: "🎬" },
 ];
 
 const moods: { value: Mood; emoji: string }[] = [
-  { value: "Thrilling", emoji: "😱" },
-  { value: "Relaxing", emoji: "😌" },
-  { value: "Romantic", emoji: "🥰" },
-  { value: "Dark", emoji: "🌑" },
-  { value: "Uplifting", emoji: "✨" },
-  { value: "Thought-Provoking", emoji: "🤔" },
-  { value: "Fun", emoji: "🎉" },
-  { value: "Intense", emoji: "🔥" },
+  { value: WATCH_MOODS[0], emoji: "😱" },
+  { value: WATCH_MOODS[1], emoji: "😌" },
+  { value: WATCH_MOODS[2], emoji: "🥰" },
+  { value: WATCH_MOODS[3], emoji: "🌑" },
+  { value: WATCH_MOODS[4], emoji: "✨" },
+  { value: WATCH_MOODS[5], emoji: "🤔" },
+  { value: WATCH_MOODS[6], emoji: "🎉" },
+  { value: WATCH_MOODS[7], emoji: "🔥" },
 ];
 
 interface Props {
   movieTitle: string;
-  onSave?: (data: { platform: WatchPlatform; context: WatchContext; mood: Mood }) => void;
+  initialValue?: WatchExperience | null;
+  onSave?: (data: WatchExperience) => void | Promise<void>;
+  disabled?: boolean;
 }
 
-export function HowYouWatched({ movieTitle, onSave }: Props) {
+export function HowYouWatched({ movieTitle, initialValue, onSave, disabled = false }: Props) {
   const [platform, setPlatform] = useState<WatchPlatform | null>(null);
   const [context, setContext] = useState<WatchContext | null>(null);
   const [mood, setMood] = useState<Mood | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
+  useEffect(() => {
+    setPlatform(initialValue?.platform ?? null);
+    setContext(initialValue?.context ?? null);
+    setMood(initialValue?.mood ?? null);
+  }, [initialValue?.platform, initialValue?.context, initialValue?.mood]);
+
+  const handleSave = async () => {
+    if (disabled || saving) {
+      return;
+    }
+
     if (platform && context && mood) {
-      onSave?.({ platform, context, mood });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setSaving(true);
+
+      try {
+        await onSave?.({ platform, context, mood });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -67,6 +87,7 @@ export function HowYouWatched({ movieTitle, onSave }: Props) {
             <button
               key={p.value}
               onClick={() => setPlatform(p.value)}
+              disabled={disabled}
               className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-all ${
                 platform === p.value
                   ? "bg-primary text-primary-foreground border-primary"
@@ -87,6 +108,7 @@ export function HowYouWatched({ movieTitle, onSave }: Props) {
             <button
               key={c.value}
               onClick={() => setContext(c.value)}
+              disabled={disabled}
               className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
                 context === c.value
                   ? "bg-accent text-accent-foreground border-accent"
@@ -107,6 +129,7 @@ export function HowYouWatched({ movieTitle, onSave }: Props) {
             <button
               key={m.value}
               onClick={() => setMood(m.value)}
+              disabled={disabled}
               className={`text-xs px-3 py-1.5 rounded-full border transition-all ${
                 mood === m.value
                   ? "bg-primary/80 text-primary-foreground border-primary/80"
@@ -126,9 +149,10 @@ export function HowYouWatched({ movieTitle, onSave }: Props) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             onClick={handleSave}
+            disabled={disabled || saving}
             className="w-full py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-medium flex items-center justify-center gap-2 hover:bg-primary/90 transition-colors"
           >
-            {saved ? <><Check className="h-4 w-4" /> Saved!</> : "Log Watch Experience"}
+            {saving ? "Saving..." : saved ? <><Check className="h-4 w-4" /> Saved!</> : "Log Watch Experience"}
           </motion.button>
         )}
       </AnimatePresence>
