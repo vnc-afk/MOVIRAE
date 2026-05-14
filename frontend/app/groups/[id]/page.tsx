@@ -24,6 +24,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FollowButton } from "@/components/FollowButton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -774,20 +775,50 @@ export default function GroupDetail() {
                   key={m.id}
                   className="flex items-center gap-3 rounded-xl bg-card p-4 card-shadow"
                 >
-                  {m.avatar ? (
-                    <img
-                      src={m.avatar}
-                      alt={m.displayName}
-                      className="h-12 w-12 rounded-full bg-muted"
-                    />
-                  ) : (
-                    <div className="h-12 w-12 rounded-full bg-muted" />
-                  )}
+                  <Link href={`/profile/${m.id}`} className="shrink-0">
+                    {m.avatar ? (
+                      <img
+                        src={m.avatar}
+                        alt={m.displayName}
+                        className="h-12 w-12 rounded-full bg-muted"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 rounded-full bg-muted" />
+                    )}
+                  </Link>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">
+                    <Link href={`/profile/${m.id}`} className="block text-sm font-medium text-foreground truncate hover:text-primary transition-colors">
                       {m.displayName}
+                    </Link>
+                    <p className="text-[11px] text-muted-foreground truncate">@{m.username}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {m.followers.toLocaleString()} followers · {m.following.toLocaleString()} following
                     </p>
                   </div>
+                  {currentUser?.id === m.id ? (
+                    <Badge variant="secondary" className="text-[10px]">
+                      You
+                    </Badge>
+                  ) : currentUser ? (
+                    <FollowButton
+                      userId={m.id}
+                      initialFollowing={Boolean(m.isFollowing)}
+                      onFollowingChange={(isFollowing) => {
+                        setGroup((currentGroup) =>
+                          currentGroup
+                            ? {
+                                ...currentGroup,
+                                members: currentGroup.members.map((member) =>
+                                  member.id === m.id
+                                    ? { ...member, isFollowing }
+                                    : member
+                                ),
+                              }
+                            : currentGroup
+                        );
+                      }}
+                    />
+                  ) : null}
                 </div>
               ))}
             </div>
