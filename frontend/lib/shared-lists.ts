@@ -2,10 +2,10 @@ import { getServerSession } from "next-auth/next";
 import { Prisma } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
-import { buildUserProfile } from "@/lib/group-discussions";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
 import type { Movie, SharedList, SharedListComment, UserProfile } from "@/lib/types";
+import { buildUserProfile } from "@/lib/user-profiles";
 
 type CurrentUser = Awaited<ReturnType<typeof prisma.user.findUnique>>;
 
