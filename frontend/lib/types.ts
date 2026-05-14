@@ -26,6 +26,20 @@ export type Mood =
   | "Fun"
   | "Intense";
 
+export interface WatchExperience {
+  platform: WatchPlatform;
+  context: WatchContext;
+  mood: Mood;
+}
+
+export interface WatchExperienceRecord extends WatchExperience {
+  id: string;
+  userId: string;
+  tmdbId: string;
+  watchedAt: string;
+  updatedAt: string;
+}
+
 export interface WatchEntry {
   platform: WatchPlatform;
   context: WatchContext;
