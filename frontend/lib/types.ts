@@ -155,12 +155,17 @@ export interface SharedListComment {
 
 export interface NotificationItem {
   id: string;
-  type: "like" | "reply" | "follow" | "group_invite" | "recommendation";
+  type: "follow" | "review_like" | "review_reply" | "discussion_created" | "discussion_like" | "discussion_reply" | "event_created" | "shared_list_like" | "shared_list_comment" | "group_invite" | "recommendation";
   user: UserProfile;
   message: string;
   date: string;
   read: boolean;
   movieId?: string;
+  reviewId?: string;
+  discussionId?: string;
+  eventId?: string;
+  sharedListId?: string;
+  groupId?: string;
 }
 
 export interface Message {
