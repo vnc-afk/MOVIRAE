@@ -590,15 +590,58 @@ async function getUserNotifications(currentUser: Awaited<ReturnType<typeof getCu
     orderBy: { createdAt: "desc" },
   });
 
-  return notifications.map((notification) => ({
-    id: notification.id,
-    type: notification.type,
-    user: buildUserProfile(notification.actor ?? currentUser)!,
-    message: notification.message,
-    date: notification.createdAt.toISOString(),
-    read: notification.read,
-    movieId: notification.movieId ?? undefined,
-  }));
+  const missingMovieByReviewIds = Array.from(
+    new Set(
+      notifications
+        .filter((notification) => !notification.movieId && notification.reviewId)
+        .map((notification) => notification.reviewId as string)
+    )
+  );
+
+  const missingGroupByDiscussionIds = Array.from(
+    new Set(
+      notifications
+        .filter((notification) => !notification.groupId && notification.discussionId)
+        .map((notification) => notification.discussionId as string)
+    )
+  );
+
+  const reviews = missingMovieByReviewIds.length
+    ? await prisma.review.findMany({
+        where: { id: { in: missingMovieByReviewIds } },
+        select: { id: true, tmdbId: true },
+      })
+    : [];
+
+  const discussions = missingGroupByDiscussionIds.length
+    ? await prisma.groupDiscussion.findMany({
+        where: { id: { in: missingGroupByDiscussionIds } },
+        select: { id: true, groupId: true },
+      })
+    : [];
+
+  const reviewMovieMap = new Map(reviews.map((review) => [review.id, review.tmdbId]));
+  const discussionGroupMap = new Map(discussions.map((discussion) => [discussion.id, discussion.groupId]));
+
+  return notifications.map((notification) => {
+    const movieId = notification.movieId ?? (notification.reviewId ? reviewMovieMap.get(notification.reviewId) : undefined);
+    const groupId = notification.groupId ?? (notification.discussionId ? discussionGroupMap.get(notification.discussionId) : undefined);
+
+    return {
+      id: notification.id,
+      type: notification.type,
+      user: buildUserProfile(notification.actor ?? currentUser)!,
+      message: notification.message,
+      date: notification.createdAt.toISOString(),
+      read: notification.read,
+      movieId: movieId ?? undefined,
+      reviewId: notification.reviewId ?? undefined,
+      discussionId: notification.discussionId ?? undefined,
+      eventId: notification.eventId ?? undefined,
+      sharedListId: notification.sharedListId ?? undefined,
+      groupId: groupId ?? undefined,
+    };
+  });
 }
 
 async function setUserNotifications(payload: unknown, currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
@@ -616,6 +659,11 @@ async function setUserNotifications(payload: unknown, currentUser: Awaited<Retur
         type: notification.type,
         message: notification.message || "",
         movieId: typeof notification.movieId === "string" ? notification.movieId : undefined,
+        reviewId: typeof notification.reviewId === "string" ? notification.reviewId : undefined,
+        discussionId: typeof notification.discussionId === "string" ? notification.discussionId : undefined,
+        eventId: typeof notification.eventId === "string" ? notification.eventId : undefined,
+        sharedListId: typeof notification.sharedListId === "string" ? notification.sharedListId : undefined,
+        groupId: typeof notification.groupId === "string" ? notification.groupId : undefined,
         read: Boolean(notification.read),
       },
     });

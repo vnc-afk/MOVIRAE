@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { addSharedListComment, getCurrentUser } from "@/lib/shared-lists";
+import { addSharedListComment, getCurrentUser, getSharedListForView, fetchSharedLists } from "@/lib/shared-lists";
 import { publishSharedListEvent } from "@/lib/shared-list-events";
+import { publishNotificationEvent } from "@/lib/group-events";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
@@ -9,6 +11,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
   try {
     const { listId } = await params;
     const currentUser = await getCurrentUser();
+    const actorName = currentUser?.displayName?.trim();
     const body = await request.json().catch(() => null);
     const commentBody = typeof body?.body === "string" ? body.body.trim() : "";
     const parentId = typeof body?.parentId === "string" && body.parentId.trim() ? body.parentId.trim() : undefined;
@@ -17,27 +20,50 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
       return NextResponse.json({ error: "Comment body is required." }, { status: 400 });
     }
 
-    const result = await addSharedListComment(listId, commentBody, currentUser, parentId);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    if ("error" in result) {
-      const errorMessage =
-        result.error === "unauthorized"
-          ? "Unauthorized"
-          : result.error === "parent-not-found"
-          ? "Comment thread not found."
-          : "Shared list not found.";
-      const status =
-        result.error === "unauthorized"
-          ? 401
-          : result.error === "parent-not-found"
-          ? 404
-          : 404;
+    const list = await getSharedListForView(listId, currentUser);
+    if (!list) {
+      return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
+    }
 
-      return NextResponse.json({ error: errorMessage }, { status });
+    if (parentId) {
+      const parent = await prisma.sharedListComment.findFirst({ where: { id: parentId, sharedListId: listId } });
+      if (!parent) {
+        return NextResponse.json({ error: "Comment thread not found." }, { status: 404 });
+      }
+    }
+
+    await prisma.sharedListComment.create({
+      data: {
+        sharedListId: listId,
+        userId: currentUser.id,
+        body: commentBody,
+        parentId: parentId || null,
+      },
+    });
+
+    await prisma.sharedList.update({ where: { id: listId }, data: { comments: { increment: 1 } } });
+
+    // Create notification if commenting on someone else's list
+    if (list.owner.id !== currentUser.id && actorName) {
+      const notification = await prisma.notification.create({
+        data: {
+          recipientId: list.owner.id,
+          actorId: currentUser.id,
+          type: "shared_list_comment",
+          sharedListId: listId,
+          message: `commented on your movie list`,
+        },
+      });
+      publishNotificationEvent(notification.id);
     }
 
     publishSharedListEvent(listId, "updated");
-    return NextResponse.json(result);
+    const result = await fetchSharedLists(currentUser);
+    return NextResponse.json({ value: result });
   } catch (error) {
     console.error("Failed to post shared list comment:", error);
     return NextResponse.json({ error: "Failed to post comment." }, { status: 500 });

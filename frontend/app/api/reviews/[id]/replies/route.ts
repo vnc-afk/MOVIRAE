@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeReview } from "@/lib/reviews";
+import { publishNotificationEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,7 @@ async function getCurrentUser() {
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await getCurrentUser();
+    const actorName = currentUser?.displayName?.trim();
 
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -47,6 +49,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         comment,
       },
     });
+
+    // Create notification if replying to someone else's review
+    if (existing.userId !== currentUser.id && actorName) {
+      const notification = await prisma.notification.create({
+        data: {
+          recipientId: existing.userId,
+          actorId: currentUser.id,
+          type: "review_reply",
+          movieId: existing.tmdbId,
+          reviewId: id,
+          message: `replied to your review`,
+        },
+      });
+      publishNotificationEvent(notification.id);
+    }
 
     const review = await prisma.review.findUnique({
       where: { id },

@@ -97,7 +97,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true },
+    select: { id: true, displayName: true },
   });
 
   if (!user) {
@@ -184,14 +184,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
     });
 
     const otherMembers = groupMembers.filter((m) => m.userId !== user.id);
-    if (otherMembers.length > 0) {
-      const senderName = session.user?.name || session.user?.email || "A group member";
+    const actorName = user.displayName?.trim();
+    if (otherMembers.length > 0 && actorName) {
       await prisma.notification.createMany({
         data: otherMembers.map((member) => ({
           recipientId: member.userId,
           actorId: user.id,
           type: "event_created" as const,
-          message: `${senderName} created a new event: "${title}"`,
+          groupId: groupId,
+          eventId: event.id,
+          message: `created a new event: "${title}"`,
         })),
       });
     }

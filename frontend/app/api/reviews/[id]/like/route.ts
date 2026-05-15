@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeReview } from "@/lib/reviews";
+import { publishNotificationEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,7 @@ async function getCurrentUser() {
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await getCurrentUser();
+    const actorName = currentUser?.displayName?.trim();
 
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -73,6 +75,33 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
           WHERE id = ${id}
         `,
       ]);
+
+      // Create notification if liking someone else's review
+      if (existing.userId !== currentUser.id && actorName) {
+        // Check for duplicate notification within 5 minutes
+        const recentNotification = await prisma.notification.findFirst({
+          where: {
+            recipientId: existing.userId,
+            actorId: currentUser.id,
+            type: "review_like",
+            createdAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
+          },
+        });
+
+        if (!recentNotification) {
+          const notification = await prisma.notification.create({
+            data: {
+              recipientId: existing.userId,
+              actorId: currentUser.id,
+              type: "review_like",
+              movieId: existing.tmdbId,
+              reviewId: id,
+              message: `liked your review`,
+            },
+          });
+          publishNotificationEvent(notification.id);
+        }
+      }
     }
 
     const review = await prisma.review.findUnique({

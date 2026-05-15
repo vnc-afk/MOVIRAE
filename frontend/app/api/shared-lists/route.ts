@@ -40,8 +40,7 @@ export async function GET() {
       value: await fetchSharedLists(currentUser),
       currentUser: currentUser
         ? {
-            id: currentUser.id,
-            email: currentUser.email ?? undefined,
+            id: currentUser.id ?? undefined,
           }
         : null,
     });
