@@ -1,26 +1,73 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Bell, Heart, MessageCircle, UserPlus, Users, Sparkles, Check } from "lucide-react";
+import { format, formatDistanceToNowStrict } from "date-fns";
+import { Bell, Heart, MessageCircle, UserPlus, Users, Sparkles, Check, MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Message, NotificationItem, UserProfile } from "@/lib/types";
+import { getNotificationLink } from "@/lib/notifications";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const typeIcons = {
-  like: Heart,
-  reply: MessageCircle,
   follow: UserPlus,
+  review_like: Heart,
+  review_reply: MessageCircle,
+  discussion_created: MessageSquare,
+  discussion_like: Heart,
+  discussion_reply: MessageCircle,
+  event_created: Sparkles,
+  shared_list_like: Heart,
+  shared_list_comment: MessageSquare,
   group_invite: Users,
   recommendation: Sparkles,
 };
 
+function formatRelativeDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  const distance = formatDistanceToNowStrict(parsed, { addSuffix: true });
+  return distance === "0 seconds ago" ? "Just now" : distance;
+}
+
+function formatExactDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return format(parsed, "PPpp");
+}
+
 export default function Notifications() {
+  const router = useRouter();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [messageText, setMessageText] = useState("");
 
+  const handleNotificationClick = async (notification: NotificationItem) => {
+    try {
+      // Mark as read
+      await fetch(`/api/notifications/${notification.id}/read`, {
+        method: "PATCH",
+      });
+
+      // Navigate to the notification context
+      const link = getNotificationLink(notification);
+      router.push(link);
+
+      // Update local state
+      setItems(items.map((n) => (n.id === notification.id ? { ...n, read: true } : n)));
+    } catch (error) {
+      console.error("Failed to handle notification click:", error);
+      // Still navigate even if marking as read fails
+      const link = getNotificationLink(notification);
+      router.push(link);
+    }
+  };
+
+  // Initial load
   useEffect(() => {
     Promise.all([
       fetch("/api/data/user-notifications").then((response) => response.json()),
@@ -33,6 +80,31 @@ export default function Notifications() {
         setUsers(Array.isArray(usersResponse.value) ? usersResponse.value : []);
       })
       .catch((error) => console.error("Failed to load notifications:", error));
+  }, []);
+
+  // Real-time SSE listener
+  useEffect(() => {
+    const eventSource = new EventSource("/api/notifications/events");
+
+    eventSource.addEventListener("notification-created", async (event) => {
+      try {
+        // Refresh notifications on new event
+        const response = await fetch("/api/data/user-notifications");
+        const data = await response.json();
+        setItems(Array.isArray(data.value) ? data.value : []);
+      } catch (error) {
+        console.error("Failed to update notifications:", error);
+      }
+    });
+
+    eventSource.addEventListener("error", () => {
+      console.error("SSE connection error");
+      eventSource.close();
+    });
+
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
   const markAllRead = () => setItems(items.map((n) => ({ ...n, read: true })));
@@ -78,14 +150,15 @@ export default function Notifications() {
           <TabsContent value="notifications">
             <div className="space-y-2">
               {items.map((notif, i) => {
-                const Icon = typeIcons[notif.type];
+                const Icon = typeIcons[notif.type] || Bell;
                 return (
                   <motion.div
                     key={notif.id}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    className={`flex items-start gap-3 rounded-lg p-4 transition-colors ${
+                    onClick={() => handleNotificationClick(notif)}
+                    className={`flex items-start gap-3 rounded-lg p-4 transition-colors cursor-pointer hover:opacity-80 ${
                       notif.read ? "bg-card" : "bg-primary/5 border border-primary/10"
                     }`}
                   >
@@ -103,7 +176,9 @@ export default function Notifications() {
                         </span>{" "}
                         <span className="text-muted-foreground">{notif.message}</span>
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">{notif.date}</p>
+                      <p className="text-xs text-muted-foreground mt-1" title={formatExactDate(notif.date)}>
+                        {formatRelativeDate(notif.date)}
+                      </p>
                     </div>
                     <img
                       src={notif.user.avatar}
@@ -158,8 +233,9 @@ export default function Notifications() {
                           className={`text-[10px] mt-1 ${
                             isMe ? "text-primary-foreground/60" : "text-muted-foreground"
                           }`}
+                          title={formatExactDate(msg.date)}
                         >
-                          {msg.date}
+                          {formatRelativeDate(msg.date)}
                         </p>
                       </div>
                     </div>
