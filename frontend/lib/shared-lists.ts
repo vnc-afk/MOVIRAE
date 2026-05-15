@@ -171,7 +171,7 @@ function buildSharedListViewFilter(currentUser: CurrentUser | null): Prisma.Shar
   };
 }
 
-async function getSharedListForView(listId: string, currentUser: CurrentUser | null) {
+export async function getSharedListForView(listId: string, currentUser: CurrentUser | null) {
   return prisma.sharedList.findFirst({
     where: {
       id: listId,

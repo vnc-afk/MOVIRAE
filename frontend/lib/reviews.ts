@@ -13,7 +13,7 @@ type PrismaUser = {
 };
 
 export function buildUserProfile(user: PrismaUser | null | undefined): UserProfile {
-  const displayName = user?.displayName || user?.name || user?.email?.split("@")[0] || "Movie Lover";
+  const displayName = user?.displayName || user?.name || "Movie Lover";
   const username = user?.username || displayName.toLowerCase().replace(/\s+/g, "_");
 
   return {

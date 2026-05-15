@@ -20,7 +20,7 @@ type ProfileUser = {
 export function buildUserProfile(user: ProfileUser | null | undefined, isFollowing = false) {
   if (!user) return null;
 
-  const displayName = user.displayName || user.name || user.email?.split("@")[0] || "Movie Lover";
+  const displayName = user.displayName || user.name || "Movie Lover";
   const username = user.username || displayName.toLowerCase().replace(/\s+/g, "_");
 
   return {
