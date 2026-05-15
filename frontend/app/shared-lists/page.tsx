@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { searchMovies } from "@/lib/tmdb";
 import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
@@ -13,6 +14,7 @@ type SharedListsResponse = {
 };
 
 export default function SharedListsPage() {
+  const searchParams = useSearchParams();
   const [lists, setLists] = useState<SharedList[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -37,6 +39,17 @@ export default function SharedListsPage() {
     () => lists.find((list) => list.id === selectedListId) ?? null,
     [lists, selectedListId]
   );
+
+  useEffect(() => {
+    const listIdFromQuery = searchParams.get("listId");
+    if (!listIdFromQuery) {
+      return;
+    }
+
+    if (lists.some((list) => list.id === listIdFromQuery)) {
+      setSelectedListId(listIdFromQuery);
+    }
+  }, [lists, searchParams]);
 
   const parseResponsePayload = async (response: Response) => {
     const text = await response.text();
