@@ -34,6 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
   }
 
   const body = await request.json().catch(() => null);
+  const opId = typeof body?.opId === "string" ? body.opId : request.headers.get("x-op-id") ?? undefined;
   const replyBody = typeof body?.body === "string" ? body.body.trim() : "";
 
   if (!replyBody) {
@@ -69,6 +70,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
     return NextResponse.json({ error: result.error === "unauthorized" ? "Unauthorized" : "Discussion not found." }, { status: result.error === "unauthorized" ? 401 : 404 });
   }
 
-  publishGroupEvent(groupId, { type: "group-updated" });
-  return NextResponse.json(result);
+  publishGroupEvent(groupId, { type: "group-updated", group: result.value ?? undefined }, opId);
+  return NextResponse.json({ ...result, opId });
 }

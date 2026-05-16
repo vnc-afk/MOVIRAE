@@ -53,7 +53,10 @@ export async function DELETE(
       where: { id: eventId },
     });
 
-    publishGroupEvent(groupId, { type: "group-updated" });
+    const body = await _request.json().catch(() => null);
+    const headerOpId = _request.headers.get("x-op-id");
+    const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
+    publishGroupEvent(groupId, { type: "group-updated", action: "deleted", eventId }, opId);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("/api/groups/[groupId]/events/[eventId] DELETE error:", err);

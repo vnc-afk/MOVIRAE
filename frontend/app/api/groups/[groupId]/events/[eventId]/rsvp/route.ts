@@ -7,6 +7,17 @@ import { publishGroupEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
+function serializeEventDate(startDate: Date) {
+  return startDate.toISOString().slice(0, 10);
+}
+
+function serializeEvent<T extends { startDate: Date }>(event: T) {
+  return {
+    ...event,
+    startDate: serializeEventDate(event.startDate),
+  };
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ groupId: string; eventId: string }> }
@@ -61,7 +72,7 @@ export async function POST(
     }
 
     // Upsert attendee record
-    const attendee = await prisma.eventAttendee.upsert({
+    await prisma.eventAttendee.upsert({
       where: {
         eventId_userId: { eventId, userId: user.id },
       },
@@ -82,8 +93,31 @@ export async function POST(
       },
     });
 
-    publishGroupEvent(groupId, { type: "group-updated" });
-    return NextResponse.json(attendee);
+    const updatedEvent = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: {
+        creator: {
+          select: { id: true, displayName: true, username: true, avatar: true },
+        },
+        attendees: {
+          include: {
+            user: {
+              select: { id: true, displayName: true, username: true, avatar: true },
+            },
+          },
+        },
+      },
+    });
+
+    const headerOpId = request.headers.get("x-op-id");
+    const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
+    publishGroupEvent(groupId, {
+      type: "group-updated",
+      action: "updated",
+      eventId,
+      event: updatedEvent ? serializeEvent(updatedEvent) : undefined,
+    }, opId);
+    return NextResponse.json(updatedEvent ? serializeEvent(updatedEvent) : null);
   } catch (err) {
     console.error("/api/groups/[groupId]/events/[eventId]/rsvp POST error:", err);
     return NextResponse.json({ error: "Failed to update RSVP" }, { status: 500 });

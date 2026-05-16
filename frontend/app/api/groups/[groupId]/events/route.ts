@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { subscribeToGroupEvents, publishGroupEvent } from "@/lib/group-events";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import type { GroupEvent } from "@/lib/group-events";
 import { isGroupAdmin } from "@/lib/group-utils";
 
 export const runtime = "nodejs";
@@ -56,7 +57,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ grou
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = (event: { type: string; groupId: string; timestamp: string }) => {
+        const send = (event: GroupEvent) => {
         controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
       };
 
@@ -198,7 +199,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
       });
     }
 
-    publishGroupEvent(groupId, { type: "group-updated" });
+    const headerOpId = request.headers.get("x-op-id");
+    const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
+
+    publishGroupEvent(groupId, { type: "group-updated", event, eventId: event.id, action: "created" }, opId);
     return NextResponse.json(serializeEvent(event), { status: 201 });
   } catch (err) {
     console.error("/api/groups/[groupId]/events POST error:", err);

@@ -26,6 +26,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
   }
 
   const body = await request.json().catch(() => null);
+  const opId = typeof body?.opId === "string" ? body.opId : request.headers.get("x-op-id") ?? undefined;
   const title = typeof body?.title === "string" ? body.title.trim() : "";
   const discussionBody = typeof body?.body === "string" ? body.body.trim() : "";
   const movieId = typeof body?.movieId === "string" ? body.movieId : undefined;
@@ -84,9 +85,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
     }
   }
 
-  publishGroupEvent(groupId, { type: "group-updated" });
-  
-  // Return the full group detail like createDiscussion did
   const result = await fetchGroupDetail(groupId, currentUser);
-  return NextResponse.json({ value: result });
+  publishGroupEvent(groupId, { type: "group-updated", group: result ?? undefined }, opId);
+  return NextResponse.json({ value: result, opId });
 }

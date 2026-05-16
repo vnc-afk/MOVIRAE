@@ -43,17 +43,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ gr
 
   const likedBy = normalizeLikedBy(discussion.likedBy);
   const isNewLike = !likedBy.includes(currentUser.id);
-  const nextLikedBy = isNewLike
-    ? [...likedBy, currentUser.id]
-    : likedBy.filter((userId) => userId !== currentUser.id);
-
-  await prisma.groupDiscussion.update({
-    where: { id: discussionId },
-    data: {
-      likes: nextLikedBy.length,
-      likedBy: nextLikedBy,
-    },
-  });
 
   // Create notification if liking someone else's discussion
   if (isNewLike && discussion.authorId !== currentUser.id && actorName) {
@@ -82,7 +71,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ gr
     }
   }
 
+  const body = await _request.json().catch(() => null);
+  const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
+
   const result = await toggleDiscussionLike(groupId, discussionId);
-  publishGroupEvent(groupId, { type: "group-updated" });
-  return NextResponse.json(result);
+  publishGroupEvent(groupId, { type: "group-updated", group: result.value ?? undefined }, opId);
+  return NextResponse.json({ ...result, opId });
 }

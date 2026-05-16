@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 
+import { fetchGroupDetail } from "@/lib/group-discussions";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { publishGroupEvent } from "@/lib/group-events";
@@ -20,7 +21,6 @@ export async function DELETE(
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: { id: true },
   });
 
   if (!user) {
@@ -57,7 +57,11 @@ export async function DELETE(
       },
     });
 
-    publishGroupEvent(groupId, { type: "group-updated" });
+    const body = await _request.json().catch(() => null);
+    const headerOpId = _request.headers.get("x-op-id");
+    const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
+    const group = await fetchGroupDetail(groupId, user);
+    publishGroupEvent(groupId, { type: "group-updated", group: group ?? undefined }, opId);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("/api/groups/[groupId]/movies/[tmdbId] DELETE error:", err);
