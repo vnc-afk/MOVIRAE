@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye, Heart, ListPlus, Play, Star } from "lucide-react";
+import { ArrowLeft, Eye, Heart, ListPlus, Play, Star, Loader2 } from "lucide-react";
 import { use } from "react";
 import { getMovieDetails, getSimilarMovies } from "@/lib/tmdb";
 import { getStreamingPlatforms } from "@/lib/watchmode";
 import type { Movie, Review } from "@/lib/types";
 import { StarRating } from "@/components/StarRating";
+import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
+import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import { CastCarousel } from "@/components/CastCarousel";
 import { ReviewCard } from "@/components/ReviewCard";
 import { TrailerModal } from "@/components/TrailerModal";
@@ -31,6 +33,7 @@ type MovieDetailPageProps = {
 export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const resolvedParams = use(params);
   const { data: session } = useSession();
+  const { addInFlightOp, removeInFlightOp, isInFlight } = useOptimisticOps();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [similar, setSimilar] = useState<Movie[]>([]);
   const [streamingOn, setStreamingOn] = useState<string[]>([]);
@@ -99,6 +102,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
     const movieId = movie.id;
 
+    let eventSource: EventSource | null = null;
+
     async function fetchUserMovieState() {
       try {
         const responses = await Promise.all([
@@ -130,6 +135,70 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     }
 
     fetchUserMovieState();
+
+    // Subscribe to review events and reconcile temp items when opId is present
+    try {
+      eventSource = new EventSource(`/api/reviews/events?movieId=${movieId}`);
+      eventSource.addEventListener("review-updated", async (ev) => {
+        try {
+          const payload = JSON.parse((ev as MessageEvent).data || "{}");
+          const incomingOpId = typeof payload?.opId === "string" ? payload.opId : undefined;
+          const action = typeof payload?.action === "string" ? payload.action : undefined;
+          const serverReview = payload?.review ?? null;
+
+          if (serverReview && action === "deleted") {
+            setReviews((prev) => prev.filter((review) => review.id !== serverReview.id));
+            return;
+          }
+
+          // Fast-path: handle simple actions in-place without full reconciliation
+          if (action === "liked" && serverReview?.id) {
+            setReviews((prev) => prev.map((review) => (review.id === serverReview.id ? { ...review, likes: serverReview.likes, likedByMe: serverReview.likedByMe } : review)));
+            return;
+          }
+
+          if (action === "updated" && serverReview?.id) {
+            setReviews((prev) => prev.map((review) => (review.id === serverReview.id ? serverReview : review)));
+            return;
+          }
+
+          // Op-based reconciliation for created/replied items below
+          if (incomingOpId) {
+            // Try to reconcile a temp review create
+            const tempReview = reviews.find((r) => (r as any).opId === incomingOpId || (r as any).tempId === incomingOpId) as any;
+            if (tempReview && serverReview) {
+              setReviews((prev) => reconcileTempItem(prev, { opId: incomingOpId, type: "create" as const, tempId: tempReview.tempId, ts: Date.now() }, serverReview));
+              return;
+            }
+
+            // Try to reconcile a temp reply on an existing review
+            for (const r of reviews) {
+              const tempReply = (r.replies ?? []).find((rep: any) => (rep as any).opId === incomingOpId || (rep as any).tempId === incomingOpId) as any;
+              if (tempReply && serverReview) {
+                const serverReply = serverReview.replies?.find((sr: any) => sr.comment === tempReply.comment && sr.user?.id === tempReply.user?.id && !String(sr.id).startsWith("temp-"));
+                if (serverReply) {
+                  const opObj = { opId: incomingOpId, type: "create" as const, tempId: tempReply.tempId, ts: Date.now() };
+                  setReviews((prev) => {
+                    return prev.map((review) => {
+                      if (review.id !== serverReview.id) return review;
+                      return { ...review, replies: reconcileTempItem(review.replies ?? [], opObj, serverReply) } as any;
+                    });
+                  });
+                  return;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Failed to process review SSE payload:", err);
+        }
+      });
+      eventSource.onerror = () => {
+        // browser will retry
+      };
+    } catch (err) {
+      console.warn("Could not open review events source:", err);
+    }
   }, [movie?.id, session?.user?.email]);
 
   async function updateMovieAction(key: string, active: boolean) {
@@ -237,30 +306,102 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     const editing = Boolean(currentUserReview);
     setReviewSubmitting(true);
 
-    const response = await fetch(editing ? `/api/reviews/${currentUserReview?.id}` : "/api/reviews", {
-      method: editing ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    if (!editing) {
+      // optimistic create
+      const tempId = makeTempId("review");
+      const op = { opId: generateOpId("review"), type: "create" as const, tempId, ts: Date.now() };
+      
+      const opId = `movie-review-${movie.id}`;
+      addInFlightOp(opId, {
+        opId,
+        type: "post",
+        surface: "movie",
+        itemId: movie.id,
+        payload: { rating: reviewRating, comment: reviewComment },
+      });
+      
+      const optimisticReview: Review = {
+        id: tempId,
+        tempId,
+        opId: op.opId,
+        user: { id: session?.user?.email ?? tempId, email: session?.user?.email ?? "", username: session?.user?.email?.split("@")[0] ?? "user", displayName: session?.user?.name ?? session?.user?.email?.split("@")[0] ?? "You", avatar: session?.user?.image ?? "", bio: "", followers: 0, following: 0, reviewCount: 0, watchlistCount: 0, favoriteMovies: [] },
         tmdbId: movie.id,
         rating: reviewRating,
         comment: reviewComment,
-      }),
-    });
+        date: new Date().toISOString(),
+        likes: 0,
+        likedByMe: false,
+        replies: [],
+      } as Review;
 
-    const json = await response.json().catch(() => null);
+      setReviews((current) => [optimisticReview, ...current]);
 
-    if (!response.ok) {
-      toast.error(json?.error || "Unable to save review.");
-      setReviewSubmitting(false);
+      try {
+        const body = attachOpToBody({ tmdbId: movie.id, rating: reviewRating, comment: reviewComment }, op);
+        const headers = attachOpToHeaders({ "Content-Type": "application/json" }, op);
+
+        const response = await fetch("/api/reviews", {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        });
+
+        const json = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(json?.error || "Unable to save review.");
+        }
+
+        const serverReview = json?.value;
+        const respOpId = json?.opId;
+
+        if (serverReview && respOpId) {
+          setReviews((prev) => reconcileTempItem(prev, op, serverReview));
+        } else if (serverReview) {
+          await refreshReviews();
+        }
+
+        toast.success("Review posted");
+      } catch (error) {
+        // rollback
+        setReviews((prev) => prev.filter((r) => r.id !== ("temp-" + tempId) && r.id !== tempId));
+        toast.error(error instanceof Error ? error.message : "Unable to save review.");
+      } finally {
+        removeInFlightOp(opId);
+        setReviewDialogOpen(false);
+        setReviewRating(0);
+        setReviewComment("");
+        setReviewSubmitting(false);
+      }
       return;
     }
 
-    toast.success(editing ? "Review updated" : "Review posted");
-    setReviewDialogOpen(false);
-    setReviewRating(0);
-    setReviewComment("");
-    setReviewSubmitting(false);
-    await refreshReviews();
+    // editing existing review - keep previous flow
+    try {
+      const response = await fetch(`/api/reviews/${currentUserReview?.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tmdbId: movie.id, rating: reviewRating, comment: reviewComment }),
+      });
+
+      const json = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        toast.error(json?.error || "Unable to save review.");
+        setReviewSubmitting(false);
+        return;
+      }
+
+      toast.success("Review updated");
+      setReviewDialogOpen(false);
+      setReviewRating(0);
+      setReviewComment("");
+      setReviewSubmitting(false);
+      await refreshReviews();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to save review.");
+      setReviewSubmitting(false);
+    }
   };
 
   const handleDeleteReview = async (reviewId: string) => {
@@ -507,8 +648,13 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
             <Button variant="secondary" type="button" onClick={() => setReviewDialogOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={handleSaveReview} disabled={reviewSubmitting || !reviewRating}>
-              {reviewSubmitting ? "Saving..." : currentUserReview ? "Update Review" : "Post Review"}
+            <Button type="button" onClick={handleSaveReview} disabled={reviewSubmitting || !reviewRating || isInFlight(`movie-review-${movie?.id}`)}>
+              {(reviewSubmitting || isInFlight(`movie-review-${movie?.id}`)) ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : currentUserReview ? "Update Review" : "Post Review"}
             </Button>
           </DialogFooter>
         </DialogContent>
