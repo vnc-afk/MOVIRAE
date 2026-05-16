@@ -23,7 +23,7 @@ export interface DiscussionRecord {
   date: string;
   likes: number;
   replies: number;
-  likedBy: string[];
+  likedByMe: boolean;
   replyItems: DiscussionReplyRecord[];
   pinned?: boolean;
   movieId?: string;
@@ -83,7 +83,8 @@ function normalizeReplyItems(value: unknown) {
     }));
 }
 
-function serializeDiscussion(discussion: any): DiscussionRecord {
+function serializeDiscussion(discussion: any, currentUserId?: string | null): DiscussionRecord {
+  const likedBy = normalizeLikedBy(discussion.likedBy);
   return {
     id: discussion.id,
     author: (isProfileUser(discussion.author) ? buildUserProfile(discussion.author) : null) ?? fallbackProfile,
@@ -92,7 +93,7 @@ function serializeDiscussion(discussion: any): DiscussionRecord {
     date: discussion.createdAt.toISOString(),
     likes: discussion.likes,
     replies: discussion.replies,
-    likedBy: normalizeLikedBy(discussion.likedBy),
+    likedByMe: currentUserId ? likedBy.includes(currentUserId) : false,
     replyItems: normalizeReplyItems(discussion.replyItems),
     pinned: discussion.pinned,
     movieId: discussion.movieId ?? undefined,
@@ -183,7 +184,7 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
     creatorId: group.creatorId,
     members,
     sharedList,
-    discussions: group.discussions.map(serializeDiscussion),
+    discussions: group.discussions.map((discussion) => serializeDiscussion(discussion, currentUser?.id)),
     joined: currentUser ? group.members.some((member) => member.userId === currentUser.id) : false,
   } satisfies GroupDetailRecord;
 }
