@@ -70,7 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       include: {
         user: true,
         replies: {
-          include: { user: true },
+          include: { user: true, likesRecords: true },
           orderBy: { createdAt: "asc" },
         },
       },
@@ -80,7 +80,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Review not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ value: serializeReview(review) });
+    return NextResponse.json({ value: serializeReview(review, currentUser.id) });
   } catch (error) {
     console.error("/api/reviews/[id]/replies POST error:", error);
     return NextResponse.json({ error: "Failed to post reply" }, { status: 500 });

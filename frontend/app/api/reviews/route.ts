@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       },
       include: {
         user: true,
-        replies: { include: { user: true }, orderBy: { createdAt: "asc" } },
+        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
       },
     });
 
@@ -68,11 +68,11 @@ export async function POST(request: Request) {
       },
       include: {
         user: true,
-        replies: { include: { user: true }, orderBy: { createdAt: "asc" } },
+        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
       },
     });
 
-    return NextResponse.json({ value: serializeReview(review) });
+    return NextResponse.json({ value: serializeReview(review, currentUser.id) });
   } catch (error) {
     console.error("/api/reviews POST error:", error);
     return NextResponse.json({ error: "Failed to create review" }, { status: 500 });

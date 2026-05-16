@@ -51,11 +51,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       },
       include: {
         user: true,
-        replies: { include: { user: true }, orderBy: { createdAt: "asc" } },
+        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
       },
     });
 
-    return NextResponse.json({ value: serializeReview(review) });
+    return NextResponse.json({ value: serializeReview(review, currentUser.id) });
   } catch (error) {
     console.error("/api/reviews/[id] PUT error:", error);
     return NextResponse.json({ error: "Failed to update review" }, { status: 500 });

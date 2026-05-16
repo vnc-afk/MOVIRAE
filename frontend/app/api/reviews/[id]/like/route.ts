@@ -34,7 +34,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       where: { id },
       include: {
         user: true,
-        replies: { include: { user: true }, orderBy: { createdAt: "asc" } },
+        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
       },
     });
 
@@ -108,7 +108,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       where: { id },
       include: {
         user: true,
-        replies: { include: { user: true }, orderBy: { createdAt: "asc" } },
+        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
       },
     });
 
