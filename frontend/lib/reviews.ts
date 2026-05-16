@@ -46,13 +46,18 @@ export async function canReviewMovie(userId: string, tmdbId: string) {
   return watched.includes(tmdbId);
 }
 
-export function serializeReply(reply: any): Reply {
+export function serializeReply(reply: any, currentUserId?: string | null): Reply {
+  const likedByMe = currentUserId && Array.isArray(reply.likesRecords)
+    ? reply.likesRecords.some((record: { userId?: string }) => record.userId === currentUserId)
+    : false;
+
   return {
     id: reply.id,
     user: buildUserProfile(reply.user),
     comment: typeof reply.comment === "string" ? reply.comment : "",
     date: reply.createdAt instanceof Date ? reply.createdAt.toISOString() : new Date(reply.createdAt).toISOString(),
     likes: typeof reply.likes === "number" ? reply.likes : 0,
+    likedByMe,
   };
 }
 
@@ -72,6 +77,6 @@ export function serializeReview(review: any, currentUserId?: string | null, like
     date: review.createdAt instanceof Date ? review.createdAt.toISOString() : new Date(review.createdAt).toISOString(),
     likes: typeof review.likes === "number" ? review.likes : 0,
     likedByMe,
-    replies: Array.isArray(review.replies) ? review.replies.map(serializeReply) : [],
+    replies: Array.isArray(review.replies) ? review.replies.map((reply: any) => serializeReply(reply, currentUserId)) : [],
   };
 }
