@@ -1,7 +1,14 @@
+import type { GroupDetailRecord } from "@/lib/group-discussions";
+
 export type GroupEvent = {
   type: "group-updated";
   groupId: string;
   timestamp: string;
+  opId?: string;
+  group?: GroupDetailRecord;
+  event?: unknown;
+  eventId?: string;
+  action?: "created" | "updated" | "deleted";
 };
 
 export type NotificationEvent = {
@@ -40,7 +47,7 @@ export function subscribeToNotifications(listener: NotificationEventListener) {
   };
 }
 
-export function publishGroupEvent(groupId: string, event: Omit<GroupEvent, "groupId" | "timestamp">) {
+export function publishGroupEvent(groupId: string, event: Omit<GroupEvent, "groupId" | "timestamp">, opId?: string) {
   const listeners = listenersByGroup.get(groupId);
   if (!listeners || listeners.size === 0) return;
 
@@ -48,6 +55,7 @@ export function publishGroupEvent(groupId: string, event: Omit<GroupEvent, "grou
     ...event,
     groupId,
     timestamp: new Date().toISOString(),
+    opId,
   };
 
   for (const listener of listeners) {
