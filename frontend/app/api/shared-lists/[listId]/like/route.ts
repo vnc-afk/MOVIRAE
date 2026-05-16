@@ -17,6 +17,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ li
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const body = await _request.json().catch(() => null);
+    const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
+
     const list = await getSharedListForView(listId, currentUser);
     if (!list) {
       return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
@@ -69,9 +72,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ li
       }
     }
 
-    publishSharedListEvent(listId, "updated");
     const result = await fetchSharedLists(currentUser);
-    return NextResponse.json({ value: result });
+    const updatedList = result.find((list) => list.id === listId);
+    publishSharedListEvent(listId, "updated", opId, updatedList);
+    return NextResponse.json({ value: result, opId });
   } catch (error) {
     console.error("Failed to toggle shared list like:", error);
     return NextResponse.json({ error: "Failed to update like." }, { status: 500 });

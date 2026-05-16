@@ -9,6 +9,8 @@ export async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUser();
     const body = await request.json().catch(() => null);
+    const headerOpId = request.headers.get("x-op-id");
+    const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
 
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     const description = typeof body?.description === "string" ? body.description.trim() : "";
@@ -24,9 +26,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const createdListId = Array.isArray(result.value) && result.value.length > 0 ? result.value[0].id : "new";
-    publishSharedListEvent(createdListId, "created");
-    return NextResponse.json(result);
+    const createdList = Array.isArray(result.value) && result.value.length > 0 ? result.value[0] : undefined;
+    const createdListId = createdList?.id ?? "new";
+    publishSharedListEvent(createdListId, "created", opId, createdList);
+    return NextResponse.json({ ...result, opId });
   } catch (error) {
     console.error("Failed to create shared list:", error);
     return NextResponse.json({ error: "Failed to create shared list." }, { status: 500 });

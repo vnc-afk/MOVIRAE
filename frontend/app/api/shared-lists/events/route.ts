@@ -1,4 +1,5 @@
 import { subscribeToSharedListEvents } from "@/lib/shared-list-events";
+import type { SharedListEvent } from "@/lib/shared-list-events";
 
 export const runtime = "nodejs";
 
@@ -7,7 +8,7 @@ export async function GET(request: Request) {
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = (event: { type: string; listId: string; action: string; timestamp: string }) => {
+      const send = (event: SharedListEvent) => {
         controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
       };
 

@@ -13,6 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
     const currentUser = await getCurrentUser();
     const actorName = currentUser?.displayName?.trim();
     const body = await request.json().catch(() => null);
+    const opId = typeof body?.opId === "string" ? body.opId : request.headers.get("x-op-id") ?? undefined;
     const commentBody = typeof body?.body === "string" ? body.body.trim() : "";
     const parentId = typeof body?.parentId === "string" && body.parentId.trim() ? body.parentId.trim() : undefined;
 
@@ -61,9 +62,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
       publishNotificationEvent(notification.id);
     }
 
-    publishSharedListEvent(listId, "updated");
     const result = await fetchSharedLists(currentUser);
-    return NextResponse.json({ value: result });
+    const updatedList = result.find((list) => list.id === listId);
+    publishSharedListEvent(listId, "updated", opId, updatedList);
+    return NextResponse.json({ value: result, opId });
   } catch (error) {
     console.error("Failed to post shared list comment:", error);
     return NextResponse.json({ error: "Failed to post comment." }, { status: 500 });

@@ -9,6 +9,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
   const { listId } = await params;
   const currentUser = await getCurrentUser();
   const body = await request.json().catch(() => null);
+  const headerOpId = request.headers.get("x-op-id");
+  const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
   const movieId = typeof body?.movieId === "string" ? body.movieId.trim() : "";
 
   if (!movieId) {
@@ -24,14 +26,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
     );
   }
 
-  publishSharedListEvent(listId, "updated");
-  return NextResponse.json(result);
+  const updatedLists = result.value;
+  const updatedList = Array.isArray(updatedLists) ? updatedLists.find((list) => list.id === listId) : undefined;
+  publishSharedListEvent(listId, "updated", opId, updatedList);
+  return NextResponse.json({ ...result, opId });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ listId: string }> }) {
   const { listId } = await params;
   const currentUser = await getCurrentUser();
   const body = await request.json().catch(() => null);
+  const headerOpId = request.headers.get("x-op-id");
+  const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
   const movieId = typeof body?.movieId === "string" ? body.movieId.trim() : "";
 
   if (!movieId) {
@@ -54,6 +60,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ l
     );
   }
 
-  publishSharedListEvent(listId, "updated");
-  return NextResponse.json(result);
+  const updatedLists = result.value;
+  const updatedList = Array.isArray(updatedLists) ? updatedLists.find((list) => list.id === listId) : undefined;
+  publishSharedListEvent(listId, "updated", opId, updatedList);
+  return NextResponse.json({ ...result, opId });
 }
