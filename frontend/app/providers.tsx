@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { SessionProvider, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
+import { OptimisticProvider } from "@/hooks/OptimisticProvider";
 import { Navbar } from "@/components/Navbar";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -24,11 +25,13 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <AuthGuard>{children}</AuthGuard>
-        </TooltipProvider>
+        <OptimisticProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <AuthGuard>{children}</AuthGuard>
+          </TooltipProvider>
+        </OptimisticProvider>
       </QueryClientProvider>
     </SessionProvider>
   );
