@@ -27,6 +27,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
 
     const { id, replyId } = await params;
+    const body = await _request.json().catch(() => null);
+    const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
     const reply = await prisma.reviewReply.findUnique({
       where: { id: replyId },
       select: { id: true, reviewId: true },
@@ -85,7 +87,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Review not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ value: serializeReview(updatedReview, currentUser.id, undefined) });
+    return NextResponse.json({ value: serializeReview(updatedReview, currentUser.id, undefined), opId });
   } catch (error) {
     console.error("/api/reviews/[id]/replies/[replyId]/like POST error:", error);
     return NextResponse.json({ error: "Failed to like reply" }, { status: 500 });

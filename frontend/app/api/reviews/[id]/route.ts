@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeReview } from "@/lib/reviews";
+import { publishReviewEvent } from "@/lib/review-events";
 
 export const runtime = "nodejs";
 
@@ -55,6 +56,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       },
     });
 
+    try {
+      const serialized = serializeReview(review, null, false);
+      publishReviewEvent(review.tmdbId, review.id, "updated", undefined, serialized);
+    } catch (e) {
+      console.warn("publishReviewEvent failed:", e);
+    }
+
     return NextResponse.json({ value: serializeReview(review, currentUser.id) });
   } catch (error) {
     console.error("/api/reviews/[id] PUT error:", error);
@@ -80,6 +88,13 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
 
     await prisma.review.delete({ where: { id } });
+
+    try {
+      const serialized = serializeReview(existing, null, false);
+      publishReviewEvent(existing.tmdbId, id, "deleted", undefined, serialized);
+    } catch (e) {
+      console.warn("publishReviewEvent failed:", e);
+    }
 
     return NextResponse.json({ value: true });
   } catch (error) {

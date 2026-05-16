@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canReviewMovie, serializeReview } from "@/lib/reviews";
+import { publishReviewEvent } from "@/lib/review-events";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,7 @@ export async function POST(request: Request) {
     }
 
     const payload = await request.json().catch(() => null);
+    const opId = typeof payload?.opId === "string" ? payload.opId : request.headers.get("x-op-id") ?? undefined;
     const tmdbId = typeof payload?.tmdbId === "string" ? payload.tmdbId.trim() : "";
     const rating = Number(payload?.rating);
     const comment = typeof payload?.comment === "string" ? payload.comment.trim() : "";
@@ -72,7 +74,16 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ value: serializeReview(review, currentUser.id) });
+    // publish review-created event so other clients can reconcile using opId
+    try {
+      const serialized = serializeReview(review, null, false);
+      publishReviewEvent(review.tmdbId, review.id, "created", opId, serialized);
+    } catch (e) {
+      // non-fatal
+      console.warn("publishReviewEvent failed:", e);
+    }
+
+    return NextResponse.json({ value: serializeReview(review, currentUser.id), opId });
   } catch (error) {
     console.error("/api/reviews POST error:", error);
     return NextResponse.json({ error: "Failed to create review" }, { status: 500 });

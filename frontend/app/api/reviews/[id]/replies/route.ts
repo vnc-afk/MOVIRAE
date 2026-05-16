@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeReview } from "@/lib/reviews";
 import { publishNotificationEvent } from "@/lib/group-events";
+import { publishReviewEvent } from "@/lib/review-events";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const { id } = await params;
     const payload = await request.json().catch(() => null);
+    const opId = typeof payload?.opId === "string" ? payload.opId : request.headers.get("x-op-id") ?? undefined;
     const comment = typeof payload?.comment === "string" ? payload.comment.trim() : "";
 
     if (!comment) {
@@ -80,7 +82,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Review not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ value: serializeReview(review, currentUser.id) });
+    try {
+      const serialized = serializeReview(review, null, false);
+      publishReviewEvent(review.tmdbId, review.id, "replied", opId, serialized);
+    } catch (e) {
+      console.warn("publishReviewEvent failed:", e);
+    }
+
+    return NextResponse.json({ value: serializeReview(review, currentUser.id), opId });
   } catch (error) {
     console.error("/api/reviews/[id]/replies POST error:", error);
     return NextResponse.json({ error: "Failed to post reply" }, { status: 500 });

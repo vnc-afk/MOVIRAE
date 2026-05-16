@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeReview } from "@/lib/reviews";
 import { publishNotificationEvent } from "@/lib/group-events";
+import { publishReviewEvent } from "@/lib/review-events";
 
 export const runtime = "nodejs";
 
@@ -30,6 +31,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     }
 
     const { id } = await params;
+    const body = await _request.json().catch(() => null);
+    const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
     const existing = await prisma.review.findUnique({
       where: { id },
       include: {
@@ -116,7 +119,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Review not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ value: serializeReview(review, currentUser.id, likedByMe) });
+    try {
+      const serialized = serializeReview(review, null, false);
+      publishReviewEvent(review.tmdbId, review.id, "liked", opId, serialized);
+    } catch (e) {
+      console.warn("publishReviewEvent failed:", e);
+    }
+
+    return NextResponse.json({ value: serializeReview(review, currentUser.id, likedByMe), opId });
   } catch (error) {
     console.error("/api/reviews/[id]/like POST error:", error);
     return NextResponse.json({ error: "Failed to like review" }, { status: 500 });
