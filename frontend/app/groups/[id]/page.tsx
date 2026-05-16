@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Send,
   Heart,
+  Loader2,
   Calendar,
   Sparkles,
   Pin,
@@ -29,6 +30,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { generateOpId, makeTempId as makeOptimisticTempId, attachOpToBody, attachOpToHeaders, reconcileTempItem } from "@/lib/optimistic";
 import { searchMovies } from "@/lib/tmdb";
 import {
   Dialog,
@@ -40,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import type { Group, Movie, UserProfile } from "@/lib/types";
 
 interface DiscussionReply {
@@ -57,7 +60,7 @@ interface Discussion {
   date: string;
   likes: number;
   replies: number;
-  likedBy?: string[];
+  likedByMe?: boolean;
   replyItems?: DiscussionReply[];
   pinned?: boolean;
   movieId?: string;
@@ -79,6 +82,7 @@ export default function GroupDetail() {
   const params = useParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+  const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
   const [group, setGroup] = useState<GroupRecord | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [joined, setJoined] = useState(false);
@@ -135,6 +139,10 @@ export default function GroupDetail() {
     return nextGroup;
   };
 
+  function makeTempId(prefix = "temp") {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
   const checkAdminStatus = () => {
     if (!group || !currentUser) {
       setIsAdmin(false);
@@ -173,12 +181,92 @@ export default function GroupDetail() {
     loadData();
 
     eventSource = new EventSource(`/api/groups/${id}/events`);
-    eventSource.addEventListener("group-updated", () => {
+    eventSource.addEventListener("group-updated", (ev) => {
       if (!isActive) return;
 
-      loadGroup(false).catch((error) => {
-        console.error("Failed to refresh group detail:", error);
-      });
+      try {
+        const payload = JSON.parse((ev as MessageEvent).data || "{}");
+        const incomingOpId = typeof payload?.opId === "string" ? payload.opId : undefined;
+
+        const action = typeof payload?.action === "string" ? payload.action : undefined;
+        const serverGroup = payload?.group ?? null;
+        const serverEvent = payload?.event ?? null;
+        const serverEventId = typeof payload?.eventId === "string" ? payload.eventId : undefined;
+
+        if (serverGroup) {
+          if (incomingOpId && group) {
+            const tempDiscussion = (group.discussions ?? []).find((discussion) => (discussion as any).opId === incomingOpId || (discussion as any).tempId === incomingOpId) as any;
+            if (tempDiscussion) {
+              const serverDiscussion = (serverGroup.discussions ?? []).find((discussion: any) => discussion.title === tempDiscussion.title && discussion.body === tempDiscussion.body && discussion.author?.id === tempDiscussion.author?.id && !String(discussion.id).startsWith("temp-"));
+              if (serverDiscussion) {
+                const op = { opId: incomingOpId, type: "create" as const, tempId: tempDiscussion.tempId, ts: Date.now() };
+                setGroup((prev) => {
+                  if (!prev) return serverGroup;
+                  const nextDiscussions = reconcileTempItem(prev.discussions ?? [], op, serverDiscussion);
+                  return { ...serverGroup, discussions: nextDiscussions } as GroupRecord;
+                });
+              } else {
+                setGroup(serverGroup);
+              }
+            } else {
+              for (const discussion of group.discussions ?? []) {
+                const tempReply = (discussion.replyItems ?? []).find((reply: any) => (reply as any).opId === incomingOpId || (reply as any).tempId === incomingOpId) as any;
+                if (!tempReply) {
+                  continue;
+                }
+
+                const serverDiscussion = (serverGroup.discussions ?? []).find((item: any) => item.id === discussion.id);
+                const serverReply = serverDiscussion?.replyItems?.find((reply: any) => reply.body === tempReply.body && reply.author?.id === tempReply.author?.id && !String(reply.id).startsWith("temp-"));
+                if (serverDiscussion && serverReply) {
+                  const op = { opId: incomingOpId, type: "create" as const, tempId: tempReply.tempId, ts: Date.now() };
+                  setGroup((prev) => {
+                    if (!prev) return serverGroup;
+                    const nextDiscussions = (prev.discussions ?? []).map((item) => {
+                      if (item.id !== serverDiscussion.id) return item;
+                      return { ...serverDiscussion, replyItems: reconcileTempItem(item.replyItems ?? [], op, serverReply) } as any;
+                    });
+                    return { ...serverGroup, discussions: nextDiscussions } as GroupRecord;
+                  });
+                  break;
+                }
+
+                setGroup(serverGroup);
+                break;
+              }
+            }
+          } else {
+            setGroup(serverGroup);
+          }
+        }
+
+        if (serverEvent) {
+          const nextEvent = serverEvent as any;
+          setEvents((prev) => {
+            if (action === "deleted") {
+              const targetId = typeof nextEvent.id === "string" ? nextEvent.id : serverEventId;
+              return prev.filter((event) => event.id !== targetId);
+            }
+
+            const nextEvents = prev.map((event) => (event.id === nextEvent.id ? nextEvent : event));
+            if (!nextEvents.some((event) => event.id === nextEvent.id)) {
+              return [nextEvent, ...prev];
+            }
+            return nextEvents;
+          });
+          return;
+        }
+
+        if (action === "deleted" && serverEventId) {
+          setEvents((prev) => prev.filter((event) => event.id !== serverEventId));
+          return;
+        }
+
+        if (!serverGroup) {
+          console.warn("Group SSE payload missing canonical data:", payload);
+        }
+      } catch (err) {
+        console.error("Failed to process group SSE payload:", err);
+      }
     });
     eventSource.onerror = () => {
       // The browser will retry automatically; keep the current view mounted.
@@ -315,21 +403,84 @@ export default function GroupDetail() {
       return;
     }
 
-    const response = await fetch(`/api/groups/${id}/discussions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newTitle, body: newBody }),
+    const opId = `group-discussion-${group?.id}`;
+    if (isInFlight(opId)) return;
+
+    addInFlightOp(opId, {
+      opId,
+      type: "post",
+      surface: "group",
+      itemId: group?.id,
+      payload: { title: newTitle, body: newBody },
     });
 
-    if (!response.ok) {
-      toast.error("Could not post the discussion.");
-      return;
-    }
+    const tempId = makeOptimisticTempId("discussion");
+    const op = { opId: generateOpId("discussion"), type: "create" as const, tempId, ts: Date.now() };
+    const tempDiscussion = {
+      id: tempId,
+      tempId,
+      opId: op.opId,
+      author: currentUser,
+      title: newTitle,
+      body: newBody,
+      date: new Date().toISOString(),
+      likes: 0,
+      replies: 0,
+      likedByMe: false,
+      replyItems: [] as any[],
+    } as any;
 
-    await refreshGroupFromResponse(response);
-    setNewTitle("");
-    setNewBody("");
-    toast.success("Discussion posted!");
+    const prevGroup = group;
+    try {
+      // Optimistically insert at the top
+      setGroup((g) => (g ? { ...g, discussions: [tempDiscussion, ...(g.discussions ?? [])] } : g));
+      setNewTitle("");
+      setNewBody("");
+
+      const body = attachOpToBody({ title: tempDiscussion.title, body: tempDiscussion.body }, op);
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, op);
+
+      const response = await fetch(`/api/groups/${id}/discussions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        // rollback
+        setGroup(prevGroup);
+        toast.error("Could not post the discussion.");
+        return;
+      }
+
+      const payload = await response.json().catch(() => null);
+      const serverGroup = payload?.value ?? null;
+      const respOpId = payload?.opId;
+
+      if (serverGroup && respOpId) {
+        // try to find the server-created discussion matching our temp content
+        const serverDiscussion = (serverGroup.discussions ?? []).find((d: any) => d.title === tempDiscussion.title && d.body === tempDiscussion.body && d.author?.id === currentUser.id && !String(d.id).startsWith("temp-"));
+        if (serverDiscussion) {
+          // replace temp item in current group discussions
+          setGroup((prev) => {
+            if (!prev) return serverGroup;
+            const nextDiscussions = reconcileTempItem(prev.discussions ?? [], op, serverDiscussion);
+            return { ...serverGroup, discussions: nextDiscussions } as GroupRecord;
+          });
+        } else {
+          setGroup(serverGroup);
+        }
+      } else if (serverGroup) {
+        setGroup(serverGroup);
+      }
+
+      toast.success("Discussion posted!");
+    } catch (err) {
+      setGroup(prevGroup);
+      toast.error("Could not post the discussion.");
+    } finally {
+      removeInFlightOp(opId);
+    }
   };
 
   const toggleLike = async (discussionId: string) => {
@@ -338,17 +489,52 @@ export default function GroupDetail() {
       return;
     }
 
-    const response = await fetch(`/api/groups/${id}/discussions/${discussionId}/like`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const opId = `group-like-${discussionId}`;
+    if (isInFlight(opId)) return;
+
+    addInFlightOp(opId, {
+      opId,
+      type: "like",
+      surface: "group",
+      itemId: discussionId,
     });
 
-    if (!response.ok) {
-      toast.error("Could not update the like.");
-      return;
-    }
+    const prevGroup = group;
+    try {
+      // Compute original likes from current state to avoid double increments
+      const originalLikes = group?.discussions?.find((d) => d.id === discussionId)?.likes ?? 0;
+      const currentLiked = Boolean(group?.discussions?.find((d) => d.id === discussionId)?.likedByMe);
+      const nextLikedByMe = !currentLiked;
+      const optimisticLikes = nextLikedByMe ? originalLikes + 1 : Math.max(originalLikes - 1, 0);
 
-    await refreshGroupFromResponse(response);
+      // Optimistic update
+      setGroup((g) => {
+        if (!g) return g;
+        const next = { ...g, discussions: (g.discussions ?? []).map((d) => {
+          if (d.id !== discussionId) return d;
+          return { ...d, likedByMe: nextLikedByMe, likes: optimisticLikes } as typeof d;
+        }) };
+        return next;
+      });
+
+      const response = await fetch(`/api/groups/${id}/discussions/${discussionId}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        setGroup(prevGroup);
+        toast.error("Could not update the like.");
+        return;
+      }
+
+      await refreshGroupFromResponse(response);
+    } catch (err) {
+      setGroup(prevGroup);
+      toast.error("Could not update the like.");
+    } finally {
+      removeInFlightOp(opId);
+    }
   };
 
   const handleReply = async (discussionId: string) => {
@@ -363,22 +549,91 @@ export default function GroupDetail() {
       return;
     }
 
-    const response = await fetch(`/api/groups/${id}/discussions/${discussionId}/replies`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body: replyBody }),
+    const opId = `group-reply-${discussionId}`;
+    if (isInFlight(opId)) return;
+
+    addInFlightOp(opId, {
+      opId,
+      type: "reply",
+      surface: "group",
+      itemId: discussionId,
+      payload: { body: replyBody },
     });
 
-    if (!response.ok) {
+    const tempReplyId = makeOptimisticTempId("reply");
+    const op = { opId: generateOpId("reply"), type: "create" as const, tempId: tempReplyId, ts: Date.now() };
+    const tempReply = {
+      id: tempReplyId,
+      tempId: tempReplyId,
+      opId: op.opId,
+      author: currentUser,
+      body: replyBody,
+      date: new Date().toISOString(),
+    } as any;
+
+    const prevGroup = group;
+    try {
+      // Optimistically append reply and increment counter
+      setGroup((g) => {
+        if (!g) return g;
+        const discussions = (g.discussions ?? []).map((d) => {
+          if (d.id !== discussionId) return d;
+          const nextReplyItems = [...(d.replyItems ?? []), tempReply];
+          return { ...d, replyItems: nextReplyItems, replies: (d.replies ?? 0) + 1 } as typeof d;
+        });
+        return { ...g, discussions };
+      });
+
+      setReplyDrafts((prev) => ({ ...prev, [discussionId]: "" }));
+      setExpandedReplies((prev) => ({ ...prev, [discussionId]: true }));
+
+      const body = attachOpToBody({ body: replyBody }, op);
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, op);
+
+      const response = await fetch(`/api/groups/${id}/discussions/${discussionId}/replies`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        setGroup(prevGroup);
+        toast.error("Could not post the reply.");
+        return;
+      }
+
+      const payload = await response.json().catch(() => null);
+      const serverGroup = payload?.value ?? null;
+      const respOpId = payload?.opId;
+
+      if (serverGroup && respOpId) {
+        // find server reply and reconcile
+        const serverDiscussion = (serverGroup.discussions ?? []).find((d: any) => d.id === discussionId);
+        const serverReply = serverDiscussion?.replyItems?.find((r: any) => r.body === tempReply.body && r.author?.id === currentUser.id && !String(r.id).startsWith("temp-"));
+        if (serverReply) {
+          setGroup((prev) => {
+            if (!prev) return serverGroup;
+            const discussions = prev.discussions ?? [];
+            const idx = discussions.findIndex((d) => d.id === discussionId);
+            if (idx === -1) return serverGroup;
+            const nextReplyItems = reconcileTempItem(discussions[idx].replyItems ?? [], op, serverReply);
+            const nextDiscussions = discussions.map((d, i) => i === idx ? { ...serverDiscussion, replyItems: nextReplyItems } : d);
+            return { ...serverGroup, discussions: nextDiscussions } as GroupRecord;
+          });
+        } else {
+          setGroup(serverGroup);
+        }
+      } else if (serverGroup) {
+        setGroup(serverGroup);
+      }
+
+      toast.success("Reply posted!");
+    } catch (err) {
+      setGroup(prevGroup);
       toast.error("Could not post the reply.");
-      return;
+    } finally {
+      removeInFlightOp(opId);
     }
-
-    await refreshGroupFromResponse(response);
-
-    setReplyDrafts((prev) => ({ ...prev, [discussionId]: "" }));
-    setExpandedReplies((prev) => ({ ...prev, [discussionId]: true }));
-    toast.success("Reply posted!");
   };
 
   const handleCreateEvent = async () => {
@@ -406,11 +661,6 @@ export default function GroupDetail() {
         return;
       }
 
-      const eventsResponse = await fetch(`/api/groups/${id}/events?data=1`, { cache: "no-store" });
-      const eventsPayload = await eventsResponse.json();
-      const newEvents = Array.isArray(eventsPayload.value) ? eventsPayload.value : [];
-      setEvents(newEvents);
-
       setEventTitle("");
       setEventDate("");
       setEventTime("");
@@ -435,7 +685,6 @@ export default function GroupDetail() {
         return;
       }
 
-      await loadGroup(false);
       toast.success("Movie removed from shared list.");
     } catch (error) {
       toast.error("Failed to remove movie.");
@@ -455,7 +704,6 @@ export default function GroupDetail() {
         return;
       }
 
-      await loadGroup(false);
       toast.success("Movie added to shared watchlist!");
       setAddMovieOpen(false);
     } catch (error) {
@@ -481,11 +729,6 @@ export default function GroupDetail() {
         toast.error(errorPayload?.error || "Could not update RSVP.");
         return;
       }
-
-      const eventsResponse = await fetch(`/api/groups/${id}/events?data=1`, { cache: "no-store" });
-      const eventsPayload = await eventsResponse.json();
-      const newEvents = Array.isArray(eventsPayload.value) ? eventsPayload.value : [];
-      setEvents(newEvents);
       toast.success(rsvpStatus === "pending" ? "RSVP cleared." : `Marked as ${rsvpStatus}.`);
     } catch (error) {
       toast.error("Failed to update RSVP.");
@@ -541,7 +784,11 @@ export default function GroupDetail() {
               </div>
               <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="What's the topic?" className="w-full bg-background border border-input rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
               <Textarea value={newBody} onChange={(e) => setNewBody(e.target.value)} placeholder="Share your thoughts with the club..." rows={3} />
-              <div className="flex justify-end"><Button onClick={handlePost} className="gap-1.5"><Send className="h-3.5 w-3.5" /> Post</Button></div>
+              <div className="flex justify-end">
+                <Button onClick={handlePost} className="gap-1.5" disabled={isInFlight(`group-discussion-${group?.id}`)}>
+                  {isInFlight(`group-discussion-${group?.id}`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Post
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -549,6 +796,7 @@ export default function GroupDetail() {
                 <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No discussions yet.</div>
               ) : discussions.map((discussion, index) => {
                 const movie = discussion.movieId ? movieLookup.get(discussion.movieId) ?? null : null;
+                const isLiked = Boolean(discussion.likedByMe);
                 return (
                   <motion.div key={discussion.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="rounded-xl bg-card p-5 card-shadow hover:card-shadow-hover transition-shadow">
                     <div className="flex items-start gap-3">
@@ -576,8 +824,13 @@ export default function GroupDetail() {
                           </Link>
                         )}
                         <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                          <button onClick={() => toggleLike(discussion.id)} className="flex items-center gap-1 hover:text-foreground transition-colors">
-                            <Heart className={`h-3.5 w-3.5 ${(currentUser && (discussion.likedBy ?? []).includes(currentUser.id)) ? "fill-primary text-primary" : ""}`} />
+                          <button
+                            onClick={() => toggleLike(discussion.id)}
+                            disabled={Boolean(isInFlight(`group-like-${discussion.id}`))}
+                            aria-busy={Boolean(isInFlight(`group-like-${discussion.id}`))}
+                            className="flex items-center gap-1 hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isInFlight(`group-like-${discussion.id}`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className={`h-3.5 w-3.5 ${isLiked ? "fill-primary text-primary" : ""}`} />}
                             {discussion.likes}
                           </button>
                           <button
@@ -596,9 +849,14 @@ export default function GroupDetail() {
                               rows={2}
                               className="min-h-0"
                             />
-                            <Button size="sm" className="self-end gap-1.5" onClick={() => handleReply(discussion.id)}>
-                              <Send className="h-3.5 w-3.5" />
-                              Reply
+                            <Button
+                              size="sm"
+                              className="self-end gap-1.5"
+                              onClick={() => handleReply(discussion.id)}
+                              disabled={isInFlight(`group-reply-${discussion.id}`)}
+                            >
+                                {isInFlight(`group-reply-${discussion.id}`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                                Reply
                             </Button>
                           </div>
                           {(expandedReplies[discussion.id] || (discussion.replyItems?.length ?? 0) > 0) && (discussion.replyItems?.length ?? 0) > 0 && (
