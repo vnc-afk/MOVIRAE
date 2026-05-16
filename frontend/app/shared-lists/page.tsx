@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
 import { searchMovies } from "@/lib/tmdb";
+import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
 import { SharedListsView } from "./shared-lists-view";
 
@@ -15,6 +17,7 @@ type SharedListsResponse = {
 
 export default function SharedListsPage() {
   const searchParams = useSearchParams();
+  const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
   const [lists, setLists] = useState<SharedList[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -120,12 +123,54 @@ export default function SharedListsPage() {
     });
 
     eventSource = new EventSource("/api/shared-lists/events");
-    eventSource.addEventListener("shared-list-updated", () => {
+    eventSource.addEventListener("shared-list-updated", (ev) => {
       if (!isActive) return;
 
-      loadSharedLists().catch((error) => {
-        console.error("Failed to refresh shared lists:", error);
-      });
+      try {
+        const payload = JSON.parse((ev as MessageEvent).data || "{}");
+        const incomingOpId = typeof payload?.opId === "string" ? payload.opId : undefined;
+
+        const action = typeof payload?.action === "string" ? payload.action : undefined;
+        const serverList = payload?.list ?? null;
+        const serverListId = typeof payload?.listId === "string" ? payload.listId : undefined;
+
+        if (action === "deleted") {
+          const targetListId = serverList?.id ?? serverListId;
+          if (!targetListId) return;
+
+          setLists((prev) => prev.filter((list) => list.id !== targetListId));
+          return;
+        }
+
+        if (serverList) {
+          if (incomingOpId) {
+            const tempList = lists.find((list) => (list as any).opId === incomingOpId || (list as any).tempId === incomingOpId) as any;
+            if (tempList) {
+              setLists((prev) =>
+                reconcileTempItem(
+                  prev,
+                  { opId: incomingOpId, type: "create" as const, tempId: tempList.tempId, ts: Date.now() },
+                  serverList
+                )
+              );
+              return;
+            }
+          }
+
+          setLists((prev) => {
+            const nextLists = prev.map((list) => (list.id === serverList.id ? serverList : list));
+            if (action === "created" && !nextLists.some((list) => list.id === serverList.id)) {
+              return [serverList, ...prev];
+            }
+            return nextLists;
+          });
+          return;
+        }
+
+        console.warn("Shared list SSE payload missing canonical list:", payload);
+      } catch (err) {
+        console.error("Failed to process shared list SSE payload:", err);
+      }
     });
     eventSource.onerror = () => {
       // Browser retries automatically.
@@ -206,33 +251,88 @@ export default function SharedListsPage() {
       return;
     }
 
-    const response = await fetch("/api/shared-lists", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: newName.trim(),
-        description: newDescription.trim(),
-        visibility: newVisibility,
-        groupId: newGroupId || undefined,
-      }),
-    });
+    const tempId = makeTempId("list");
+    const op = { opId: generateOpId("list"), type: "create" as const, tempId, ts: Date.now() };
 
-    if (!response.ok) {
+    const optimisticList = {
+      id: tempId,
+      tempId,
+      opId: op.opId,
+      name: newName.trim(),
+      description: newDescription.trim(),
+      visibility: newVisibility,
+      group: newGroupId ? groups.find((g) => g.id === newGroupId) ?? null : null,
+      owner: currentUser!,
+      collaborators: [],
+      movies: [],
+      commentItems: [],
+      comments: 0,
+      likes: 0,
+      likedByMe: false,
+    } as any;
+
+    setLists((current) => [optimisticList, ...current]);
+
+    try {
+      const body = attachOpToBody({ name: newName.trim(), description: newDescription.trim(), visibility: newVisibility, groupId: newGroupId || undefined }, op);
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, op);
+
+      const response = await fetch("/api/shared-lists", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
       const payload = await response.json().catch(() => null);
-      toast.error(payload?.error || "Failed to create list.");
-      return;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to create list.");
+      }
+
+      const nextLists = Array.isArray(payload?.value) ? payload.value : [];
+
+      // try to reconcile the temp item with the server-created one
+      const serverCreated = nextLists.find((l: any) => l.name === optimisticList.name && l.owner?.id === optimisticList.owner.id && !String(l.id).startsWith("temp-"));
+      if (serverCreated) {
+        setLists((prev) => reconcileTempItem(prev, op, serverCreated));
+      } else {
+        setLists(nextLists);
+      }
+
+      setNewName("");
+      setNewDescription("");
+      setNewVisibility("public");
+      setNewGroupId("");
+      setOpenCreate(false);
+
+      toast.success("Shared list created");
+    } catch (error) {
+      setLists((prev) => prev.filter((l) => l.id !== tempId));
+      const message = error instanceof Error ? error.message : "Failed to create list.";
+      toast.error(message);
     }
+  };
 
-    const payload = await response.json();
-    setLists(Array.isArray(payload.value) ? payload.value : []);
+  type SharedListComment = NonNullable<SharedList["commentItems"]>[number];
 
-    setNewName("");
-    setNewDescription("");
-    setNewVisibility("public");
-    setNewGroupId("");
-    setOpenCreate(false);
+  const appendReplyToComments = (
+    comments: SharedListComment[],
+    parentId: string,
+    reply: SharedListComment
+  ): SharedListComment[] => {
+    return comments.map((comment) => {
+      if (comment.id === parentId) {
+        return {
+          ...comment,
+          replies: [...comment.replies, reply],
+        };
+      }
 
-    toast.success("Shared list created");
+      return {
+        ...comment,
+        replies: appendReplyToComments(comment.replies, parentId, reply),
+      };
+    });
   };
 
   const updateListsFromResponse = async (response: Response) => {
@@ -247,11 +347,22 @@ export default function SharedListsPage() {
     return nextLists;
   };
 
-  const mutateList = async (listId: string, endpoint: string, body?: Record<string, unknown>) => {
+  const mutateList = async (
+    listId: string,
+    endpoint: string,
+    body?: Record<string, unknown>,
+    op?: any,
+    method: "POST" | "DELETE" = "POST"
+  ) => {
+    const bodyObj = op ? attachOpToBody(body, op) : body;
+    const headers = op
+      ? attachOpToHeaders({ "Content-Type": "application/json" }, op)
+      : { "Content-Type": "application/json" };
+
     const response = await fetch(`/api/shared-lists/${listId}/${endpoint}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
+      method,
+      headers,
+      body: bodyObj ? JSON.stringify(bodyObj) : undefined,
     });
 
     return updateListsFromResponse(response);
@@ -274,11 +385,44 @@ export default function SharedListsPage() {
   };
 
   const toggleLike = async (list: SharedList) => {
+    const opId = `shared-list-like-${list.id}`;
+    if (isInFlight(opId)) {
+      return;
+    }
+
+    addInFlightOp(opId, {
+      opId,
+      type: "like",
+      surface: "shared-list",
+      itemId: list.id,
+    });
+
+    const previousLists = lists;
+
+    // Compute original likes from current state to avoid double increments
+    const originalLikes = lists.find((item) => item.id === list.id)?.likes ?? 0;
+    const currentLiked = Boolean(lists.find((item) => item.id === list.id)?.likedByMe);
+    const nextLiked = !currentLiked;
+    const optimisticLikes = nextLiked ? originalLikes + 1 : Math.max(originalLikes - 1, 0);
+
+    setLists((current) =>
+      current.map((item) =>
+        item.id === list.id
+          ? { ...item, likedByMe: nextLiked, likes: optimisticLikes }
+          : item
+      )
+    );
+
+    const op = { opId: generateOpId("shared-list-like"), type: "like" as const, itemId: list.id, ts: Date.now() };
+
     try {
-      await mutateList(list.id, "like");
+      await mutateList(list.id, "like", undefined, op, "POST");
     } catch (error) {
+      setLists(previousLists);
       const message = error instanceof Error ? error.message : "Could not update the like.";
       toast.error(message);
+    } finally {
+      removeInFlightOp(opId);
     }
   };
 
@@ -289,14 +433,77 @@ export default function SharedListsPage() {
     }
 
     const body = (parentId ? replyDrafts[parentId] : newCommentByList[listId])?.trim();
+    if (!body) {
+      toast.error("Comment cannot be empty.");
+      return;
+    }
+
+    const opId = parentId ? `shared-list-reply-${parentId}` : `shared-list-comment-${listId}`;
+    if (isInFlight(opId)) {
+      return;
+    }
+
+    addInFlightOp(opId, {
+      opId,
+      type: parentId ? "reply" : "post",
+      surface: "shared-list",
+      itemId: listId,
+      parentId,
+      payload: { body, parentId },
+    });
+
+    const previousLists = lists;
+    const tempCommentId = makeTempId("comment");
+    const op = { opId: generateOpId("shared-list-comment"), type: "create" as const, tempId: tempCommentId, ts: Date.now() };
+    const optimisticComment: any = {
+      id: tempCommentId,
+      tempId: tempCommentId,
+      opId: op.opId,
+      user: currentUser,
+      body,
+      date: new Date().toISOString(),
+      parentId: parentId ?? null,
+      replies: [],
+    };
+
+    setLists((current) =>
+      current.map((item) => {
+        if (item.id !== listId) {
+          return item;
+        }
+
+        const existingComments = item.commentItems ?? [];
+        const updatedComments = parentId
+          ? appendReplyToComments(existingComments, parentId, optimisticComment)
+          : [...existingComments, optimisticComment];
+
+        return {
+          ...item,
+          commentItems: updatedComments,
+          comments: (item.comments ?? 0) + 1,
+        };
+      })
+    );
+
     try {
+      const bodyObj = attachOpToBody({ body, parentId }, op);
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, op);
+
       const response = await fetch(`/api/shared-lists/${listId}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, parentId }),
+        headers,
+        body: JSON.stringify(bodyObj),
       });
 
-      await updateListsFromResponse(response);
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Could not post the comment.");
+      }
+
+      // server returns canonical lists array; set it to keep state consistent
+      const nextLists = Array.isArray(payload?.value) ? payload.value : [];
+      setLists(nextLists);
 
       if (parentId) {
         setReplyDrafts((current) => ({ ...current, [parentId]: "" }));
@@ -307,23 +514,39 @@ export default function SharedListsPage() {
 
       toast.success(parentId ? "Reply posted" : "Comment posted");
     } catch (error) {
+      setLists(previousLists);
       const message = error instanceof Error ? error.message : "Could not post the comment.";
       toast.error(message);
+    } finally {
+      removeInFlightOp(opId);
     }
   };
 
   const addMovie = async (listId: string, movieId: string) => {
-    setAddingMovieToListId(listId);
-    try {
-      const response = await fetch(`/api/shared-lists/${listId}/movies`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ movieId }),
-      });
+    const previousLists = lists;
+    const optimisticMovie = movieSearchResults.find((movie) => movie.id === movieId);
 
-      await updateListsFromResponse(response);
+    if (optimisticMovie) {
+      setLists((current) =>
+        current.map((item) =>
+          item.id === listId
+            ? {
+                ...item,
+                movies: [...item.movies, optimisticMovie],
+              }
+            : item
+        )
+      );
+    }
+
+    setAddingMovieToListId(listId);
+    const op = { opId: generateOpId("shared-list-add-movie"), type: "update" as const, itemId: listId, ts: Date.now() };
+
+    try {
+      await mutateList(listId, "movies", { movieId }, op, "POST");
       toast.success("Movie added to list");
     } catch (error) {
+      setLists(previousLists);
       const message = error instanceof Error ? error.message : "Could not add movie.";
       toast.error(message);
     } finally {
@@ -332,17 +555,26 @@ export default function SharedListsPage() {
   };
 
   const removeMovie = async (listId: string, movieId: string) => {
-    setRemovingMovieFromListId(listId);
-    try {
-      const response = await fetch(`/api/shared-lists/${listId}/movies`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ movieId }),
-      });
+    const previousLists = lists;
+    setLists((current) =>
+      current.map((item) =>
+        item.id === listId
+          ? {
+              ...item,
+              movies: item.movies.filter((movie) => movie.id !== movieId),
+            }
+          : item
+      )
+    );
 
-      await updateListsFromResponse(response);
+    setRemovingMovieFromListId(listId);
+    const op = { opId: generateOpId("shared-list-remove-movie"), type: "delete" as const, itemId: listId, ts: Date.now() };
+
+    try {
+      await mutateList(listId, "movies", { movieId }, op, "DELETE");
       toast.success("Movie removed from list");
     } catch (error) {
+      setLists(previousLists);
       const message = error instanceof Error ? error.message : "Could not remove movie.";
       toast.error(message);
     } finally {
@@ -382,6 +614,7 @@ export default function SharedListsPage() {
       movieSearchError={movieSearchError}
       addingMovieToListId={addingMovieToListId}
       removingMovieFromListId={removingMovieFromListId}
+      isInFlight={isInFlight}
       toggleLike={toggleLike}
       removeList={removeList}
       addComment={addComment}

@@ -93,6 +93,7 @@ type SharedListsViewProps = {
   movieSearchError: string | null;
   addingMovieToListId: string | null;
   removingMovieFromListId: string | null;
+  isInFlight: (opId: string) => boolean;
   toggleLike: (list: SharedList) => void;
   removeList: (id: string) => void;
   addComment: (listId: string, parentId?: string) => void;
@@ -150,6 +151,7 @@ export function SharedListsView({
   movieSearchError,
   addingMovieToListId,
   removingMovieFromListId,
+  isInFlight,
   toggleLike,
   removeList,
   addComment,
@@ -268,6 +270,7 @@ export function SharedListsView({
                           list={list}
                           index={i}
                           currentUser={currentUser}
+                          isInFlight={isInFlight}
                           onLike={toggleLike}
                           onDelete={removeList}
                           onOpen={setSelectedListId}
@@ -277,6 +280,7 @@ export function SharedListsView({
                           key={list.id}
                           list={list}
                           index={i}
+                          isInFlight={isInFlight}
                           onLike={toggleLike}
                           onOpen={setSelectedListId}
                         />
@@ -323,6 +327,7 @@ export function SharedListsView({
                       newComment={newCommentByList[selectedList.id] ?? ""}
                       setNewComment={(value) => setNewCommentByList((current) => ({ ...current, [selectedList.id]: value }))}
                       onCommentSubmit={() => addComment(selectedList.id)}
+                      isInFlight={isInFlight}
                       replyDrafts={replyDrafts}
                       setReplyDrafts={setReplyDrafts}
                       openReplyFor={openReplyFor}
@@ -349,6 +354,7 @@ export function SharedListsView({
                       newComment={newCommentByList[selectedList.id] ?? ""}
                       setNewComment={(value) => setNewCommentByList((current) => ({ ...current, [selectedList.id]: value }))}
                       onCommentSubmit={() => addComment(selectedList.id)}
+                      isInFlight={isInFlight}
                       replyDrafts={replyDrafts}
                       setReplyDrafts={setReplyDrafts}
                       openReplyFor={openReplyFor}
@@ -367,7 +373,7 @@ export function SharedListsView({
   );
 }
 
-function ListCard({ list, index, currentUser, onLike, onDelete, onOpen }: { list: SharedList; index: number; currentUser: UserProfile | null; onLike: (list: SharedList) => void; onDelete: (id: string) => void; onOpen: (id: string) => void; }) {
+function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOpen }: { list: SharedList; index: number; currentUser: UserProfile | null; isInFlight: (opId: string) => boolean; onLike: (list: SharedList) => void; onDelete: (id: string) => void; onOpen: (id: string) => void; }) {
   const vis = visibilityConfig[list.visibility];
   const VisIcon = vis.icon;
   const isOwner = currentUser?.id === list.owner.id;
@@ -468,8 +474,9 @@ function ListCard({ list, index, currentUser, onLike, onDelete, onOpen }: { list
             variant="ghost"
             className="h-7 text-xs gap-1 hover:text-primary"
             onClick={() => onLike(list)}
+            disabled={isInFlight(`shared-list-like-${list.id}`)}
           >
-            <Heart className={`h-3 w-3 ${list.likedByMe ? "fill-primary text-primary" : ""}`} /> {list.likedByMe ? "Liked" : "Like"}
+            {isInFlight(`shared-list-like-${list.id}`) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Heart className={`h-3 w-3 ${list.likedByMe ? "fill-primary text-primary" : ""}`} />} {list.likedByMe ? "Liked" : "Like"}
           </Button>
           <Button
             size="sm"
@@ -485,7 +492,7 @@ function ListCard({ list, index, currentUser, onLike, onDelete, onOpen }: { list
   );
 }
 
-function PublicListCard({ list, index, onLike, onOpen }: { list: SharedList; index: number; onLike: (list: SharedList) => void; onOpen: (id: string) => void; }) {
+function PublicListCard({ list, index, isInFlight, onLike, onOpen }: { list: SharedList; index: number; isInFlight: (opId: string) => boolean; onLike: (list: SharedList) => void; onOpen: (id: string) => void; }) {
   const vis = visibilityConfig[list.visibility];
   const VisIcon = vis.icon;
 
@@ -548,8 +555,9 @@ function PublicListCard({ list, index, onLike, onOpen }: { list: SharedList; ind
             variant="ghost"
             className="h-7 text-xs gap-1 hover:text-primary"
             onClick={() => onLike(list)}
+            disabled={isInFlight(`shared-list-like-${list.id}`)}
           >
-            <Heart className={`h-3 w-3 ${list.likedByMe ? "fill-primary text-primary" : ""}`} /> {list.likedByMe ? "Liked" : "Like"}
+            {isInFlight(`shared-list-like-${list.id}`) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Heart className={`h-3 w-3 ${list.likedByMe ? "fill-primary text-primary" : ""}`} />} {list.likedByMe ? "Liked" : "Like"}
           </Button>
           <Button
             size="sm"
@@ -573,6 +581,7 @@ function ListDetail({
   newComment,
   setNewComment,
   onCommentSubmit,
+  isInFlight,
   replyDrafts,
   setReplyDrafts,
   openReplyFor,
@@ -597,6 +606,7 @@ function ListDetail({
   newComment: string;
   setNewComment: (value: string) => void;
   onCommentSubmit: () => void;
+  isInFlight: (opId: string) => boolean;
   replyDrafts: Record<string, string>;
   setReplyDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   openReplyFor: string | null;
@@ -728,8 +738,8 @@ function ListDetail({
               rows={3}
             />
             <div className="flex justify-end">
-              <Button onClick={onCommentSubmit} className="gap-2" disabled={!currentUser}>
-                <Send className="h-4 w-4" /> Post comment
+              <Button onClick={onCommentSubmit} className="gap-2" disabled={!currentUser || isInFlight(`shared-list-comment-${list.id}`)}>
+                {isInFlight(`shared-list-comment-${list.id}`) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Post comment
               </Button>
             </div>
           </div>
@@ -750,6 +760,7 @@ function ListDetail({
                 openReplyFor={openReplyFor}
                 setOpenReplyFor={setOpenReplyFor}
                 onReplySubmit={onReplySubmit}
+                isInFlight={isInFlight}
               />
             ))}
           </div>
@@ -834,6 +845,7 @@ function PublicListDetail({
   newComment,
   setNewComment,
   onCommentSubmit,
+  isInFlight,
   replyDrafts,
   setReplyDrafts,
   openReplyFor,
@@ -848,6 +860,7 @@ function PublicListDetail({
   newComment: string;
   setNewComment: (value: string) => void;
   onCommentSubmit: () => void;
+  isInFlight: (opId: string) => boolean;
   replyDrafts: Record<string, string>;
   setReplyDrafts: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   openReplyFor: string | null;
@@ -874,8 +887,8 @@ function PublicListDetail({
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onLike} className="gap-2">
-            <Heart className={`h-4 w-4 ${list.likedByMe ? "fill-primary text-primary" : ""}`} />
+          <Button variant="outline" size="sm" onClick={onLike} className="gap-2" disabled={isInFlight(`shared-list-like-${list.id}`)}>
+            {isInFlight(`shared-list-like-${list.id}`) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Heart className={`h-4 w-4 ${list.likedByMe ? "fill-primary text-primary" : ""}`} />}
             {list.likes}
           </Button>
         </div>
@@ -946,8 +959,8 @@ function PublicListDetail({
             rows={3}
           />
           <div className="flex justify-end">
-            <Button onClick={onCommentSubmit} className="gap-2" disabled={!currentUser}>
-              <Send className="h-4 w-4" /> Post comment
+            <Button onClick={onCommentSubmit} className="gap-2" disabled={!currentUser || isInFlight(`shared-list-comment-${list.id}`)}>
+              {isInFlight(`shared-list-comment-${list.id}`) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Post comment
             </Button>
           </div>
         </div>
@@ -968,6 +981,7 @@ function PublicListDetail({
               openReplyFor={openReplyFor}
               setOpenReplyFor={setOpenReplyFor}
               onReplySubmit={onReplySubmit}
+              isInFlight={isInFlight}
             />
           ))}
         </div>
@@ -983,6 +997,7 @@ function CommentNode({
   openReplyFor,
   setOpenReplyFor,
   onReplySubmit,
+  isInFlight,
 }: {
   comment: SharedListComment;
   replyDrafts: Record<string, string>;
@@ -990,8 +1005,10 @@ function CommentNode({
   openReplyFor: string | null;
   setOpenReplyFor: (value: string | null) => void;
   onReplySubmit: (commentId: string) => void;
+  isInFlight: (opId: string) => boolean;
 }) {
   const isReplying = openReplyFor === comment.id;
+  const isReplySubmitting = isInFlight(`shared-list-reply-${comment.id}`);
 
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-3">
@@ -1025,8 +1042,8 @@ function CommentNode({
                 <Button variant="outline" size="sm" onClick={() => setOpenReplyFor(null)}>
                   Cancel
                 </Button>
-                <Button size="sm" onClick={() => onReplySubmit(comment.id)}>
-                  Post reply
+                <Button size="sm" onClick={() => onReplySubmit(comment.id)} disabled={isReplySubmitting}>
+                  {isReplySubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Post reply
                 </Button>
               </div>
             </div>
@@ -1043,6 +1060,7 @@ function CommentNode({
                   openReplyFor={openReplyFor}
                   setOpenReplyFor={setOpenReplyFor}
                   onReplySubmit={onReplySubmit}
+                  isInFlight={isInFlight}
                 />
               ))}
             </div>
