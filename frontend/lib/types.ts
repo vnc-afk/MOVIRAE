@@ -59,6 +59,7 @@ export interface Reply {
   comment: string;
   date: string;
   likes: number;
+  likedByMe?: boolean;
 }
 
 export interface Review {
