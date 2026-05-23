@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { queryKeys } from "@/lib/queryKeys";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import {
   Filter,
   Search,
@@ -54,8 +56,6 @@ export default function Discover() {
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [userPresets, setUserPresets] = useState<FilterPreset[]>([]);
   const [genres, setGenres] = useState<GenreOption[]>([]);
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const toggleArr = <T extends string>(arr: T[], val: T): T[] =>
     arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val];
@@ -79,32 +79,32 @@ export default function Discover() {
       .catch((error) => console.error("Failed to load saved presets:", error));
   }, []);
 
-  useEffect(() => {
-    async function loadMovies() {
-      setLoading(true);
-      try {
-        const trimmedQuery = filters.query.trim();
-        let results: Movie[] = [];
+  const trimmedQuery = filters.query.trim();
+  const isSearchMode = Boolean(trimmedQuery);
+  const isGenreMode = !isSearchMode && Boolean(filters.genreId);
 
-        if (trimmedQuery) {
-          results = await searchMovies(trimmedQuery);
-        } else if (filters.genreId) {
-          results = await getMoviesByGenre(Number(filters.genreId));
-        } else {
-          results = await getTrendingMovies(1);
-        }
-
-        setMovies(results);
-      } catch (error) {
-        console.error("Failed to load discover movies:", error);
-        setMovies([]);
-      } finally {
-        setLoading(false);
+  const moviesQuery = usePrefetchAwareQuery<Movie[]>({
+    queryKey: isSearchMode
+      ? queryKeys.discover.search(trimmedQuery)
+      : isGenreMode
+        ? queryKeys.movie.list({ genreId: Number(filters.genreId) })
+        : queryKeys.discover.seeds(),
+    queryFn: async () => {
+      if (isSearchMode) {
+        return searchMovies(trimmedQuery);
       }
-    }
 
-    loadMovies();
-  }, [filters.query, filters.genreId]);
+      if (isGenreMode) {
+        return getMoviesByGenre(Number(filters.genreId));
+      }
+
+      return getTrendingMovies(1);
+    },
+    enabled: true,
+  });
+
+  const movies = moviesQuery.data ?? [];
+  const loading = moviesQuery.isPending;
 
   const filtered = useMemo(() => {
     return movies

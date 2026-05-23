@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
@@ -10,7 +10,15 @@ import { Users, UserPlus, Heart } from "lucide-react";
 import { FollowButton } from "@/components/FollowButton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { queryKeys } from "@/lib/queryKeys";
 import type { UserProfile } from "@/lib/types";
+
+type PublicProfileSnapshot = {
+  profile: UserProfile | null;
+  followers: UserProfile[];
+  following: UserProfile[];
+};
 
 function UserList({ title, users }: { title: string; users: UserProfile[] }) {
   if (users.length === 0) {
@@ -42,42 +50,30 @@ export default function PublicProfilePage() {
   const params = useParams<{ userId: string }>();
   const userId = Array.isArray(params.userId) ? params.userId[0] : params.userId;
   const { data: session } = useSession();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [followers, setFollowers] = useState<UserProfile[]>([]);
-  const [following, setFollowing] = useState<UserProfile[]>([]);
-  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const profileQuery = usePrefetchAwareQuery<PublicProfileSnapshot>({
+    queryKey: queryKeys.profile.detail(userId),
+    queryFn: async () => {
+      const [profileResponse, followersResponse, followingResponse] = await Promise.all([
+        fetch(`/api/users/${userId}`).then((response) => response.json()),
+        fetch(`/api/users/${userId}/followers`).then((response) => response.json()),
+        fetch(`/api/users/${userId}/following`).then((response) => response.json()),
+      ]);
 
-  useEffect(() => {
-    let active = true;
+      return {
+        profile: profileResponse.value ?? null,
+        followers: Array.isArray(followersResponse.value) ? followersResponse.value : [],
+        following: Array.isArray(followingResponse.value) ? followingResponse.value : [],
+      };
+    },
+    enabled: Boolean(userId),
+  });
 
-    const load = async () => {
-      try {
-        const [profileResponse, followersResponse, followingResponse] = await Promise.all([
-          fetch(`/api/users/${userId}`).then((response) => response.json()),
-          fetch(`/api/users/${userId}/followers`).then((response) => response.json()),
-          fetch(`/api/users/${userId}/following`).then((response) => response.json()),
-        ]);
+  const snapshot = profileQuery.data ?? { profile: null, followers: [], following: [] };
+  const profile = snapshot.profile;
+  const followers = snapshot.followers;
+  const following = snapshot.following;
 
-        if (!active) return;
-
-        setProfile(profileResponse.value ?? null);
-        setFollowers(Array.isArray(followersResponse.value) ? followersResponse.value : []);
-        setFollowing(Array.isArray(followingResponse.value) ? followingResponse.value : []);
-        setLoadState(profileResponse.value ? "ready" : "error");
-      } catch (error) {
-        console.error("Failed to load public profile:", error);
-        if (active) setLoadState("error");
-      }
-    };
-
-    load();
-
-    return () => {
-      active = false;
-    };
-  }, [userId]);
-
-  if (loadState === "loading") {
+  if (profileQuery.isPending) {
     return <div className="container py-20 text-center text-sm text-muted-foreground">Loading profile...</div>;
   }
 

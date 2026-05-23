@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { ArrowLeft, Eye, Heart, ListPlus, Play, Star, Loader2 } from "lucide-react";
@@ -12,6 +15,7 @@ import type { Movie, Review } from "@/lib/types";
 import { StarRating } from "@/components/StarRating";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { CastCarousel } from "@/components/CastCarousel";
 import { ReviewCard } from "@/components/ReviewCard";
 import { TrailerModal } from "@/components/TrailerModal";
@@ -34,8 +38,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const resolvedParams = use(params);
   const { data: session } = useSession();
   const { addInFlightOp, removeInFlightOp, isInFlight } = useOptimisticOps();
-  const [movie, setMovie] = useState<Movie | null>(null);
-  const [similar, setSimilar] = useState<Movie[]>([]);
+  const queryClient = useQueryClient();
   const [streamingOn, setStreamingOn] = useState<string[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [trailerOpen, setTrailerOpen] = useState(false);
@@ -43,12 +46,28 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [isWatched, setIsWatched] = useState(false);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const [watchExperience, setWatchExperience] = useState<WatchExperience | null>(null);
   const [buttonLoading, setButtonLoading] = useState({ watched: false, watchlist: false, liked: false });
+
+  const movieQuery = usePrefetchAwareQuery<Movie | null>({
+    queryKey: queryKeys.movie.detail(resolvedParams.id),
+    queryFn: () => getMovieDetails(resolvedParams.id),
+    enabled: Boolean(resolvedParams.id),
+  });
+
+  const similarQuery = usePrefetchAwareQuery<Movie[]>({
+    queryKey: queryKeys.movie.recommendations(resolvedParams.id),
+    queryFn: () => getSimilarMovies(resolvedParams.id),
+    enabled: Boolean(resolvedParams.id),
+  });
+
+  const movie = movieQuery.data ?? null;
+  const similar = similarQuery.data?.slice(0, 6) ?? [];
+  const loading = movieQuery.isPending;
+  const movieWithStreaming = movie ? { ...movie, streamingOn } : null;
 
   useEffect(() => {
     async function fetchReviews(movieId: string) {
@@ -66,34 +85,31 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       }
     }
 
-    async function fetchMovieData() {
+    if (!movie) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchMovieExtras(movieId: string) {
       try {
-        const movieData = await getMovieDetails(resolvedParams.id);
-        if (movieData) {
-          setMovie(movieData);
-
-          // Fetch similar movies
-          const similarMovies = await getSimilarMovies(resolvedParams.id);
-          setSimilar(similarMovies.slice(0, 6));
-
-          // Fetch streaming platforms
-          const platforms = await getStreamingPlatforms(resolvedParams.id);
+        const platforms = await getStreamingPlatforms(movieId);
+        if (!cancelled) {
           setStreamingOn(platforms);
-
-          // Update movie with streaming info
-          movieData.streamingOn = platforms;
-
-          await fetchReviews(movieData.id);
         }
+
+        await fetchReviews(movieId);
       } catch (error) {
-        console.error("Failed to fetch movie data:", error);
-      } finally {
-        setLoading(false);
+        console.error("Failed to fetch movie extras:", error);
       }
     }
 
-    fetchMovieData();
-  }, [resolvedParams.id]);
+    fetchMovieExtras(movie.id);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [movie]);
 
   useEffect(() => {
     if (!movie) {
@@ -147,18 +163,51 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           const serverReview = payload?.review ?? null;
 
           if (serverReview && action === "deleted") {
-            setReviews((prev) => prev.filter((review) => review.id !== serverReview.id));
+            setReviews((prev) => {
+              const next = prev.filter((review) => review.id !== serverReview.id);
+              try {
+                applyEntityUpdate(queryClient, [queryKeys.movie.detail(movieId)], (current: any) => {
+                  if (!current) return current;
+                  return { ...current, reviews: next };
+                });
+              } catch (e) {
+                /* best-effort */
+              }
+              return next;
+            });
             return;
           }
 
           // Fast-path: handle simple actions in-place without full reconciliation
           if (action === "liked" && serverReview?.id) {
-            setReviews((prev) => prev.map((review) => (review.id === serverReview.id ? { ...review, likes: serverReview.likes, likedByMe: serverReview.likedByMe } : review)));
+            setReviews((prev) => {
+              const next = prev.map((review) => (review.id === serverReview.id ? { ...review, likes: serverReview.likes, likedByMe: serverReview.likedByMe } : review));
+              try {
+                applyEntityUpdate(queryClient, [queryKeys.movie.detail(movieId)], (current: any) => {
+                  if (!current) return current;
+                  return { ...current, reviews: next };
+                });
+              } catch (e) {
+                /* best-effort */
+              }
+              return next;
+            });
             return;
           }
 
           if (action === "updated" && serverReview?.id) {
-            setReviews((prev) => prev.map((review) => (review.id === serverReview.id ? serverReview : review)));
+            setReviews((prev) => {
+              const next = prev.map((review) => (review.id === serverReview.id ? serverReview : review));
+              try {
+                applyEntityUpdate(queryClient, [queryKeys.movie.detail(movieId)], (current: any) => {
+                  if (!current) return current;
+                  return { ...current, reviews: next };
+                });
+              } catch (e) {
+                /* best-effort */
+              }
+              return next;
+            });
             return;
           }
 
@@ -166,8 +215,17 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           if (incomingOpId) {
             // Try to reconcile a temp review create
             const tempReview = reviews.find((r) => (r as any).opId === incomingOpId || (r as any).tempId === incomingOpId) as any;
-            if (tempReview && serverReview) {
-              setReviews((prev) => reconcileTempItem(prev, { opId: incomingOpId, type: "create" as const, tempId: tempReview.tempId, ts: Date.now() }, serverReview));
+              if (tempReview && serverReview) {
+              const reconciled = reconcileTempItem(reviews, { opId: incomingOpId, type: "create" as const, tempId: tempReview.tempId, ts: Date.now() }, serverReview);
+              setReviews(reconciled);
+              try {
+                applyEntityUpdate(queryClient, [queryKeys.movie.detail(movieId)], (current: any) => {
+                  if (!current) return current;
+                  return { ...current, reviews: reconciled };
+                });
+              } catch (e) {
+                /* best-effort */
+              }
               return;
             }
 
@@ -178,12 +236,19 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
                 const serverReply = serverReview.replies?.find((sr: any) => sr.comment === tempReply.comment && sr.user?.id === tempReply.user?.id && !String(sr.id).startsWith("temp-"));
                 if (serverReply) {
                   const opObj = { opId: incomingOpId, type: "create" as const, tempId: tempReply.tempId, ts: Date.now() };
-                  setReviews((prev) => {
-                    return prev.map((review) => {
-                      if (review.id !== serverReview.id) return review;
-                      return { ...review, replies: reconcileTempItem(review.replies ?? [], opObj, serverReply) } as any;
-                    });
+                  const updated = reviews.map((review) => {
+                    if (review.id !== serverReview.id) return review;
+                    return { ...review, replies: reconcileTempItem(review.replies ?? [], opObj, serverReply) } as any;
                   });
+                  setReviews(updated);
+                  try {
+                    applyEntityUpdate(queryClient, [queryKeys.movie.detail(movieId)], (current: any) => {
+                      if (!current) return current;
+                      return { ...current, reviews: updated };
+                    });
+                  } catch (e) {
+                    /* best-effort */
+                  }
                   return;
                 }
               }
@@ -556,14 +621,14 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
             </div>
 
             <div className="mt-6">
-              <StreamingBadges platforms={movie.streamingOn} />
+              <StreamingBadges platforms={movieWithStreaming?.streamingOn ?? []} />
             </div>
           </motion.div>
         </div>
 
         <section className="mt-10">
           <h2 className="font-display text-lg font-bold text-foreground mb-4">Cast</h2>
-          <CastCarousel cast={movie.cast} />
+          <CastCarousel cast={movieWithStreaming?.cast ?? []} />
         </section>
 
         <section className="mt-10">

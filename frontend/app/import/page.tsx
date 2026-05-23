@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Download, Upload, FileText, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getTrendingMovies } from "@/lib/tmdb";
-import type { Movie } from "@/lib/types";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { queryKeys } from "@/lib/queryKeys";
 
 export default function ImportExport() {
   const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
-  const [movieCount, setMovieCount] = useState(0);
+  const trendingQuery = usePrefetchAwareQuery({
+    queryKey: queryKeys.discover.seeds(),
+    queryFn: () => getTrendingMovies(),
+    enabled: true,
+  });
 
-  useEffect(() => {
-    getTrendingMovies().then((list: Movie[]) => setMovieCount(list.length)).catch(() => setMovieCount(0));
-  }, []);
+  const movieCount = trendingQuery.data?.length ?? 0;
 
   const handleExportCSV = () => {
     const blob = new Blob(["Title,Year,Rating,Genre,Director\n"], { type: "text/csv" });

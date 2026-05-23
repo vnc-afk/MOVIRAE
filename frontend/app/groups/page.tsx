@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useQueryClient } from "@tanstack/react-query";
 import { Users, Plus, MessageCircle, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -11,12 +12,20 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { queryKeys } from "@/lib/queryKeys";
+import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import type { Group, UserProfile } from "@/lib/types";
 
 const avatarUrl = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
 
 type GroupRecord = Group & { joined?: boolean };
 type GroupsResponse = { value?: GroupRecord[]; currentUser?: UserProfile | null };
+
+type GroupsSnapshot = {
+  groups: GroupRecord[];
+  currentUser: UserProfile | null;
+};
 
 async function fetchJsonValue<T>(url: string): Promise<T | null> {
   try {
@@ -40,23 +49,34 @@ async function fetchJsonValue<T>(url: string): Promise<T | null> {
 
 export default function Groups() {
   const router = useRouter();
-  const [groups, setGroups] = useState<GroupRecord[]>([]);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
-  useEffect(() => {
-    fetchJsonValue<GroupsResponse>("/api/data/groups")
-      .then((groupsResponse) => {
-        setGroups(Array.isArray(groupsResponse?.value) ? groupsResponse.value : []);
-        setCurrentUser(groupsResponse?.currentUser ?? null);
-      })
-      .catch((error) => console.error("Failed to load groups:", error));
-  }, []);
+  const groupsQuery = usePrefetchAwareQuery<GroupsSnapshot>({
+    queryKey: queryKeys.group.list(),
+    queryFn: async () => {
+      const payload = await fetchJsonValue<GroupsResponse>("/api/data/groups");
+      return {
+        groups: Array.isArray(payload?.value) ? payload.value : [],
+        currentUser: payload?.currentUser ?? null,
+      };
+    },
+    enabled: true,
+  });
 
-  const persistGroups = async (nextGroups: GroupRecord[]) => {
-    setGroups(nextGroups);
+  const snapshot = groupsQuery.data ?? { groups: [], currentUser: null };
+  const groups = snapshot.groups;
+  const currentUser = snapshot.currentUser;
+
+  const loading = groupsQuery.isPending;
+
+  const persistSnapshot = async (nextGroups: GroupRecord[]) => {
+    applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: GroupsSnapshot | undefined) => {
+      if (!current) return current;
+      return { ...current, groups: nextGroups };
+    });
 
     const response = await fetch("/api/data/groups", {
       method: "PUT",
@@ -70,7 +90,10 @@ export default function Groups() {
 
     const payload = await response.json();
     const savedGroups = Array.isArray(payload.value) ? payload.value as GroupRecord[] : nextGroups;
-    setGroups(savedGroups);
+    applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: GroupsSnapshot | undefined) => {
+      if (!current) return current;
+      return { ...current, groups: savedGroups };
+    });
     return savedGroups;
   };
 
@@ -104,9 +127,9 @@ export default function Groups() {
     const nextGroups = groups.map((group) =>
       group.id === id ? applyMembership(group, !group.joined) : group
     );
-    const savedGroups = await persistGroups(nextGroups);
+    const savedGroups = await persistSnapshot(nextGroups);
 
-    const group = savedGroups.find((item) => item.id === id);
+    const group = savedGroups.find((item: GroupRecord) => item.id === id);
     toast.success(group?.joined ? `Joined ${group.name}!` : `Left ${group?.name}`);
   };
 
@@ -133,14 +156,18 @@ export default function Groups() {
       joined: true,
     };
 
-    const savedGroups = await persistGroups([newGroup, ...groups]);
-    const createdGroup = savedGroups.find((group) => group.id === newGroup.id) ?? savedGroups[0] ?? newGroup;
+    const savedGroups = await persistSnapshot([newGroup, ...groups]);
+    const createdGroup = savedGroups.find((group: GroupRecord) => group.id === newGroup.id) ?? savedGroups[0] ?? newGroup;
     setOpen(false);
     setName("");
     setDescription("");
     toast.success(`${createdGroup.name} created!`);
     router.push(`/groups/${createdGroup.id}`);
   };
+
+  if (loading) {
+    return <div className="container py-20 text-center text-sm text-muted-foreground">Loading groups...</div>;
+  }
 
   return (
     <div className="pb-20 md:pb-0">

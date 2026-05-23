@@ -1,38 +1,72 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, TrendingUp, Clock, Star } from "lucide-react";
 import { MovieCard } from "@/components/MovieCard";
 import { getTrendingMovies, getMoviesByGenre } from "@/lib/tmdb";
 import type { Movie } from "@/lib/types";
+import { queryKeys } from "@/lib/queryKeys";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+
+type RecommendationsSnapshot = {
+  topPicks: Movie[];
+  trending: Movie[];
+  similar: Movie[];
+  updatedAt: number;
+};
 
 export default function RecommendationsPage() {
-  const [topPicks, setTopPicks] = useState<Movie[]>([]);
-  const [trending, setTrending] = useState<Movie[]>([]);
-  const [similar, setSimilar] = useState<Movie[]>([]);
-  const [loading, setLoading] = useState(true);
+  const recommendationsQuery = usePrefetchAwareQuery<RecommendationsSnapshot>({
+    queryKey: queryKeys.recommendations.home(),
+    queryFn: async () => {
+      const topMovies = await getTrendingMovies(1);
+      const trendingMovies = await getTrendingMovies(2);
+      const actionMovies = await getMoviesByGenre(28, 1);
+
+      return {
+        topPicks: topMovies.slice(0, 6),
+        trending: trendingMovies.slice(0, 6),
+        similar: actionMovies.slice(0, 6),
+        updatedAt: Date.now(),
+      };
+    },
+    enabled: true,
+  });
+
+  const snapshot = recommendationsQuery.data ?? {
+    topPicks: [],
+    trending: [],
+    similar: [],
+    updatedAt: 0,
+  };
+
+  const topPicks = snapshot.topPicks;
+  const trending = snapshot.trending;
+  const similar = snapshot.similar;
+  const loading = recommendationsQuery.isPending;
 
   useEffect(() => {
-    async function fetchRecommendations() {
-      try {
-        const topMovies = await getTrendingMovies(1);
-        setTopPicks(topMovies.slice(0, 6));
+    let eventSource: EventSource | null = null;
+    let refreshTimer: number | null = null;
 
-        const trendingMovies = await getTrendingMovies(2);
-        setTrending(trendingMovies.slice(0, 6));
-
-        const actionMovies = await getMoviesByGenre(28, 1); // Action genre
-        setSimilar(actionMovies.slice(0, 6));
-      } catch (error) {
-        console.error("Failed to fetch recommendations:", error);
-      } finally {
-        setLoading(false);
-      }
+    try {
+      eventSource = new EventSource("/api/reviews/events");
+      eventSource.addEventListener("review-updated", () => {
+        if (refreshTimer) window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+          void recommendationsQuery.refetch();
+        }, 500);
+      });
+    } catch {
+      /* best-effort */
     }
 
-    fetchRecommendations();
-  }, []);
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      eventSource?.close();
+    };
+  }, [recommendationsQuery]);
 
   const LoadingSkeleton = () => (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -60,7 +94,6 @@ export default function RecommendationsPage() {
           </p>
         </motion.div>
 
-        {/* Top picks */}
         <section>
           <div className="flex items-center gap-2 mb-5">
             <Star className="h-4 w-4 text-primary" />
@@ -79,7 +112,6 @@ export default function RecommendationsPage() {
           )}
         </section>
 
-        {/* Because you watched */}
         <section>
           <div className="flex items-center gap-2 mb-5">
             <Clock className="h-4 w-4 text-primary" />
@@ -98,7 +130,6 @@ export default function RecommendationsPage() {
           )}
         </section>
 
-        {/* Trending */}
         <section>
           <div className="flex items-center gap-2 mb-5">
             <TrendingUp className="h-4 w-4 text-primary" />

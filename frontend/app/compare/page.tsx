@@ -2,48 +2,59 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { ArrowLeftRight, Check, X } from "lucide-react";
 import { getMovieDetails } from "@/lib/tmdb";
 import type { Movie, UserProfile } from "@/lib/types";
+import { queryKeys } from "@/lib/queryKeys";
 
 export default function CompareWatchlists() {
-  const [users, setUsers] = useState<UserProfile[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [currentUserMovies, setCurrentUserMovies] = useState<Movie[]>([]);
-  const [selectedUserMovies, setSelectedUserMovies] = useState<Movie[]>([]);
+  const usersQuery = usePrefetchAwareQuery<UserProfile[]>({
+    queryKey: queryKeys.compare.users(),
+    queryFn: async () => {
+      const response = await fetch("/api/users");
+      const data = await response.json();
+      return Array.isArray(data.value) ? data.value : [];
+    },
+    enabled: true,
+  });
+
+  const users = usersQuery.data ?? [];
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/users").then((response) => response.json()),
-      fetch("/api/data/user-watchlist-current").then((response) => response.json()),
-    ])
-      .then(async ([usersResponse, watchlistResponse]) => {
-        const userList = Array.isArray(usersResponse.value) ? usersResponse.value : [];
-        setUsers(userList);
-        setSelectedUser(userList[1] ?? userList[0] ?? null);
-
-        const currentIds = Array.isArray(watchlistResponse.value) ? watchlistResponse.value : [];
-        const currentMovies = await Promise.all(currentIds.map((movieId: string) => getMovieDetails(movieId)));
-        setCurrentUserMovies(currentMovies.filter((movie): movie is Movie => movie !== null));
-      })
-      .catch((error) => console.error("Failed to load comparison data:", error));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedUser) {
-      setSelectedUserMovies([]);
-      return;
+    if (!selectedUser && users.length > 0) {
+      setSelectedUser(users[1] ?? users[0] ?? null);
     }
+  }, [selectedUser, users]);
 
-    fetch(`/api/data/user-watchlist-${selectedUser.id}`)
-      .then((response) => response.json())
-      .then(async (data) => {
-        const ids = Array.isArray(data.value) ? data.value : [];
-        const movies = await Promise.all(ids.map((movieId: string) => getMovieDetails(movieId)));
-        setSelectedUserMovies(movies.filter((movie): movie is Movie => movie !== null));
-      })
-      .catch((error) => console.error("Failed to load selected watchlist:", error));
-  }, [selectedUser]);
+  const currentWatchlistQuery = usePrefetchAwareQuery<Movie[]>({
+    queryKey: queryKeys.compare.watchlist("current"),
+    queryFn: async () => {
+      const response = await fetch("/api/data/user-watchlist-current");
+      const data = await response.json();
+      const ids = Array.isArray(data.value) ? data.value : [];
+      const movies = await Promise.all(ids.map((movieId: string) => getMovieDetails(movieId)));
+      return movies.filter((movie): movie is Movie => movie !== null);
+    },
+    enabled: true,
+  });
+
+  const selectedWatchlistQuery = usePrefetchAwareQuery<Movie[]>({
+    queryKey: queryKeys.compare.watchlist(selectedUser?.id ?? ""),
+    queryFn: async () => {
+      if (!selectedUser?.id) return [];
+      const response = await fetch(`/api/data/user-watchlist-${selectedUser.id}`);
+      const data = await response.json();
+      const ids = Array.isArray(data.value) ? data.value : [];
+      const movies = await Promise.all(ids.map((movieId: string) => getMovieDetails(movieId)));
+      return movies.filter((movie): movie is Movie => movie !== null);
+    },
+    enabled: Boolean(selectedUser?.id),
+  });
+
+  const currentUserMovies = currentWatchlistQuery.data ?? [];
+  const selectedUserMovies = selectedWatchlistQuery.data ?? [];
 
   const both = currentUserMovies.filter((movie) => selectedUserMovies.some((other) => other.id === movie.id));
   const onlyMe = currentUserMovies.filter((movie) => !selectedUserMovies.some((other) => other.id === movie.id));

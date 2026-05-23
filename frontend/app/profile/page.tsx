@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
@@ -11,6 +12,9 @@ import { StarRating } from "@/components/StarRating";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Movie, UserProfile } from "@/lib/types";
 import { getMovieDetails } from "@/lib/tmdb";
+import { queryKeys } from "@/lib/queryKeys";
+import { applyEntityUpdate } from "@/lib/cacheHelpers";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 
 interface ReviewSummary {
   movieId: string;
@@ -26,46 +30,108 @@ function formatReviewDate(date: string) {
   return format(parsedDate, "PPp");
 }
 
+type ProfileSnapshot = {
+  user: UserProfile | null;
+  favoriteMovies: Movie[];
+  watchlistMovies: Movie[];
+  reviewSummaries: ReviewSummary[];
+  reviewMovies: Record<string, Movie | null>;
+};
+
+const emptyProfileSnapshot: ProfileSnapshot = {
+  user: null,
+  favoriteMovies: [] as Movie[],
+  watchlistMovies: [] as Movie[],
+  reviewSummaries: [] as ReviewSummary[],
+  reviewMovies: {} as Record<string, Movie | null>,
+};
+
 export default function ProfilePage() {
   const { data: session } = useSession();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [favoriteMovies, setFavoriteMovies] = useState<Movie[]>([]);
-  const [watchlistMovies, setWatchlistMovies] = useState<Movie[]>([]);
-  const [reviewSummaries, setReviewSummaries] = useState<ReviewSummary[]>([]);
-  const [reviewMovies, setReviewMovies] = useState<Record<string, Movie | null>>({});
+  const queryClient = useQueryClient();
+  const profileQuery = usePrefetchAwareQuery<ProfileSnapshot>({
+    queryKey: queryKeys.profile.current(),
+    queryFn: async () => {
+      const [usersResponse, reviewsResponse, watchlistResponse] = await Promise.all([
+        fetch("/api/users").then((response) => response.json()),
+        fetch("/api/data/user-reviews-current").then((response) => response.json()),
+        fetch("/api/data/user-watchlist-current").then((response) => response.json()),
+      ]);
+
+      const users = Array.isArray(usersResponse.value) ? usersResponse.value : [];
+      const currentUser = users.find((item: UserProfile) => item.email === session?.user?.email) ?? users[0] ?? null;
+
+      const favoriteIds = currentUser?.favoriteMovies ?? [];
+      const favoriteResults = await Promise.all(favoriteIds.map((movieId: string) => getMovieDetails(movieId)));
+
+      const watchlistIds = Array.isArray(watchlistResponse.value) ? watchlistResponse.value : [];
+      const watchlistResults = await Promise.all(watchlistIds.map((movieId: string) => getMovieDetails(movieId)));
+
+      const reviewList = Array.isArray(reviewsResponse.value) ? reviewsResponse.value : [];
+      const reviewedMovieResults = await Promise.all(
+        reviewList.map(async (review: ReviewSummary) => [review.movieId, await getMovieDetails(review.movieId)] as const)
+      );
+      const nextReviewMovies = Object.fromEntries(reviewedMovieResults);
+
+      return {
+        user: currentUser,
+        favoriteMovies: favoriteResults.filter((movie): movie is Movie => movie !== null),
+        watchlistMovies: watchlistResults.filter((movie): movie is Movie => movie !== null),
+        reviewSummaries: reviewList,
+        reviewMovies: nextReviewMovies,
+      };
+    },
+    enabled: true,
+  });
+
+  const profile = profileQuery.data ?? emptyProfileSnapshot;
+  const user = profile.user;
+  const favoriteMovies = profile.favoriteMovies;
+  const watchlistMovies = profile.watchlistMovies;
+  const reviewSummaries = profile.reviewSummaries;
+  const reviewMovies = profile.reviewMovies;
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/users").then((response) => response.json()),
-      fetch("/api/data/user-reviews-current").then((response) => response.json()),
-      fetch("/api/data/user-watchlist-current").then((response) => response.json()),
-    ])
-      .then(async ([usersResponse, reviewsResponse, watchlistResponse]) => {
-        const users = Array.isArray(usersResponse.value) ? usersResponse.value : [];
-        const currentUser = users.find((item: UserProfile) => item.email === session?.user?.email) ?? users[0] ?? null;
-        setUser(currentUser);
+    if (!profile.user?.id) {
+      return;
+    }
 
-        const favoriteIds = currentUser?.favoriteMovies ?? [];
-        const favoriteResults = await Promise.all(favoriteIds.map((movieId: string) => getMovieDetails(movieId)));
-        setFavoriteMovies(favoriteResults.filter((movie): movie is Movie => movie !== null));
+    try {
+      applyEntityUpdate(queryClient, [queryKeys.profile.current()], () => profile);
+      applyEntityUpdate(queryClient, [queryKeys.profile.detail(profile.user!.id)], () => profile);
+    } catch {
+      /* best-effort */
+    }
+  }, [profile, queryClient]);
 
-        const watchlistIds = Array.isArray(watchlistResponse.value) ? watchlistResponse.value : [];
-        const watchlistResults = await Promise.all(watchlistIds.map((movieId: string) => getMovieDetails(movieId)));
-        setWatchlistMovies(watchlistResults.filter((movie): movie is Movie => movie !== null));
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let refreshTimer: number | null = null;
 
-        const reviewList = Array.isArray(reviewsResponse.value) ? reviewsResponse.value : [];
-        setReviewSummaries(reviewList);
+    try {
+      eventSource = new EventSource("/api/reviews/events");
+      eventSource.addEventListener("review-updated", () => {
+        if (refreshTimer) window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+          void profileQuery.refetch();
+        }, 400);
+      });
+    } catch {
+      /* best-effort */
+    }
 
-        const reviewedMovieResults = await Promise.all(
-          reviewList.map(async (review: ReviewSummary) => [review.movieId, await getMovieDetails(review.movieId)] as const)
-        );
-        setReviewMovies(Object.fromEntries(reviewedMovieResults));
-      })
-      .catch((error) => console.error("Failed to load profile data:", error));
-  }, [session?.user?.name]);
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      eventSource?.close();
+    };
+  }, [profileQuery]);
+
+  if (!profileQuery.data && profileQuery.isPending) {
+    return <div className="container py-20 text-center text-sm text-muted-foreground">Loading profile...</div>;
+  }
 
   if (!user) {
-    return <div className="container py-20 text-center text-sm text-muted-foreground">Loading profile...</div>;
+    return <div className="container py-20 text-center text-sm text-muted-foreground">Profile not found.</div>;
   }
 
   return (

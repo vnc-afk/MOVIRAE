@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
@@ -8,6 +9,9 @@ import { searchMovies } from "@/lib/tmdb";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
 import { SharedListsView } from "./shared-lists-view";
+import { queryKeys } from "@/lib/queryKeys";
+import { applyEntityUpdate } from "@/lib/cacheHelpers";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 
 type SharedListsResponse = {
   value?: SharedList[];
@@ -15,13 +19,17 @@ type SharedListsResponse = {
   error?: string;
 };
 
+type SharedListsSnapshot = {
+  lists: SharedList[];
+  groups: Group[];
+  currentUser: UserProfile | null;
+};
+
 export default function SharedListsPage() {
   const searchParams = useSearchParams();
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
-  const [lists, setLists] = useState<SharedList[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const [openCreate, setOpenCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -38,10 +46,58 @@ export default function SharedListsPage() {
   const [addingMovieToListId, setAddingMovieToListId] = useState<string | null>(null);
   const [removingMovieFromListId, setRemovingMovieFromListId] = useState<string | null>(null);
 
-  const selectedList = useMemo(
-    () => lists.find((list) => list.id === selectedListId) ?? null,
-    [lists, selectedListId]
-  );
+  const sharedListsQuery = usePrefetchAwareQuery<SharedListsSnapshot>({
+    queryKey: queryKeys.sharedLists.all(),
+    queryFn: async () => {
+      const [listsResponse, groupsResponse] = await Promise.all([
+        fetch("/api/shared-lists", { cache: "no-store" }),
+        fetch("/api/data/groups", { cache: "no-store" }),
+      ]);
+
+      const listsPayload = (await parseResponsePayload(listsResponse)) as SharedListsResponse | null;
+      const groupsPayload = await groupsResponse.json().catch(() => ({}));
+
+      if (!listsResponse.ok) {
+        throw new Error(listsPayload?.error || "Failed to load shared lists.");
+      }
+
+      const nextLists = Array.isArray(listsPayload?.value) ? listsPayload.value : [];
+      const authenticatedUser = listsPayload?.currentUser;
+      const currentUser = authenticatedUser?.id
+        ? (
+            nextLists.find((list) => list.owner.id === authenticatedUser.id)?.owner ??
+            nextLists.flatMap((list) => list.collaborators).find((collaborator) => collaborator.id === authenticatedUser.id) ??
+            {
+              id: authenticatedUser.id,
+              email: authenticatedUser.email,
+              username: authenticatedUser.email?.split("@")[0] ?? "user",
+              displayName: authenticatedUser.email?.split("@")[0] ?? "User",
+              avatar: "",
+              bio: "",
+              followers: 0,
+              following: 0,
+              reviewCount: 0,
+              watchlistCount: 0,
+              favoriteMovies: [],
+            }
+          )
+        : null;
+
+      return {
+        lists: nextLists,
+        groups: Array.isArray(groupsPayload.value) ? groupsPayload.value : [],
+        currentUser,
+      };
+    },
+    enabled: true,
+  });
+
+  const snapshot = sharedListsQuery.data ?? { lists: [], groups: [], currentUser: null };
+  const lists = snapshot.lists;
+  const groups = snapshot.groups;
+  const currentUser = snapshot.currentUser;
+
+  const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId]);
 
   useEffect(() => {
     const listIdFromQuery = searchParams.get("listId");
@@ -76,39 +132,40 @@ export default function SharedListsPage() {
     }
 
     const nextLists = Array.isArray(payload?.value) ? payload.value : [];
-    setLists(nextLists);
-    setCurrentUser((existingUser) => {
-      const authenticatedUser = payload?.currentUser;
-      if (!authenticatedUser?.id) {
-        return null;
-      }
-
-      return (
-        nextLists.find((list) => list.owner.id === authenticatedUser.id)?.owner ??
-        nextLists
-          .flatMap((list) => list.collaborators)
-          .find((collaborator) => collaborator.id === authenticatedUser.id) ??
-        existingUser ?? {
-          id: authenticatedUser.id,
-          email: authenticatedUser.email,
-          username: authenticatedUser.email?.split("@")[0] ?? "user",
-          displayName: authenticatedUser.email?.split("@")[0] ?? "User",
-          avatar: "",
-          bio: "",
-          followers: 0,
-          following: 0,
-          reviewCount: 0,
-          watchlistCount: 0,
-          favoriteMovies: [],
-        }
-      );
-    });
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], () => ({
+      lists: nextLists,
+      groups: snapshot.groups,
+      currentUser:
+        payload?.currentUser?.id
+          ? (
+              nextLists.find((list) => list.owner.id === payload.currentUser?.id)?.owner ??
+              nextLists.flatMap((list) => list.collaborators).find((collaborator) => collaborator.id === payload.currentUser?.id) ??
+              snapshot.currentUser ??
+              {
+                id: payload.currentUser.id,
+                email: payload.currentUser.email,
+                username: payload.currentUser.email?.split("@")[0] ?? "user",
+                displayName: payload.currentUser.email?.split("@")[0] ?? "User",
+                avatar: "",
+                bio: "",
+                followers: 0,
+                following: 0,
+                reviewCount: 0,
+                watchlistCount: 0,
+                favoriteMovies: [],
+              }
+            )
+          : null,
+    }));
     return nextLists;
   };
 
   const loadSupportingData = async () => {
     const groupsResponse = await fetch("/api/data/groups", { cache: "no-store" }).then((response) => response.json());
-    setGroups(Array.isArray(groupsResponse.value) ? groupsResponse.value : []);
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      if (!current) return current;
+      return { ...current, groups: Array.isArray(groupsResponse.value) ? groupsResponse.value : [] };
+    });
   };
 
   useEffect(() => {
@@ -138,7 +195,14 @@ export default function SharedListsPage() {
           const targetListId = serverList?.id ?? serverListId;
           if (!targetListId) return;
 
-          setLists((prev) => prev.filter((list) => list.id !== targetListId));
+          try {
+            applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+              if (!current) return current;
+              return { ...current, lists: current.lists.filter((list) => list.id !== targetListId) };
+            });
+          } catch (e) {
+            /* best-effort */
+          }
           return;
         }
 
@@ -146,24 +210,33 @@ export default function SharedListsPage() {
           if (incomingOpId) {
             const tempList = lists.find((list) => (list as any).opId === incomingOpId || (list as any).tempId === incomingOpId) as any;
             if (tempList) {
-              setLists((prev) =>
-                reconcileTempItem(
-                  prev,
-                  { opId: incomingOpId, type: "create" as const, tempId: tempList.tempId, ts: Date.now() },
-                  serverList
-                )
+              const reconciled = reconcileTempItem(
+                lists,
+                { opId: incomingOpId, type: "create" as const, tempId: tempList.tempId, ts: Date.now() },
+                serverList
               );
+              try {
+                applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+                  if (!current) return current;
+                  return { ...current, lists: reconciled as any };
+                });
+              } catch (e) {
+                /* best-effort */
+              }
               return;
             }
           }
 
-          setLists((prev) => {
-            const nextLists = prev.map((list) => (list.id === serverList.id ? serverList : list));
-            if (action === "created" && !nextLists.some((list) => list.id === serverList.id)) {
-              return [serverList, ...prev];
-            }
-            return nextLists;
-          });
+          const nextLists = lists.map((list) => (list.id === serverList.id ? serverList : list));
+          const finalLists = action === "created" && !nextLists.some((list) => list.id === serverList.id) ? [serverList, ...lists] : nextLists;
+          try {
+            applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+              if (!current) return current;
+              return { ...current, lists: finalLists as any };
+            });
+          } catch (e) {
+            /* best-effort */
+          }
           return;
         }
 
@@ -271,7 +344,10 @@ export default function SharedListsPage() {
       likedByMe: false,
     } as any;
 
-    setLists((current) => [optimisticList, ...current]);
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      if (!current) return current;
+      return { ...current, lists: [optimisticList, ...current.lists] };
+    });
 
     try {
       const body = attachOpToBody({ name: newName.trim(), description: newDescription.trim(), visibility: newVisibility, groupId: newGroupId || undefined }, op);
@@ -294,9 +370,15 @@ export default function SharedListsPage() {
       // try to reconcile the temp item with the server-created one
       const serverCreated = nextLists.find((l: any) => l.name === optimisticList.name && l.owner?.id === optimisticList.owner.id && !String(l.id).startsWith("temp-"));
       if (serverCreated) {
-        setLists((prev) => reconcileTempItem(prev, op, serverCreated));
+        applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+          if (!current) return current;
+          return { ...current, lists: reconcileTempItem(current.lists, op, serverCreated) as any };
+        });
       } else {
-        setLists(nextLists);
+        applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+          if (!current) return current;
+          return { ...current, lists: nextLists };
+        });
       }
 
       setNewName("");
@@ -307,7 +389,10 @@ export default function SharedListsPage() {
 
       toast.success("Shared list created");
     } catch (error) {
-      setLists((prev) => prev.filter((l) => l.id !== tempId));
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, lists: current.lists.filter((list: SharedList) => list.id !== tempId) };
+      });
       const message = error instanceof Error ? error.message : "Failed to create list.";
       toast.error(message);
     }
@@ -343,7 +428,10 @@ export default function SharedListsPage() {
     }
 
     const nextLists = Array.isArray(payload?.value) ? payload.value : [];
-    setLists(nextLists);
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      if (!current) return current;
+      return { ...current, lists: nextLists };
+    });
     return nextLists;
   };
 
@@ -405,20 +493,25 @@ export default function SharedListsPage() {
     const nextLiked = !currentLiked;
     const optimisticLikes = nextLiked ? originalLikes + 1 : Math.max(originalLikes - 1, 0);
 
-    setLists((current) =>
-      current.map((item) =>
-        item.id === list.id
-          ? { ...item, likedByMe: nextLiked, likes: optimisticLikes }
-          : item
-      )
-    );
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      if (!current) return current;
+      return {
+        ...current,
+        lists: current.lists.map((item) =>
+          item.id === list.id ? { ...item, likedByMe: nextLiked, likes: optimisticLikes } : item
+        ),
+      };
+    });
 
     const op = { opId: generateOpId("shared-list-like"), type: "like" as const, itemId: list.id, ts: Date.now() };
 
     try {
       await mutateList(list.id, "like", undefined, op, "POST");
     } catch (error) {
-      setLists(previousLists);
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, lists: previousLists };
+      });
       const message = error instanceof Error ? error.message : "Could not update the like.";
       toast.error(message);
     } finally {
@@ -466,24 +559,29 @@ export default function SharedListsPage() {
       replies: [],
     };
 
-    setLists((current) =>
-      current.map((item) => {
-        if (item.id !== listId) {
-          return item;
-        }
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      if (!current) return current;
 
-        const existingComments = item.commentItems ?? [];
-        const updatedComments = parentId
-          ? appendReplyToComments(existingComments, parentId, optimisticComment)
-          : [...existingComments, optimisticComment];
+      return {
+        ...current,
+        lists: current.lists.map((item) => {
+          if (item.id !== listId) {
+            return item;
+          }
 
-        return {
-          ...item,
-          commentItems: updatedComments,
-          comments: (item.comments ?? 0) + 1,
-        };
-      })
-    );
+          const existingComments = item.commentItems ?? [];
+          const updatedComments = parentId
+            ? appendReplyToComments(existingComments, parentId, optimisticComment)
+            : [...existingComments, optimisticComment];
+
+          return {
+            ...item,
+            commentItems: updatedComments,
+            comments: (item.comments ?? 0) + 1,
+          };
+        }),
+      };
+    });
 
     try {
       const bodyObj = attachOpToBody({ body, parentId }, op);
@@ -503,7 +601,10 @@ export default function SharedListsPage() {
 
       // server returns canonical lists array; set it to keep state consistent
       const nextLists = Array.isArray(payload?.value) ? payload.value : [];
-      setLists(nextLists);
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, lists: nextLists };
+      });
 
       if (parentId) {
         setReplyDrafts((current) => ({ ...current, [parentId]: "" }));
@@ -514,7 +615,10 @@ export default function SharedListsPage() {
 
       toast.success(parentId ? "Reply posted" : "Comment posted");
     } catch (error) {
-      setLists(previousLists);
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, lists: previousLists };
+      });
       const message = error instanceof Error ? error.message : "Could not post the comment.";
       toast.error(message);
     } finally {
@@ -527,16 +631,20 @@ export default function SharedListsPage() {
     const optimisticMovie = movieSearchResults.find((movie) => movie.id === movieId);
 
     if (optimisticMovie) {
-      setLists((current) =>
-        current.map((item) =>
-          item.id === listId
-            ? {
-                ...item,
-                movies: [...item.movies, optimisticMovie],
-              }
-            : item
-        )
-      );
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return {
+          ...current,
+          lists: current.lists.map((item) =>
+            item.id === listId
+              ? {
+                  ...item,
+                  movies: [...item.movies, optimisticMovie],
+                }
+              : item
+          ),
+        };
+      });
     }
 
     setAddingMovieToListId(listId);
@@ -546,7 +654,10 @@ export default function SharedListsPage() {
       await mutateList(listId, "movies", { movieId }, op, "POST");
       toast.success("Movie added to list");
     } catch (error) {
-      setLists(previousLists);
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, lists: previousLists };
+      });
       const message = error instanceof Error ? error.message : "Could not add movie.";
       toast.error(message);
     } finally {
@@ -556,16 +667,20 @@ export default function SharedListsPage() {
 
   const removeMovie = async (listId: string, movieId: string) => {
     const previousLists = lists;
-    setLists((current) =>
-      current.map((item) =>
-        item.id === listId
-          ? {
-              ...item,
-              movies: item.movies.filter((movie) => movie.id !== movieId),
-            }
-          : item
-      )
-    );
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      if (!current) return current;
+      return {
+        ...current,
+        lists: current.lists.map((item) =>
+          item.id === listId
+            ? {
+                ...item,
+                movies: item.movies.filter((movie) => movie.id !== movieId),
+              }
+            : item
+        ),
+      };
+    });
 
     setRemovingMovieFromListId(listId);
     const op = { opId: generateOpId("shared-list-remove-movie"), type: "delete" as const, itemId: listId, ts: Date.now() };
@@ -574,7 +689,10 @@ export default function SharedListsPage() {
       await mutateList(listId, "movies", { movieId }, op, "DELETE");
       toast.success("Movie removed from list");
     } catch (error) {
-      setLists(previousLists);
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, lists: previousLists };
+      });
       const message = error instanceof Error ? error.message : "Could not remove movie.";
       toast.error(message);
     } finally {

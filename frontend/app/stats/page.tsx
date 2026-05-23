@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { BarChart3, Clock, Film, Star, TrendingUp, Award, Calendar, Monitor, Users, Sparkles, MapPin } from "lucide-react";
 import type { UserStats } from "@/lib/types";
 import { WATCH_MOODS } from "@/lib/watch-options";
+import { queryKeys } from "@/lib/queryKeys";
+import { applyEntityUpdate } from "@/lib/cacheHelpers";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar } from "recharts";
 const COLORS = [
   "hsl(36, 90%, 50%)",
@@ -39,14 +43,51 @@ function formatMonthLabel(monthValue: string) {
 
 
 export default function UserStats() {
-  const [stats, setStats] = useState<UserStats | null>(null);
+  const queryClient = useQueryClient();
+
+  const statsQuery = usePrefetchAwareQuery<UserStats | null>({
+    queryKey: queryKeys.stats.current(),
+    queryFn: async () => {
+      const response = await fetch("/api/data/user-stats");
+      const data = await response.json();
+      return data.value ?? null;
+    },
+    enabled: true,
+  });
+
+  const stats = statsQuery.data ?? null;
 
   useEffect(() => {
-    fetch("/api/data/user-stats")
-      .then((response) => response.json())
-      .then((data) => setStats(data.value ?? null))
-      .catch((error) => console.error("Failed to fetch user stats:", error));
-  }, []);
+    if (!stats) return;
+
+    try {
+      applyEntityUpdate(queryClient, [queryKeys.stats.current()], () => stats);
+    } catch {
+      /* best-effort */
+    }
+  }, [queryClient, stats]);
+
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let refreshTimer: number | null = null;
+
+    try {
+      eventSource = new EventSource("/api/reviews/events");
+      eventSource.addEventListener("review-updated", () => {
+        if (refreshTimer) window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+          void statsQuery.refetch();
+        }, 600);
+      });
+    } catch {
+      /* best-effort */
+    }
+
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      eventSource?.close();
+    };
+  }, [statsQuery]);
 
   const userStats = stats ?? {
     totalWatched: 0,

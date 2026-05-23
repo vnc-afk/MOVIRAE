@@ -6,6 +6,10 @@ import { motion } from "framer-motion";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { Bell, Heart, MessageCircle, UserPlus, Users, Sparkles, Check, MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
+import { applyEntityUpdate } from "@/lib/cacheHelpers";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import type { Message, NotificationItem, UserProfile } from "@/lib/types";
 import { getNotificationLink } from "@/lib/notifications";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -39,12 +43,39 @@ function formatExactDate(value: string) {
   return format(parsed, "PPpp");
 }
 
+type NotificationsSnapshot = {
+  items: NotificationItem[];
+  messages: Message[];
+  users: UserProfile[];
+};
+
 export default function Notifications() {
   const router = useRouter();
-  const [items, setItems] = useState<NotificationItem[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
   const [messageText, setMessageText] = useState("");
+  const queryClient = useQueryClient();
+
+  const notificationsQuery = usePrefetchAwareQuery<NotificationsSnapshot>({
+    queryKey: queryKeys.notifications.all(),
+    queryFn: async () => {
+      const [notificationsResponse, messagesResponse, usersResponse] = await Promise.all([
+        fetch("/api/data/user-notifications").then((response) => response.json()),
+        fetch("/api/data/user-messages").then((response) => response.json()),
+        fetch("/api/users").then((response) => response.json()),
+      ]);
+
+      return {
+        items: Array.isArray(notificationsResponse.value) ? notificationsResponse.value : [],
+        messages: Array.isArray(messagesResponse.value) ? messagesResponse.value : [],
+        users: Array.isArray(usersResponse.value) ? usersResponse.value : [],
+      };
+    },
+    enabled: true,
+  });
+
+  const snapshot = notificationsQuery.data ?? { items: [], messages: [], users: [] };
+  const items = snapshot.items;
+  const messages = snapshot.messages;
+  const users = snapshot.users;
 
   const handleNotificationClick = async (notification: NotificationItem) => {
     try {
@@ -57,8 +88,13 @@ export default function Notifications() {
       const link = getNotificationLink(notification);
       router.push(link);
 
-      // Update local state
-      setItems(items.map((n) => (n.id === notification.id ? { ...n, read: true } : n)));
+      applyEntityUpdate(queryClient, [queryKeys.notifications.all()], (current: NotificationsSnapshot | undefined) => {
+        if (!current) return current;
+        return {
+          ...current,
+          items: current.items.map((n) => (n.id === notification.id ? { ...n, read: true } : n)),
+        };
+      });
     } catch (error) {
       console.error("Failed to handle notification click:", error);
       // Still navigate even if marking as read fails
@@ -67,31 +103,12 @@ export default function Notifications() {
     }
   };
 
-  // Initial load
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/data/user-notifications").then((response) => response.json()),
-      fetch("/api/data/user-messages").then((response) => response.json()),
-      fetch("/api/users").then((response) => response.json()),
-    ])
-      .then(([notificationsResponse, messagesResponse, usersResponse]) => {
-        setItems(Array.isArray(notificationsResponse.value) ? notificationsResponse.value : []);
-        setMessages(Array.isArray(messagesResponse.value) ? messagesResponse.value : []);
-        setUsers(Array.isArray(usersResponse.value) ? usersResponse.value : []);
-      })
-      .catch((error) => console.error("Failed to load notifications:", error));
-  }, []);
-
-  // Real-time SSE listener
   useEffect(() => {
     const eventSource = new EventSource("/api/notifications/events");
 
-    eventSource.addEventListener("notification-created", async (event) => {
+    eventSource.addEventListener("notification-created", async () => {
       try {
-        // Refresh notifications on new event
-        const response = await fetch("/api/data/user-notifications");
-        const data = await response.json();
-        setItems(Array.isArray(data.value) ? data.value : []);
+        await notificationsQuery.refetch();
       } catch (error) {
         console.error("Failed to update notifications:", error);
       }
@@ -105,9 +122,17 @@ export default function Notifications() {
     return () => {
       eventSource.close();
     };
-  }, []);
+  }, [notificationsQuery]);
 
-  const markAllRead = () => setItems(items.map((n) => ({ ...n, read: true })));
+  const markAllRead = () => {
+    applyEntityUpdate(queryClient, [queryKeys.notifications.all()], (current: NotificationsSnapshot | undefined) => {
+      if (!current) return current;
+      return {
+        ...current,
+        items: current.items.map((n) => ({ ...n, read: true })),
+      };
+    });
+  };
 
   return (
     <div className="pb-20 md:pb-0">

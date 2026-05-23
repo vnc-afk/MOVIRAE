@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, Film, Clock, Star, Award, MapPin, Heart, Users, Sparkles, BarChart3 } from "lucide-react";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { queryKeys } from "@/lib/queryKeys";
 import type { Movie, UserStats } from "@/lib/types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, PieChart, Pie, Cell } from "recharts";
 
@@ -39,14 +41,17 @@ function Slide({ children, bgClass = "" }: SlideProps) {
 export default function Wrapped() {
   const [slideIndex, setSlideIndex] = useState(0);
   const totalSlides = 7;
-  const [stats, setStats] = useState<UserStats | null>(null);
+  const wrappedQuery = usePrefetchAwareQuery<UserStats | null>({
+    queryKey: queryKeys.wrapped.current(),
+    queryFn: async () => {
+      const response = await fetch("/api/data/user-wrapped");
+      const data = await response.json();
+      return data.value ?? null;
+    },
+    enabled: true,
+  });
 
-  useEffect(() => {
-    fetch("/api/data/user-wrapped")
-      .then((response) => response.json())
-      .then((data) => setStats(data.value ?? null))
-      .catch((error) => console.error("Failed to fetch wrapped stats:", error));
-  }, []);
+  const stats = wrappedQuery.data ?? null;
 
   const userStats: UserStats = stats ?? {
     totalWatched: 0,

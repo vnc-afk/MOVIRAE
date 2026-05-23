@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { MoviePrefetchLink } from "@/components/MoviePrefetchLink";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -421,13 +422,13 @@ function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOp
       {/* Movie posters strip */}
       <div className="flex gap-2 mt-4 overflow-hidden">
         {list.movies.slice(0, 5).map((movie) => (
-          <Link key={movie.id} href={`/movie/${movie.id}`} className="flex-1 min-w-0">
+          <MoviePrefetchLink key={movie.id} movieId={movie.id} href={`/movie/${movie.id}`} className="flex-1 min-w-0">
             <img
               src={getSafeImageSrc(movie.poster) || ""}
               alt={movie.title}
               className="h-20 w-full rounded-md object-cover poster-shadow hover:scale-105 transition-transform duration-200"
             />
-          </Link>
+          </MoviePrefetchLink>
         ))}
         {list.movies.length > 5 && (
           <div className="flex-1 min-w-0 h-20 rounded-md bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
@@ -517,13 +518,13 @@ function PublicListCard({ list, index, isInFlight, onLike, onOpen }: { list: Sha
 
       <div className="flex gap-2 mt-4 overflow-hidden">
         {list.movies.slice(0, 5).map((movie) => (
-          <Link key={movie.id} href={`/movie/${movie.id}`} className="flex-1 min-w-0">
+          <MoviePrefetchLink key={movie.id} movieId={movie.id} href={`/movie/${movie.id}`} className="flex-1 min-w-0">
             <img
               src={getSafeImageSrc(movie.poster) || ""}
               alt={movie.title}
               className="h-20 w-full rounded-md object-cover poster-shadow hover:scale-105 transition-transform duration-200"
             />
-          </Link>
+          </MoviePrefetchLink>
         ))}
         {list.movies.length > 5 && (
           <div className="flex-1 min-w-0 h-20 rounded-md bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
@@ -688,7 +689,7 @@ function ListDetail({
           ) : (
             list.movies.map((movie) => (
               <div key={movie.id} className="relative group rounded-lg overflow-hidden border border-border bg-card">
-                <Link href={`/movie/${movie.id}`} className="block">
+                <MoviePrefetchLink movieId={movie.id} href={`/movie/${movie.id}`} className="block">
                   {getSafeImageSrc(movie.poster) ? (
                     <img
                       src={getSafeImageSrc(movie.poster)}
@@ -704,7 +705,7 @@ function ListDetail({
                     <p className="line-clamp-1 text-sm font-medium text-foreground">{movie.title}</p>
                     <p className="text-xs text-muted-foreground">Open movie page</p>
                   </div>
-                </Link>
+                </MoviePrefetchLink>
                 {canEdit && (
                   <button
                     type="button"
@@ -923,7 +924,7 @@ function PublicListDetail({
           ) : (
             list.movies.map((movie) => (
               <div key={movie.id} className="relative group rounded-lg overflow-hidden border border-border bg-card">
-                <Link href={`/movie/${movie.id}`} className="block">
+                <MoviePrefetchLink movieId={movie.id} href={`/movie/${movie.id}`} className="block">
                   {getSafeImageSrc(movie.poster) ? (
                     <img
                       src={getSafeImageSrc(movie.poster)}
@@ -939,7 +940,7 @@ function PublicListDetail({
                     <p className="line-clamp-1 text-sm font-medium text-foreground">{movie.title}</p>
                     <p className="text-xs text-muted-foreground">Open movie page</p>
                   </div>
-                </Link>
+                </MoviePrefetchLink>
               </div>
             ))
           )}

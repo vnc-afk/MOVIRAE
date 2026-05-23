@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import {
@@ -42,8 +43,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoviePrefetchLink } from "@/components/MoviePrefetchLink";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import type { Group, Movie, UserProfile } from "@/lib/types";
+import { queryKeys } from "@/lib/queryKeys";
+import { applyEntityUpdate } from "@/lib/cacheHelpers";
 
 interface DiscussionReply {
   id: string;
@@ -83,6 +87,7 @@ export default function GroupDetail() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
+  const queryClient = useQueryClient();
   const [group, setGroup] = useState<GroupRecord | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [joined, setJoined] = useState(false);
@@ -193,20 +198,30 @@ export default function GroupDetail() {
         const serverEvent = payload?.event ?? null;
         const serverEventId = typeof payload?.eventId === "string" ? payload.eventId : undefined;
 
-        if (serverGroup) {
+            if (serverGroup) {
           if (incomingOpId && group) {
             const tempDiscussion = (group.discussions ?? []).find((discussion) => (discussion as any).opId === incomingOpId || (discussion as any).tempId === incomingOpId) as any;
             if (tempDiscussion) {
               const serverDiscussion = (serverGroup.discussions ?? []).find((discussion: any) => discussion.title === tempDiscussion.title && discussion.body === tempDiscussion.body && discussion.author?.id === tempDiscussion.author?.id && !String(discussion.id).startsWith("temp-"));
-              if (serverDiscussion) {
+                if (serverDiscussion) {
                 const op = { opId: incomingOpId, type: "create" as const, tempId: tempDiscussion.tempId, ts: Date.now() };
                 setGroup((prev) => {
                   if (!prev) return serverGroup;
                   const nextDiscussions = reconcileTempItem(prev.discussions ?? [], op, serverDiscussion);
                   return { ...serverGroup, discussions: nextDiscussions } as GroupRecord;
                 });
+                try {
+                  applyEntityUpdate(queryClient, [queryKeys.group.detail(id)], () => ({ ...serverGroup, discussions: (serverGroup.discussions ?? []).map((d: any) => ({ ...d })) }));
+                } catch (e) {
+                  /* best-effort */
+                }
               } else {
                 setGroup(serverGroup);
+                try {
+                  applyEntityUpdate(queryClient, [queryKeys.group.detail(id)], () => serverGroup as any);
+                } catch (e) {
+                  /* best-effort */
+                }
               }
             } else {
               for (const discussion of group.discussions ?? []) {
@@ -227,15 +242,30 @@ export default function GroupDetail() {
                     });
                     return { ...serverGroup, discussions: nextDiscussions } as GroupRecord;
                   });
+                  try {
+                    applyEntityUpdate(queryClient, [queryKeys.group.detail(id)], () => ({ ...serverGroup }));
+                  } catch (e) {
+                    /* best-effort */
+                  }
                   break;
                 }
 
                 setGroup(serverGroup);
+                try {
+                  applyEntityUpdate(queryClient, [queryKeys.group.detail(id)], () => serverGroup as any);
+                } catch (e) {
+                  /* best-effort */
+                }
                 break;
               }
             }
           } else {
             setGroup(serverGroup);
+            try {
+              applyEntityUpdate(queryClient, [queryKeys.group.detail(id)], () => serverGroup as any);
+            } catch (e) {
+              /* best-effort */
+            }
           }
         }
 
@@ -814,14 +844,14 @@ export default function GroupDetail() {
                         <h4 className="font-semibold text-foreground mt-1">{discussion.title}</h4>
                         <p className="text-sm text-muted-foreground mt-1">{discussion.body}</p>
                         {movie && (
-                          <Link href={`/movie/${movie.id}`} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-muted/50 p-2 hover:bg-muted transition-colors">
+                          <MoviePrefetchLink movieId={movie.id} href={`/movie/${movie.id}`} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-muted/50 p-2 hover:bg-muted transition-colors">
                             {movie.poster ? (
                               <img src={movie.poster} alt={movie.title} className="h-10 w-7 rounded object-cover" />
                             ) : (
                               <div className="h-10 w-7 rounded bg-muted" />
                             )}
                             <span className="text-xs font-medium text-foreground">{movie.title} ({movie.year})</span>
-                          </Link>
+                          </MoviePrefetchLink>
                         )}
                         <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                           <button
@@ -998,7 +1028,7 @@ export default function GroupDetail() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {group.sharedList.map((m) => (
                   <div key={m.id} className="group relative">
-                    <Link href={`/movie/${m.id}`} className="block">
+                    <MoviePrefetchLink movieId={m.id} href={`/movie/${m.id}`} className="block">
                       {m.poster ? (
                         <img
                           src={m.poster}
@@ -1012,7 +1042,7 @@ export default function GroupDetail() {
                         {m.title}
                       </p>
                       <p className="text-[10px] text-muted-foreground">{m.year}</p>
-                    </Link>
+                    </MoviePrefetchLink>
                     <button
                       onClick={() => handleRemoveMovie(m.id)}
                       className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-background/90 text-muted-foreground hover:text-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
