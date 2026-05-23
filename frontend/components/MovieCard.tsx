@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { scheduleMovieDetailPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Eye, Plus, Check } from "lucide-react";
@@ -15,6 +17,8 @@ interface MovieCardProps {
 
 export function MovieCard({ movie, index = 0 }: MovieCardProps) {
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
+  const prefetchTokenRef = useRef(`movie-card:${movie.id}:${Math.random().toString(36).slice(2)}`);
   const [isWatched, setIsWatched] = useState(false);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [loading, setLoading] = useState({ watched: false, watchlist: false });
@@ -92,7 +96,16 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: index * 0.08 }}
     >
-      <Link href={`/movie/${movie.id}`} className="group block">
+      <Link
+        href={`/movie/${movie.id}`}
+        className="group block"
+        onMouseEnter={() => {
+          scheduleMovieDetailPrefetch(queryClient, movie.id, prefetchTokenRef.current, 150);
+        }}
+        onMouseLeave={() => {
+          cancelScheduledPrefetch(prefetchTokenRef.current);
+        }}
+      >
         <div className="relative overflow-hidden rounded-lg poster-shadow">
           {posterSrc ? (
             <img

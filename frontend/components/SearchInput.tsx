@@ -1,7 +1,9 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { scheduleDiscoverSeedsPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 
 interface SearchInputProps {
   placeholder?: string;
@@ -15,6 +17,8 @@ export function SearchInput({
   className = "",
 }: SearchInputProps) {
   const [query, setQuery] = useState("");
+  const queryClient = useQueryClient();
+  const prefetchTokenRef = useRef("search-input:discover");
 
   return (
     <div className={`relative ${className}`}>
@@ -26,6 +30,8 @@ export function SearchInput({
           setQuery(e.target.value);
           onSearch?.(e.target.value);
         }}
+        onFocus={() => scheduleDiscoverSeedsPrefetch(queryClient, prefetchTokenRef.current, 120)}
+        onBlur={() => cancelScheduledPrefetch(prefetchTokenRef.current)}
         placeholder={placeholder}
         className="w-full rounded-full bg-secondary pl-10 pr-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all duration-200"
       />

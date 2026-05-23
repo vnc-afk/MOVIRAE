@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { Eye, Heart, ListPlus, MessageCircle } from "lucide-react";
 import { StarRating } from "./StarRating";
+import { MoviePrefetchLink } from "./MoviePrefetchLink";
 import type { ActivityItem } from "@/lib/types";
 
 const actionIcons = {
@@ -50,12 +50,13 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
                 <span className="text-muted-foreground">
                   {actionText[item.action]}
                 </span>{" "}
-                <Link
+                <MoviePrefetchLink
+                  movieId={item.movie.id}
                   href={`/movie/${item.movie.id}`}
                   className="font-semibold text-primary hover:underline"
                 >
                   {item.movie.title}
-                </Link>
+                </MoviePrefetchLink>
               </p>
               {item.rating && (
                 <div className="mt-1">

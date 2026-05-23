@@ -5,6 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Film, Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
 import { SearchInput } from "./SearchInput";
+import { useQueryClient } from "@tanstack/react-query";
+import { scheduleDiscoverSeedsPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   DropdownMenu,
@@ -27,6 +29,7 @@ const navLinks = [
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   async function handleSignOut() {
     try {
@@ -52,20 +55,37 @@ export function Navbar() {
 
           {/* Desktop nav links */}
           <div className="hidden lg:flex items-center gap-1">
-            {navLinks.map(({ label, path, icon: Icon }) => (
-              <Link
-                key={path}
-                href={path}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  pathname === path
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </Link>
-            ))}
+            {navLinks.map(({ label, path, icon: Icon }) => {
+              const token = `navbar:${path}`;
+              const handleMouseEnter = () => {
+                try {
+                  if (path === "/discover") scheduleDiscoverSeedsPrefetch(queryClient, token, 150);
+                } catch (err) {
+                  console.debug("Navbar prefetch failed", err);
+                }
+              };
+
+              const handleMouseLeave = () => {
+                cancelScheduledPrefetch(token);
+              };
+
+              return (
+                <Link
+                  key={path}
+                  href={path}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    pathname === path
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="hidden md:block flex-1 max-w-md mx-4">

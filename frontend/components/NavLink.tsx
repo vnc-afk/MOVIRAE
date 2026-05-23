@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { forwardRef } from "react";
+import { forwardRef, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { scheduleMovieDetailPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { cn } from "@/lib/utils";
 
 interface NavLinkCompatProps extends Omit<React.ComponentPropsWithoutRef<"a">, "href"> {
@@ -14,14 +16,42 @@ interface NavLinkCompatProps extends Omit<React.ComponentPropsWithoutRef<"a">, "
 
 const NavLink = forwardRef<HTMLAnchorElement, NavLinkCompatProps>(
   ({ className, activeClassName, href, ...props }, ref) => {
+    const queryClient = useQueryClient();
+    const tokenRef = useRef(`nav-link:${href}:${Math.random().toString(36).slice(2)}`);
     const pathname = usePathname();
     const isActive = pathname === href;
+    const handleMouseEnter = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
+      // preserve any provided onMouseEnter
+      // @ts-ignore - props may include onMouseEnter
+      props.onMouseEnter?.(e);
 
+      try {
+        if (typeof href === "string") {
+          const m = href.match(/^\/movie\/([^/?#]+)/);
+          const movieId = m?.[1];
+          if (movieId) {
+            scheduleMovieDetailPrefetch(queryClient, movieId, tokenRef.current, 150);
+          }
+        }
+      } catch (err) {
+        // best-effort
+        console.debug("NavLink prefetch failed", err);
+      }
+    };
+
+    const handleMouseLeave = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
+      cancelScheduledPrefetch(tokenRef.current);
+      // preserve any provided onMouseLeave
+      // @ts-ignore
+      props.onMouseLeave?.(e);
+    };
     return (
       <Link
         ref={ref}
         href={href}
         className={cn(className, isActive && activeClassName)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         {...props}
       />
     );
