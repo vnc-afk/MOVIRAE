@@ -3,6 +3,10 @@ import type { Movie, CastMember } from "@/lib/types";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 
+type TMDBRequestOptions = {
+  suppressClientErrors?: boolean;
+};
+
 interface TMDBMovie {
   id: number;
   title: string;
@@ -28,6 +32,14 @@ interface TMDBGenre {
 }
 
 const genreMap = new Map<number, string>();
+
+function reportTmdbError(message: string, error: unknown, options?: TMDBRequestOptions) {
+  if (options?.suppressClientErrors && typeof window !== "undefined") {
+    return;
+  }
+
+  console.error(message, error);
+}
 
 /**
  * Initialize genre map from TMDB
@@ -92,7 +104,7 @@ function getGenreName(genreId: number): string {
 /**
  * Fetch trending movies from TMDB
  */
-export async function getTrendingMovies(page = 1): Promise<Movie[]> {
+export async function getTrendingMovies(page = 1, options?: TMDBRequestOptions): Promise<Movie[]> {
   if (!TMDB_API_KEY) {
     console.error("TMDB_API_KEY is not set");
     return [];
@@ -115,7 +127,7 @@ export async function getTrendingMovies(page = 1): Promise<Movie[]> {
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
     );
   } catch (error) {
-    console.error("Failed to fetch trending movies:", error);
+    reportTmdbError("Failed to fetch trending movies:", error, options);
     return [];
   }
 }
@@ -123,7 +135,7 @@ export async function getTrendingMovies(page = 1): Promise<Movie[]> {
 /**
  * Search movies by query
  */
-export async function searchMovies(query: string, page = 1): Promise<Movie[]> {
+export async function searchMovies(query: string, page = 1, options?: TMDBRequestOptions): Promise<Movie[]> {
   if (!TMDB_API_KEY) {
     console.error("TMDB_API_KEY is not set");
     return [];
@@ -146,7 +158,7 @@ export async function searchMovies(query: string, page = 1): Promise<Movie[]> {
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
     );
   } catch (error) {
-    console.error("Failed to search movies:", error);
+    reportTmdbError("Failed to search movies:", error, options);
     return [];
   }
 }
@@ -154,7 +166,7 @@ export async function searchMovies(query: string, page = 1): Promise<Movie[]> {
 /**
  * Get movie details by ID
  */
-export async function getMovieDetails(movieId: string): Promise<Movie | null> {
+export async function getMovieDetails(movieId: string, options?: TMDBRequestOptions): Promise<Movie | null> {
   if (!TMDB_API_KEY) {
     console.error("TMDB_API_KEY is not set");
     return null;
@@ -173,7 +185,7 @@ export async function getMovieDetails(movieId: string): Promise<Movie | null> {
 
     return transformTMDBMovie(movie);
   } catch (error) {
-    console.error("Failed to fetch movie details:", error);
+    reportTmdbError("Failed to fetch movie details:", error, options);
     return null;
   }
 }
@@ -181,7 +193,7 @@ export async function getMovieDetails(movieId: string): Promise<Movie | null> {
 /**
  * Get similar movies
  */
-export async function getSimilarMovies(movieId: string): Promise<Movie[]> {
+export async function getSimilarMovies(movieId: string, options?: TMDBRequestOptions): Promise<Movie[]> {
   if (!TMDB_API_KEY) {
     console.error("TMDB_API_KEY is not set");
     return [];
@@ -204,7 +216,7 @@ export async function getSimilarMovies(movieId: string): Promise<Movie[]> {
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
     );
   } catch (error) {
-    console.error("Failed to fetch similar movies:", error);
+    reportTmdbError("Failed to fetch similar movies:", error, options);
     return [];
   }
 }
@@ -266,7 +278,8 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
  */
 export async function getMoviesByGenre(
   genreId: number,
-  page = 1
+  page = 1,
+  options?: TMDBRequestOptions
 ): Promise<Movie[]> {
   if (!TMDB_API_KEY) {
     console.error("TMDB_API_KEY is not set");
@@ -290,7 +303,7 @@ export async function getMoviesByGenre(
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
     );
   } catch (error) {
-    console.error("Failed to fetch movies by genre:", error);
+    reportTmdbError("Failed to fetch movies by genre:", error, options);
     return [];
   }
 }
