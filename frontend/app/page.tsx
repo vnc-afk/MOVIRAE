@@ -1,38 +1,36 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { motion } from "framer-motion";
+import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { MovieCard } from "@/components/MovieCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { SearchInput } from "@/components/SearchInput";
 import { getTrendingMovies } from "@/lib/tmdb";
+import { queryKeys } from "@/lib/queryKeys";
 import type { ActivityItem, Movie } from "@/lib/types";
 import heroBackdrop from "@/assets/hero-backdrop.jpg";
 
 export default function Home() {
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const trendingQuery = usePrefetchAwareQuery<Movie[]>({
+    queryKey: queryKeys.discover.seeds(),
+    queryFn: () => getTrendingMovies(),
+    enabled: true,
+  });
 
-  useEffect(() => {
-    async function fetchHomeData() {
-      try {
-        const [trendingMovies, feedResponse] = await Promise.all([
-          getTrendingMovies(),
-          fetch("/api/data/home-activity-feed").then((response) => response.json()),
-        ]);
+  const activityQuery = usePrefetchAwareQuery<ActivityItem[]>({
+    queryKey: queryKeys.home.activityFeed(),
+    queryFn: async () => {
+      const response = await fetch("/api/data/home-activity-feed");
+      const data = await response.json();
+      return Array.isArray(data?.value) ? data.value : [];
+    },
+    enabled: true,
+  });
 
-        setMovies(trendingMovies);
-        setActivities(Array.isArray(feedResponse?.value) ? feedResponse.value : []);
-      } catch (error) {
-        console.error("Failed to fetch home data:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchHomeData();
-  }, []);
+  const movies = trendingQuery.data ?? [];
+  const activities = activityQuery.data ?? [];
+  const loading = trendingQuery.isPending || activityQuery.isPending;
 
   return (
     <div className="pb-20 md:pb-0">
