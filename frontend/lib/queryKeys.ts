@@ -15,7 +15,12 @@ export const queryKeys = {
     detail: (id: string) => ["shared-lists", "detail", id] as const,
   },
   notifications: {
-    all: () => ["notifications", "all"] as const,
+    all: (sessionEmail?: string | null) => ["notifications", "all", sessionEmail ?? "anonymous"] as const,
+  },
+  messaging: {
+    snapshot: () => ["messaging", "snapshot"] as const,
+    friends: () => ["messaging", "friends"] as const,
+    thread: (userId: string) => ["messaging", "thread", userId] as const,
   },
   profile: {
     detail: (id: string) => ["profile", "detail", id] as const,
