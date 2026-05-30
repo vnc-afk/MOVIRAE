@@ -110,6 +110,14 @@ export default function PublicProfilePage() {
             </div>
             <div className="md:ml-auto flex flex-col gap-2">
               {showFollowButton ? <FollowButton userId={profile.id} initialFollowing={Boolean(profile.isFollowing)} className="w-full md:w-auto" /> : null}
+              {showFollowButton ? (
+                <button
+                  onClick={() => window.location.assign(`/notifications?user=${profile.id}`)}
+                  className="rounded-full bg-primary/10 px-4 py-2 text-sm text-primary hover:bg-primary/20"
+                >
+                  Message
+                </button>
+              ) : null}
             </div>
           </motion.div>
         </div>
