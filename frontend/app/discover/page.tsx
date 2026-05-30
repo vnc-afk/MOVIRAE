@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { queryKeys } from "@/lib/queryKeys";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
@@ -83,44 +83,35 @@ export default function Discover() {
   const isSearchMode = Boolean(trimmedQuery);
   const isGenreMode = !isSearchMode && Boolean(filters.genreId);
 
-  const moviesQuery = usePrefetchAwareQuery<Movie[]>({
-    queryKey: isSearchMode
-      ? queryKeys.discover.search(trimmedQuery)
-      : isGenreMode
-        ? queryKeys.movie.list({ genreId: Number(filters.genreId) })
-        : queryKeys.discover.seeds(),
-    queryFn: async () => {
-      if (isSearchMode) {
-        return searchMovies(trimmedQuery);
-      }
+  // Pagination / infinite-scroll state
+  const [pages, setPages] = useState<Movie[][]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const seenMovieIdsRef = useRef<Set<string>>(new Set());
+  const requestGenerationRef = useRef(0);
+  const pageSize = 20; // TMDB default page size
 
-      if (isGenreMode) {
-        return getMoviesByGenre(Number(filters.genreId));
-      }
-
-      return getTrendingMovies(1);
-    },
-    enabled: true,
-  });
-
-  const movies = moviesQuery.data ?? [];
-  const loading = moviesQuery.isPending;
+  const loading = pages.length === 0 && !isFetchingNextPage;
 
   const filtered = useMemo(() => {
-    return movies
-      .filter((movie) => {
-        if (movie.runtime < filters.runtimeRange[0] || movie.runtime > filters.runtimeRange[1]) {
-          return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
+    const sortMovies = (list: Movie[]) =>
+      [...list].sort((a, b) => {
         if (filters.sortBy === "rating") return b.rating - a.rating;
         if (filters.sortBy === "year") return b.year - a.year;
         if (filters.sortBy === "runtime") return a.runtime - b.runtime;
         return a.title.localeCompare(b.title);
       });
-  }, [filters.runtimeRange, filters.sortBy, movies]);
+
+    return pages
+      .map((page) =>
+        sortMovies(
+          page.filter((movie) => movie.runtime >= filters.runtimeRange[0] && movie.runtime <= filters.runtimeRange[1])
+        )
+      )
+      .flat();
+  }, [filters.runtimeRange, filters.sortBy, pages]);
 
   const activeCount = (filters.genreId ? 1 : 0) + (filters.runtimeRange[0] > 0 || filters.runtimeRange[1] < 200 ? 1 : 0);
 
@@ -131,6 +122,94 @@ export default function Discover() {
       runtimeRange: [preset.filters.minRuntime || 0, preset.filters.maxRuntime || 200],
     });
   };
+
+  const resetAndLoad = useCallback(() => {
+    requestGenerationRef.current += 1;
+    setPages([]);
+    setCurrentPage(1);
+    setHasMore(true);
+    seenMovieIdsRef.current = new Set();
+  }, []);
+
+  useEffect(() => {
+    // Reset pages when search or genre changes
+    resetAndLoad();
+  }, [trimmedQuery, filters.genreId, resetAndLoad]);
+
+  const fetchPage = useCallback(
+    async (page: number) => {
+      const generation = requestGenerationRef.current;
+      setIsFetchingNextPage(true);
+      try {
+        let results: Movie[] = [];
+        if (isSearchMode) {
+          results = await searchMovies(trimmedQuery, page);
+        } else if (isGenreMode) {
+          results = await getMoviesByGenre(Number(filters.genreId), page);
+        } else {
+          results = await getTrendingMovies(page);
+        }
+
+        if (!results || results.length === 0) {
+          if (generation !== requestGenerationRef.current) return;
+          setHasMore(false);
+          return;
+        }
+
+        const nextResults = results.filter((movie) => !seenMovieIdsRef.current.has(movie.id));
+
+        if (nextResults.length === 0) {
+          if (generation !== requestGenerationRef.current) return;
+          setHasMore(false);
+          return;
+        }
+
+        if (generation !== requestGenerationRef.current) {
+          return;
+        }
+
+        nextResults.forEach((movie) => seenMovieIdsRef.current.add(movie.id));
+        setPages((prev) => (page === 1 ? [nextResults] : [...prev, nextResults]));
+        // If we received fewer than a full page, assume no more results
+        if (results.length < pageSize) setHasMore(false);
+      } catch (err) {
+        if (generation !== requestGenerationRef.current) return;
+        console.error("Failed to fetch Discover page:", err);
+        setHasMore(false);
+      } finally {
+        if (generation !== requestGenerationRef.current) return;
+        setIsFetchingNextPage(false);
+      }
+    },
+    [isSearchMode, isGenreMode, trimmedQuery, filters.genreId]
+  );
+
+  // Load first page when filters change
+  useEffect(() => {
+    fetchPage(1);
+  }, [fetchPage]);
+
+  const loadNext = useCallback(() => {
+    if (isFetchingNextPage || !hasMore) return;
+    const next = currentPage + 1;
+    setCurrentPage(next);
+    fetchPage(next);
+  }, [currentPage, fetchPage, hasMore, isFetchingNextPage]);
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    if (!sentinelRef.current) return;
+    const el = sentinelRef.current;
+    const obs = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          loadNext();
+        }
+      }
+    }, { rootMargin: "200px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [loadNext]);
 
   const savePreset = () => {
     if (!presetName.trim()) return;
@@ -352,11 +431,30 @@ export default function Discover() {
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {filtered.map((movie, index) => (
-              <MovieCard key={movie.id} movie={movie} index={index} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {filtered.map((movie, index) => (
+                <MovieCard key={movie.id} movie={movie} index={index} />
+              ))}
+            </div>
+
+            <div ref={sentinelRef} aria-hidden="true" className="h-6" />
+
+            <div className="flex justify-center mt-4">
+              {isFetchingNextPage ? (
+                <div className="text-sm text-muted-foreground">Loading more…</div>
+              ) : hasMore ? (
+                <button
+                  onClick={() => loadNext()}
+                  className="text-sm px-3 py-1 rounded-md bg-secondary border border-border"
+                >
+                  Load more
+                </button>
+              ) : (
+                <div className="text-sm text-muted-foreground">End of results</div>
+              )}
+            </div>
+          </>
         )}
 
         {!loading && filtered.length === 0 && (
