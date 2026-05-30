@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
+import { getMessageThreadReadState } from "@/lib/message-threads";
 import type { Movie, UserProfile } from "@/lib/types";
 import { getWatchExperienceStats } from "@/lib/watch-experiences";
 
@@ -623,7 +624,7 @@ async function getUserNotifications(currentUser: Awaited<ReturnType<typeof getCu
   const reviewMovieMap = new Map(reviews.map((review) => [review.id, review.tmdbId]));
   const discussionGroupMap = new Map(discussions.map((discussion) => [discussion.id, discussion.groupId]));
 
-  return notifications.map((notification) => {
+  const databaseNotifications = notifications.map((notification) => {
     const movieId = notification.movieId ?? (notification.reviewId ? reviewMovieMap.get(notification.reviewId) : undefined);
     const groupId = notification.groupId ?? (notification.discussionId ? discussionGroupMap.get(notification.discussionId) : undefined);
 
@@ -642,6 +643,8 @@ async function getUserNotifications(currentUser: Awaited<ReturnType<typeof getCu
       groupId: groupId ?? undefined,
     };
   });
+
+  return databaseNotifications;
 }
 
 async function setUserNotifications(payload: unknown, currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
@@ -679,15 +682,47 @@ async function getUserMessages(currentUser: Awaited<ReturnType<typeof getCurrent
     where: {
       OR: [{ fromId: currentUser.id }, { toId: currentUser.id }],
     },
-    include: { from: true },
+    include: { from: true, to: true },
     orderBy: { createdAt: "asc" },
   });
+
+  const conversationPartnerIds = Array.from(
+    new Set(
+      messages
+        .map((message) => (message.fromId === currentUser.id ? message.toId : message.fromId))
+        .filter((partnerId): partnerId is string => typeof partnerId === "string" && partnerId.length > 0)
+    )
+  );
+
+  const readStates = await Promise.all(
+    conversationPartnerIds.map(async (partnerId) => ({
+      partnerId,
+      state: await getMessageThreadReadState(currentUser.id, partnerId),
+    }))
+  );
+
+  const readStateByPartnerId = new Map(
+    readStates.map(({ partnerId, state }) => [partnerId, state])
+  );
 
   return messages.map((message) => ({
     id: message.id,
     from: buildUserProfile(message.from)!,
+    to: buildUserProfile(message.to)!,
+    fromId: message.fromId,
+    toId: message.toId,
     text: message.text,
     date: message.createdAt.toISOString(),
+    isRead:
+      message.fromId === currentUser.id
+        ? Boolean(
+            readStateByPartnerId.get(message.toId)?.[message.toId] &&
+              new Date(readStateByPartnerId.get(message.toId)?.[message.toId] ?? 0).getTime() >= message.createdAt.getTime()
+          )
+        : Boolean(
+            readStateByPartnerId.get(message.fromId)?.[currentUser.id] &&
+              new Date(readStateByPartnerId.get(message.fromId)?.[currentUser.id] ?? 0).getTime() >= message.createdAt.getTime()
+          ),
   }));
 }
 
