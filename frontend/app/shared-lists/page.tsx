@@ -25,6 +25,12 @@ type SharedListsSnapshot = {
   currentUser: UserProfile | null;
 };
 
+const EMPTY_SHARED_LISTS_SNAPSHOT: SharedListsSnapshot = {
+  lists: [],
+  groups: [],
+  currentUser: null,
+};
+
 export default function SharedListsPage() {
   const searchParams = useSearchParams();
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
@@ -92,7 +98,7 @@ export default function SharedListsPage() {
     enabled: true,
   });
 
-  const snapshot = sharedListsQuery.data ?? { lists: [], groups: [], currentUser: null };
+  const snapshot = sharedListsQuery.data ?? EMPTY_SHARED_LISTS_SNAPSHOT;
   const lists = snapshot.lists;
   const groups = snapshot.groups;
   const currentUser = snapshot.currentUser;
