@@ -172,8 +172,12 @@ export interface NotificationItem {
 export interface Message {
   id: string;
   from: UserProfile;
+  to?: UserProfile;
+  fromId?: string;
+  toId?: string;
   text: string;
   date: string;
+  isRead?: boolean;
 }
 
 export interface FilterPreset {
