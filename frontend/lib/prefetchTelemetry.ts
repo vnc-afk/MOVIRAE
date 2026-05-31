@@ -1,7 +1,7 @@
 import { type QueryKey } from "@tanstack/react-query";
 
 const STORAGE_KEY = "movirae_prefetch_telemetry_v1";
-const PREFETCH_TTL_MS = 30 * 1000; // Keep prefetch records for 30s
+const PREFETCH_TTL_MS = 5 * 60 * 1000; // Keep prefetch records for 5m
 
 type TelemetrySnapshot = {
   attempts: number;
@@ -14,11 +14,19 @@ type TelemetrySnapshot = {
   lastUpdated: number;
 };
 
-// in-memory prefetch store: tracks recent successful prefetches with TTL
-const prefetchStore = new Map<string, number>();
+type PrefetchTelemetryGlobals = {
+  prefetchStore?: Map<string, number>;
+  telemetry?: TelemetrySnapshot;
+};
+
+const globalTelemetry = globalThis as typeof globalThis & PrefetchTelemetryGlobals;
+
+// Keep the store and aggregate state on globalThis so separate client chunks share it.
+const prefetchStore = globalTelemetry.prefetchStore ?? new Map<string, number>();
+globalTelemetry.prefetchStore = prefetchStore;
 
 // aggregate telemetry (persisted to localStorage)
-let telemetry: TelemetrySnapshot = load() || {
+let telemetry: TelemetrySnapshot = globalTelemetry.telemetry ?? load() ?? {
   attempts: 0,
   skipped: 0,
   succeeded: 0,
@@ -28,6 +36,7 @@ let telemetry: TelemetrySnapshot = load() || {
   misses: 0,
   lastUpdated: Date.now(),
 };
+globalTelemetry.telemetry = telemetry;
 
 let autoFlushIntervalId: ReturnType<typeof setInterval> | null = null;
 let ttlCleanupIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -53,6 +62,7 @@ function handleBeforeUnload() {
 function save() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(telemetry));
+    globalTelemetry.telemetry = telemetry;
   } catch {
     // ignore
   }
@@ -245,6 +255,7 @@ export function resetTelemetry() {
     lastUpdated: Date.now(),
   };
   prefetchStore.clear();
+  globalTelemetry.telemetry = telemetry;
   save();
 }
 

@@ -19,6 +19,7 @@ type PrefetchTask = {
 };
 
 const PREFETCH_MAX_CONCURRENCY = 2;
+const PREFETCH_STALE_TIME_MS = 5 * 60 * 1000;
 let activePrefetchCount = 0;
 const queuedTasks: PrefetchTask[] = [];
 const queuedByToken = new Map<string, PrefetchTask>();
@@ -73,7 +74,11 @@ async function executePrefetchTask(task: PrefetchTask) {
     activePrefetchCount++;
     inFlightQueryKeys.add(keyHash);
 
-    await task.client.prefetchQuery({ queryKey: task.queryKey as any, queryFn: task.queryFn });
+    await task.client.prefetchQuery({
+      queryKey: task.queryKey as any,
+      queryFn: task.queryFn,
+      staleTime: PREFETCH_STALE_TIME_MS,
+    });
     prefetchStats.succeeded++;
     try { telemetry.recordPrefetchSucceeded(task.queryKey); } catch {}
   } catch (e) {
@@ -152,7 +157,11 @@ export async function safePrefetchQuery(client: QueryClient, options: { queryKey
       try { telemetry.recordPrefetchSkipped(); } catch {}
       return;
     }
-    await client.prefetchQuery({ queryKey: options.queryKey as any, queryFn: options.queryFn });
+    await client.prefetchQuery({
+      queryKey: options.queryKey as any,
+      queryFn: options.queryFn,
+      staleTime: PREFETCH_STALE_TIME_MS,
+    });
     prefetchStats.succeeded++;
     try { telemetry.recordPrefetchSucceeded(options.queryKey); } catch {}
   } catch (e) {
