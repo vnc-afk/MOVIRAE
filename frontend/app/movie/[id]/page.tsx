@@ -506,7 +506,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
   return (
     <div className="pb-20 md:pb-0">
-      <div className="relative h-[300px] md:h-[400px] overflow-hidden">
+      <div className="relative h-[80px] md:h-[180px] overflow-hidden">
         <img
           src={movie.poster}
           alt=""
@@ -523,7 +523,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         </div>
       </div>
 
-      <div className="container -mt-24 md:-mt-32 relative z-10">
+      <div className="container -mt-20 md:-mt-28 relative z-10">
         <div className="flex flex-col md:flex-row gap-6 md:gap-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}

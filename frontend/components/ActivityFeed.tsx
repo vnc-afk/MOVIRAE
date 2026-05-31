@@ -25,7 +25,7 @@ interface ActivityFeedProps {
 
 export function ActivityFeed({ activities }: ActivityFeedProps) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-6">
       {activities.map((item) => {
         const Icon = actionIcons[item.action];
         return (
