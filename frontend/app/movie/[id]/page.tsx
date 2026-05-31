@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { applyEntityUpdate } from "@/lib/cacheHelpers";
@@ -51,6 +52,11 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [watchExperience, setWatchExperience] = useState<WatchExperience | null>(null);
   const [buttonLoading, setButtonLoading] = useState({ watched: false, watchlist: false, liked: false });
+  const reviewsRef = useRef<Review[]>([]);
+
+  useEffect(() => {
+    reviewsRef.current = reviews;
+  }, [reviews]);
 
   const movieQuery = usePrefetchAwareQuery<Movie | null>({
     queryKey: queryKeys.movie.detail(resolvedParams.id),
@@ -93,12 +99,18 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
     async function fetchMovieExtras(movieId: string) {
       try {
-        const platforms = await getStreamingPlatforms(movieId);
-        if (!cancelled) {
-          setStreamingOn(platforms);
+        const [platformsResult, reviewsResult] = await Promise.allSettled([
+          getStreamingPlatforms(movieId),
+          fetchReviews(movieId),
+        ]);
+
+        if (!cancelled && platformsResult.status === "fulfilled") {
+          setStreamingOn(platformsResult.value);
         }
 
-        await fetchReviews(movieId);
+        if (reviewsResult.status === "rejected") {
+          console.error("Failed to fetch reviews:", reviewsResult.reason);
+        }
       } catch (error) {
         console.error("Failed to fetch movie extras:", error);
       }
@@ -214,9 +226,10 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           // Op-based reconciliation for created/replied items below
           if (incomingOpId) {
             // Try to reconcile a temp review create
-            const tempReview = reviews.find((r) => (r as any).opId === incomingOpId || (r as any).tempId === incomingOpId) as any;
+            const currentReviews = reviewsRef.current;
+            const tempReview = currentReviews.find((r) => (r as any).opId === incomingOpId || (r as any).tempId === incomingOpId) as any;
               if (tempReview && serverReview) {
-              const reconciled = reconcileTempItem(reviews, { opId: incomingOpId, type: "create" as const, tempId: tempReview.tempId, ts: Date.now() }, serverReview);
+              const reconciled = reconcileTempItem(currentReviews, { opId: incomingOpId, type: "create" as const, tempId: tempReview.tempId, ts: Date.now() }, serverReview);
               setReviews(reconciled);
               try {
                 applyEntityUpdate(queryClient, [queryKeys.movie.detail(movieId)], (current: any) => {
@@ -230,13 +243,13 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
             }
 
             // Try to reconcile a temp reply on an existing review
-            for (const r of reviews) {
+            for (const r of currentReviews) {
               const tempReply = (r.replies ?? []).find((rep: any) => (rep as any).opId === incomingOpId || (rep as any).tempId === incomingOpId) as any;
               if (tempReply && serverReview) {
                 const serverReply = serverReview.replies?.find((sr: any) => sr.comment === tempReply.comment && sr.user?.id === tempReply.user?.id && !String(sr.id).startsWith("temp-"));
                 if (serverReply) {
                   const opObj = { opId: incomingOpId, type: "create" as const, tempId: tempReply.tempId, ts: Date.now() };
-                  const updated = reviews.map((review) => {
+                  const updated = currentReviews.map((review) => {
                     if (review.id !== serverReview.id) return review;
                     return { ...review, replies: reconcileTempItem(review.replies ?? [], opObj, serverReply) } as any;
                   });
@@ -264,6 +277,10 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     } catch (err) {
       console.warn("Could not open review events source:", err);
     }
+
+    return () => {
+      eventSource?.close();
+    };
   }, [movie?.id, session?.user?.email]);
 
   async function updateMovieAction(key: string, active: boolean) {
