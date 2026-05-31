@@ -363,12 +363,6 @@ export default function Notifications() {
       return;
     }
 
-    if (requestedConversationUserId) {
-      if (activeTab !== "messages") {
-        setActiveTab("messages");
-      }
-    }
-
     if (!requestedConversationUserId) {
       if (selectedConversationUserId !== null) {
         setSelectedConversationUserId(null);
@@ -391,7 +385,7 @@ export default function Notifications() {
     }
 
     setSelectedConversationUserId(null);
-  }, [activeTab, isMobile, requestedConversationUserId, selectedConversationUserId, snapshot.users]);
+  }, [isMobile, requestedConversationUserId, selectedConversationUserId, snapshot.users]);
 
   useEffect(() => {
     if (activeTab !== "messages") {
@@ -586,7 +580,7 @@ export default function Notifications() {
   };
 
   return (
-    <div className="pb-20 md:pb-0">
+    <div className="pb-20 md:pb-0 overflow-x-hidden">
       <div className="container py-8 max-w-2xl space-y-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -628,9 +622,9 @@ export default function Notifications() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="notifications">
-              <div className="space-y-2">
-                <div ref={notificationsParentRef} className="min-h-0 max-h-[60vh] overflow-y-auto">
+          <TabsContent value="notifications" className="overflow-x-hidden">
+              <div className="space-y-2 overflow-x-hidden">
+                <div ref={notificationsParentRef} className="min-h-0 max-h-[60vh] overflow-y-auto overflow-x-hidden">
                   <div style={{ height: notificationsVirtualizer.getTotalSize(), position: "relative" }}>
                     {notificationsVirtualizer.getVirtualItems().map((virtualRow) => {
                       const notif = items[virtualRow.index];

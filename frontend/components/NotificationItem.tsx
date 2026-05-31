@@ -36,7 +36,7 @@ function NotificationItem({ notif, index = 0, onClick, onHover }: Props) {
       transition={{ delay: index * 0.05 }}
       onClick={() => onClick?.(notif)}
       onMouseEnter={() => onHover?.(notif)}
-      className={`flex items-start gap-3 rounded-lg p-4 transition-colors cursor-pointer hover:opacity-80 ${
+      className={`flex w-full items-start gap-3 rounded-lg p-4 transition-colors cursor-pointer hover:opacity-80 ${
         notif.read ? "bg-card" : "bg-primary/5 border border-primary/10"
       }`}
     >
