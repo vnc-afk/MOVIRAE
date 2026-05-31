@@ -6,6 +6,9 @@ import { motion } from "framer-motion";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { Bell, Heart, MessageCircle, UserPlus, Users, Sparkles, Check, MessageSquare, Send, UserCircle2, ChevronLeft } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import useEventSource from "@/hooks/use-event-source";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
@@ -32,10 +35,14 @@ import {
   type MessageThreadSnapshot,
   type MessagingSnapshot,
 } from "@/lib/messaging";
-import type { Message, NotificationItem, UserProfile } from "@/lib/types";
+import type { Message, UserProfile } from "@/lib/types";
+import type { NotificationItem as NotificationItemType } from "@/lib/types";
 import { getNotificationLink } from "@/lib/notifications";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FriendsList from "@/components/FriendsList";
+import NotificationItem from "@/components/NotificationItem";
+import prefetchHelpers from "@/lib/prefetchHelpers";
+import ConversationListItem from "@/components/ConversationListItem";
 
 const typeIcons = {
   follow: UserPlus,
@@ -78,19 +85,175 @@ export default function Notifications() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const isMobile = useIsMobile();
-  const sessionEmail = session?.user?.email ?? null;
-  const notificationsKey = useMemo(() => queryKeys.notifications.all(sessionEmail), [sessionEmail]);
+  const _user = (session?.user as any) ?? {};
+  const sessionIdOrEmail = _user.id ?? _user.email ?? null;
+  const notificationsKey = useMemo(() => queryKeys.notifications.all(sessionIdOrEmail), [sessionIdOrEmail]);
 
-  const notificationsQuery = usePrefetchAwareQuery<MessagingSnapshot>({
-    queryKey: notificationsKey,
-    queryFn: fetchMessagingSnapshot,
+  const PAGE_LIMIT = 50;
+
+  const fetchNotificationsPage = async ({ pageParam = 0 }) => {
+    const res = await fetch(`/api/data/user-notifications?limit=${PAGE_LIMIT}&offset=${pageParam}`);
+    const json = await res.json().catch(() => null);
+    return Array.isArray(json?.value) ? json.value : [];
+  };
+
+  const fetchMessagesPage = async ({ pageParam = 0 }) => {
+    const res = await fetch(`/api/data/user-messages?limit=${PAGE_LIMIT}&offset=${pageParam}`);
+    const json = await res.json().catch(() => null);
+    return Array.isArray(json?.value) ? json.value : [];
+  };
+
+  const notificationsInfinite = useInfiniteQuery({
+    queryKey: ["notifications", "paged", sessionIdOrEmail ?? "anonymous"],
+    queryFn: async ({ pageParam = 0 }: { pageParam?: number }) => fetchNotificationsPage({ pageParam: pageParam as number }),
+    getNextPageParam: (lastPage: any, pages: any[]) => {
+      const fetched = pages.flat().length;
+      return lastPage.length === PAGE_LIMIT ? fetched : undefined;
+    },
+    initialPageParam: 0,
+  });
+
+  const messagesInfinite = useInfiniteQuery({
+    queryKey: ["messages", "paged", sessionIdOrEmail ?? "anonymous"],
+    queryFn: async ({ pageParam = 0 }: { pageParam?: number }) => fetchMessagesPage({ pageParam: pageParam as number }),
+    getNextPageParam: (lastPage: any, pages: any[]) => {
+      const fetched = pages.flat().length;
+      return lastPage.length === PAGE_LIMIT ? fetched : undefined;
+    },
+    initialPageParam: 0,
+  });
+
+  const usersQuery = usePrefetchAwareQuery<UserProfile[]>({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const res = await fetch("/api/users").then((r) => r.json()).catch(() => null);
+      return Array.isArray(res?.value) ? res.value : [];
+    },
     enabled: true,
   });
 
-  const snapshot = notificationsQuery.data ?? { items: [], messages: [], users: [], sessionEmail: null };
+  const notificationPages = (notificationsInfinite.data as any)?.pages ?? [];
+  const messagePages = (messagesInfinite.data as any)?.pages ?? [];
+
+  const snapshot = {
+    items: Array.isArray(notificationPages) ? notificationPages.flat() : [],
+    messages: Array.isArray(messagePages) ? messagePages.flat() : [],
+    users: usersQuery.data ?? [],
+    sessionEmail: session?.user?.email ?? null,
+  } as MessagingSnapshot;
+
   const items = snapshot.items;
+
+  const notificationsParentRef = useRef<HTMLDivElement | null>(null);
+  const notificationsVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => notificationsParentRef.current,
+    estimateSize: () => 84,
+    overscan: 5,
+  });
+
+  const conversationsParentRef = useRef<HTMLDivElement | null>(null);
+
+  // Prefetch next notifications page when user scrolls near the bottom
+  useEffect(() => {
+    const el = notificationsParentRef.current;
+    if (!el) return;
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        try {
+          const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
+          const THRESHOLD = 400;
+          if (remaining < THRESHOLD) {
+            if ((notificationsInfinite as any).hasNextPage && !(notificationsInfinite as any).isFetchingNextPage) {
+              void (notificationsInfinite as any).fetchNextPage();
+            }
+          }
+        } finally {
+          ticking = false;
+        }
+      });
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    // initial check in case content is short
+    onScroll();
+
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [notificationsParentRef]);
+
+  // Also prefetch when virtualizer renders items near the end
+  useEffect(() => {
+    const vitems = notificationsVirtualizer.getVirtualItems();
+    if (!vitems.length) return;
+    const last = vitems[vitems.length - 1];
+    if (last.index >= items.length - 6) {
+      if ((notificationsInfinite as any).hasNextPage && !(notificationsInfinite as any).isFetchingNextPage) {
+        void (notificationsInfinite as any).fetchNextPage();
+      }
+    }
+  }, [notificationsVirtualizer.getVirtualItems(), items.length]);
+
+  // Prefetch next messages page when conversation list scrolls near bottom
+  useEffect(() => {
+    const el = conversationsParentRef.current;
+    if (!el) return;
+
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        try {
+          const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
+          const THRESHOLD = 300;
+          if (remaining < THRESHOLD) {
+            if ((messagesInfinite as any).hasNextPage && !(messagesInfinite as any).isFetchingNextPage) {
+              void (messagesInfinite as any).fetchNextPage();
+            }
+          }
+        } finally {
+          ticking = false;
+        }
+      });
+    };
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [conversationsParentRef]);
+
+  
+
+  // Keep the legacy `notificationsKey` cache entry in sync for optimistic updates
+  useEffect(() => {
+    queryClient.setQueryData<MessagingSnapshot>(notificationsKey, snapshot);
+  }, [snapshot, notificationsKey, queryClient]);
   const currentUser = getCurrentUserFromSnapshot(snapshot);
   const conversations = useMemo(() => buildConversationSummaries(snapshot, currentUser?.id ?? null), [snapshot, currentUser?.id]);
+
+  // Initialize virtualizer for conversations after conversations is defined
+  const conversationsVirtualizer = useVirtualizer({
+    count: conversations.length,
+    getScrollElement: () => conversationsParentRef.current,
+    estimateSize: () => 72,
+    overscan: 3,
+  });
+
+  useEffect(() => {
+    const vitems = conversationsVirtualizer.getVirtualItems();
+    if (!vitems.length) return;
+    const last = vitems[vitems.length - 1];
+    if (last.index >= conversations.length - 6) {
+      if ((messagesInfinite as any).hasNextPage && !(messagesInfinite as any).isFetchingNextPage) {
+        void (messagesInfinite as any).fetchNextPage();
+      }
+    }
+  }, [conversationsVirtualizer.getVirtualItems(), conversations.length]);
   const requestedConversationUserId = searchParams?.get("user") ?? null;
   const selectedUserId = selectedConversationUserId ?? requestedConversationUserId;
   const selectedPartner = selectedUserId ? snapshot.users.find((user) => user.id === selectedUserId) ?? null : null;
@@ -149,7 +312,7 @@ export default function Notifications() {
     };
   }, [activeConversation?.conversationKey, activeThread.messages.length, activeTab]);
 
-  const handleNotificationClick = async (notification: NotificationItem) => {
+  const handleNotificationClick = async (notification: NotificationItemType) => {
     const previousSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
 
     if (previousSnapshot) {
@@ -217,66 +380,56 @@ export default function Notifications() {
     }
   }, [activeTab]);
 
-  useEffect(() => {
-    const eventSource = new EventSource("/api/notifications/events");
+  useEventSource(
+    "/api/notifications/events",
+    {
+      "notification-created": (ev: MessageEvent) => {
+        try {
+          const payload = JSON.parse(ev.data) as { recipientId?: string; notification?: NotificationItemType };
 
-    eventSource.addEventListener("notification-created", (event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as {
-          recipientId?: string;
-          notification?: NotificationItem;
-        };
+          if (currentUser && payload.recipientId && payload.notification && payload.recipientId === currentUser.id) {
+            queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
+              if (!current) return current;
+              return appendNotificationToSnapshot(current, payload.notification as NotificationItemType);
+            });
+            return;
+          }
 
-        if (currentUser && payload.recipientId && payload.notification && payload.recipientId === currentUser.id) {
-          queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
-            if (!current) return current;
-            return appendNotificationToSnapshot(current, payload.notification as NotificationItem);
-          });
-          return;
+          void notificationsInfinite.refetch();
+        } catch (error) {
+          console.error("Failed to update notifications:", error);
         }
+      },
+    },
+    { enabled: true, onError: () => console.error("Notifications SSE error") }
+  );
 
-        void notificationsQuery.refetch();
-      } catch (error) {
-        console.error("Failed to update notifications:", error);
-      }
-    });
-
-    eventSource.addEventListener("error", () => {
-      console.error("SSE connection error");
-      eventSource.close();
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, [currentUser?.id, notificationsKey, notificationsQuery.refetch, queryClient]);
-
-  useEffect(() => {
-    const eventSource = new EventSource("/api/messages/events");
-
-    const refreshMessages = async () => {
-      try {
-        await notificationsQuery.refetch();
-        if (activeConversationPartnerId) {
-          await threadQuery.refetch();
+  useEventSource(
+    "/api/messages/events",
+    {
+      "message-created": async () => {
+          try {
+          await notificationsInfinite.refetch();
+          if (activeConversationPartnerId) {
+            await threadQuery.refetch();
+          }
+        } catch (error) {
+          console.error("Failed to update messages:", error);
         }
-      } catch (error) {
-        console.error("Failed to update messages:", error);
-      }
-    };
-
-    eventSource.addEventListener("message-created", refreshMessages);
-    eventSource.addEventListener("message-read", refreshMessages);
-
-    eventSource.addEventListener("error", () => {
-      console.error("Message SSE connection error");
-      eventSource.close();
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, [activeConversationPartnerId, notificationsQuery.refetch, threadQuery.refetch]);
+      },
+      "message-read": async () => {
+          try {
+          await notificationsInfinite.refetch();
+          if (activeConversationPartnerId) {
+            await threadQuery.refetch();
+          }
+        } catch (error) {
+          console.error("Failed to update messages:", error);
+        }
+      },
+    },
+    { enabled: true, onError: () => console.error("Messages SSE error") }
+  );
 
   useEffect(() => {
     if (activeTab !== "messages" || !currentUser || !activeConversation || activeThread.messages.length === 0) return;
@@ -457,51 +610,67 @@ export default function Notifications() {
           </TabsList>
 
           <TabsContent value="notifications">
-            <div className="space-y-2">
-              {items.map((notif, i) => {
-                const Icon = typeIcons[notif.type] || Bell;
-                return (
-                  <motion.div
-                    key={notif.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => handleNotificationClick(notif)}
-                    className={`flex items-start gap-3 rounded-lg p-4 transition-colors cursor-pointer hover:opacity-80 ${
-                      notif.read ? "bg-card" : "bg-primary/5 border border-primary/10"
-                    }`}
-                  >
-                    <div
-                      className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        notif.read ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary"
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm">
-                        <span className="font-semibold text-foreground">
-                          {notif.user.displayName}
-                        </span>{" "}
-                        <span className="text-muted-foreground">{notif.message}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1" title={formatExactDate(notif.date)}>
-                        {formatRelativeDate(notif.date)}
-                      </p>
-                    </div>
-                    {notif.user.avatar ? (
-                      <img
-                        src={notif.user.avatar}
-                        alt={notif.user.displayName}
-                        className="h-8 w-8 rounded-full bg-muted flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
+              <div className="space-y-2">
+                <div ref={notificationsParentRef} className="min-h-0 max-h-[60vh] overflow-y-auto">
+                  <div style={{ height: notificationsVirtualizer.getTotalSize(), position: "relative" }}>
+                    {notificationsVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const notif = items[virtualRow.index];
+                      return (
+                        <div key={notif.id} style={{ position: "absolute", top: virtualRow.start, left: 0, width: "100%" }}>
+                          <NotificationItem
+                            notif={notif}
+                            index={virtualRow.index}
+                            onClick={handleNotificationClick}
+                            onHover={(n: NotificationItemType) => {
+                              // Prefetch likely useful targets depending on notification type
+                              try {
+                                if (n.user?.id) {
+                                  void queryClient.prefetchQuery({
+                                    queryKey: queryKeys.profile.detail(n.user.id),
+                                    queryFn: async () => {
+                                      const res = await fetch(`/api/users/${n.user.id}`);
+                                      const json = await res.json().catch(() => null);
+                                      return json?.value ?? json;
+                                    },
+                                  });
+                                }
+
+                                if (n.movieId) {
+                                  void prefetchHelpers.scheduleMovieDetailPrefetch(queryClient, n.movieId, `notif-movie-${n.movieId}`);
+                                }
+
+                                if (n.sharedListId) {
+                                  void queryClient.prefetchQuery({
+                                    queryKey: queryKeys.sharedLists.detail(n.sharedListId),
+                                    queryFn: async () => {
+                                      const res = await fetch(`/api/shared-lists/${n.sharedListId}`);
+                                      const json = await res.json().catch(() => null);
+                                      return json?.value ?? json;
+                                    },
+                                  });
+                                }
+
+                                if (n.groupId) {
+                                  void queryClient.prefetchQuery({
+                                    queryKey: queryKeys.group.detail(n.groupId),
+                                    queryFn: async () => {
+                                      const res = await fetch(`/api/groups/${n.groupId}`);
+                                      const json = await res.json().catch(() => null);
+                                      return json?.value ?? json;
+                                    },
+                                  });
+                                }
+                              } catch (e) {
+                                // best-effort
+                              }
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
           </TabsContent>
 
           <TabsContent value="messages" className="min-h-0">
@@ -529,65 +698,33 @@ export default function Notifications() {
                   />
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  {conversations.length > 0 ? (
-                    conversations.map((conversation) => {
-                      const isActive = conversation.partner.id === activeConversation?.partner.id;
-                      const previewMessage = conversation.messages[conversation.messages.length - 1];
-
-                      return (
-                        <button
-                          key={conversation.partner.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedConversationUserId(conversation.partner.id);
-                            if (isMobile) {
-                              setMobileMessagesView("thread");
-                            }
-                          }}
-                          className={`flex w-full items-center gap-3 border-b border-border p-4 text-left transition-colors last:border-b-0 ${
-                            isActive
-                              ? "bg-primary/10"
-                              : conversation.unreadCount > 0
-                                ? "bg-primary/5 hover:bg-primary/10"
-                                : "hover:bg-secondary/60"
-                          }`}
-                        >
-                          {conversation.partner.avatar ? (
-                            <img
-                              src={conversation.partner.avatar}
-                              alt={conversation.partner.displayName}
-                              className="h-10 w-10 rounded-full bg-muted flex-shrink-0"
+                <div className="min-h-0 flex-1">
+                  <div ref={conversationsParentRef} className="min-h-0 overflow-y-auto">
+                    <div style={{ height: conversationsVirtualizer.getTotalSize(), position: "relative" }}>
+                      {conversationsVirtualizer.getVirtualItems().map((v) => {
+                        const conversation = conversations[v.index];
+                        const isActive = conversation.partner.id === activeConversation?.partner.id;
+                        return (
+                          <div key={conversation.partner.id} style={{ position: "absolute", top: v.start, left: 0, width: "100%" }}>
+                            <ConversationListItem
+                              conversation={conversation}
+                              isActive={isActive}
+                              onSelect={(id) => {
+                                setSelectedConversationUserId(id);
+                                if (isMobile) {
+                                  setMobileMessagesView("thread");
+                                }
+                              }}
+                              onHover={(id) => {
+                                const key = queryKeys.messaging.thread(id);
+                                void queryClient.prefetchQuery({ queryKey: key, queryFn: () => fetchMessageThread(id) });
+                              }}
                             />
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-                              <UserCircle2 className="h-5 w-5" />
-                            </div>
-                          )}
-
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className={`truncate text-sm ${conversation.unreadCount > 0 ? "font-semibold text-foreground" : "font-medium text-foreground/85"}`}>
-                                {conversation.partner.displayName}
-                              </p>
-                              {conversation.unreadCount > 0 && (
-                                <span className="h-5 min-w-5 rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground flex items-center justify-center">
-                                  {conversation.unreadCount}
-                                </span>
-                              )}
-                            </div>
-                            <p className={`truncate text-xs ${conversation.unreadCount > 0 ? "text-foreground/80 font-medium" : "text-muted-foreground"}`}>
-                              {previewMessage?.text || "No messages yet"}
-                            </p>
                           </div>
-                        </button>
-                      );
-                    })
-                  ) : (
-                    <div className="p-6 text-center text-sm text-muted-foreground">
-                      No direct messages yet.
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
                 </div>
                 </aside>
               )}
