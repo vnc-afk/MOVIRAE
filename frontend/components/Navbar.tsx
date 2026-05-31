@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
+import useEventSource from "@/hooks/use-event-source";
 import { SearchInput } from "./SearchInput";
 import { useQueryClient } from "@tanstack/react-query";
 import { scheduleDiscoverSeedsPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
@@ -37,50 +38,40 @@ export function Navbar() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const sessionEmail = session?.user?.email ?? null;
-  const notificationsKey = useMemo(() => queryKeys.notifications.all(sessionEmail), [sessionEmail]);
+  const _user = (session?.user as any) ?? {};
+  const sessionIdOrEmail = _user.id ?? _user.email ?? null;
+  const notificationsKey = useMemo(() => queryKeys.notifications.all(sessionIdOrEmail), [sessionIdOrEmail]);
   const notificationsQuery = usePrefetchAwareQuery<MessagingSnapshot>({
     queryKey: notificationsKey,
     queryFn: fetchMessagingSnapshot,
     enabled: true,
   });
 
-  useEffect(() => {
-    const eventSource = new EventSource("/api/notifications/events");
+  useEventSource(
+    "/api/notifications/events",
+    {
+      "notification-created": (ev) => {
+        try {
+          const payload = JSON.parse(ev.data) as { recipientId?: string; notification?: NotificationItem };
+          const currentSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
+          const currentUser = currentSnapshot ? getCurrentUserFromSnapshot(currentSnapshot) : null;
 
-    const handleNotificationCreated = (event: Event) => {
-      try {
-        const payload = JSON.parse((event as MessageEvent).data) as {
-          recipientId?: string;
-          notification?: NotificationItem;
-        };
+          if (currentSnapshot && currentUser && payload.recipientId && payload.notification && payload.recipientId === currentUser.id) {
+            queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
+              if (!current) return current;
+              return appendNotificationToSnapshot(current, payload.notification as NotificationItem);
+            });
+            return;
+          }
 
-        const currentSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
-        const currentUser = currentSnapshot ? getCurrentUserFromSnapshot(currentSnapshot) : null;
-
-        if (currentSnapshot && currentUser && payload.recipientId && payload.notification && payload.recipientId === currentUser.id) {
-          queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
-            if (!current) return current;
-            return appendNotificationToSnapshot(current, payload.notification as NotificationItem);
-          });
-          return;
+          void notificationsQuery.refetch();
+        } catch (error) {
+          console.error("Navbar notification cache update failed:", error);
         }
-
-        void notificationsQuery.refetch();
-      } catch (error) {
-        console.error("Navbar notification cache update failed:", error);
-      }
-    };
-
-    eventSource.addEventListener("notification-created", handleNotificationCreated);
-    eventSource.addEventListener("error", () => {
-      eventSource.close();
-    });
-
-    return () => {
-      eventSource.close();
-    };
-  }, [notificationsKey, notificationsQuery.refetch, queryClient, session?.user?.email]);
+      },
+    },
+    { enabled: true, onError: () => {} }
+  );
 
   const snapshot = notificationsQuery.data;
   const currentUser = snapshot ? getCurrentUserFromSnapshot(snapshot) : null;
