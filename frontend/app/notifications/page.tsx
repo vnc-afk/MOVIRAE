@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { Bell, Heart, MessageCircle, UserPlus, Users, Sparkles, Check, MessageSquare, Send, UserCircle2, ChevronLeft } from "lucide-react";
@@ -9,7 +9,6 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent }
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import useEventSource from "@/hooks/use-event-source";
-import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { queryKeys } from "@/lib/queryKeys";
@@ -75,6 +74,7 @@ function formatExactDate(value: string) {
 
 export default function Notifications() {
   const router = useRouter();
+  const pathname = usePathname();
   const [activeTab, setActiveTab] = useState("notifications");
   const [draftMessage, setDraftMessage] = useState("");
   const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -267,7 +267,7 @@ export default function Notifications() {
           lastMessageAt: "",
           conversationKey: currentUser ? [currentUser.id, selectedPartner.id].sort().join(":") : selectedPartner.id,
         }
-      : conversations[0] ?? null);
+      : null);
   const activeConversationPartnerId = activeConversation?.partner.id ?? null;
   const threadQueryKey = useMemo(
     () => queryKeys.messaging.thread(activeConversationPartnerId ?? "__idle__"),
@@ -339,6 +339,24 @@ export default function Notifications() {
     }
   };
 
+  const setConversationAndUrl = (userId: string | null) => {
+    setSelectedConversationUserId(userId);
+
+    if (userId) {
+      setActiveTab("messages");
+      router.push(`${pathname}?user=${encodeURIComponent(userId)}`);
+      if (isMobile) {
+        setMobileMessagesView("thread");
+      }
+      return;
+    }
+
+    router.push(pathname);
+    if (isMobile) {
+      setMobileMessagesView("list");
+    }
+  };
+
   useEffect(() => {
     if (!snapshot.users.length) {
       setSelectedConversationUserId(null);
@@ -346,33 +364,34 @@ export default function Notifications() {
     }
 
     if (requestedConversationUserId) {
-      setActiveTab("messages");
+      if (activeTab !== "messages") {
+        setActiveTab("messages");
+      }
     }
 
-    const selectedConversationExists = selectedConversationUserId
-      ? conversations.some((conversation) => conversation.partner.id === selectedConversationUserId)
-      : false;
-
-    if (selectedConversationExists) {
+    if (!requestedConversationUserId) {
+      if (selectedConversationUserId !== null) {
+        setSelectedConversationUserId(null);
+      }
+      if (isMobile) {
+        setMobileMessagesView("list");
+      }
       return;
     }
 
-    const requested = searchParams?.get("user");
+    const requested = requestedConversationUserId;
     if (requested && snapshot.users.some((user) => user.id === requested)) {
-      setSelectedConversationUserId(requested);
+      if (selectedConversationUserId !== requested) {
+        setSelectedConversationUserId(requested);
+      }
       if (isMobile) {
         setMobileMessagesView("thread");
       }
       return;
     }
 
-    if (conversations.length > 0) {
-      setSelectedConversationUserId(conversations[0].partner.id);
-      return;
-    }
-
     setSelectedConversationUserId(null);
-  }, [conversations, searchParams, selectedConversationUserId, snapshot.users]);
+  }, [activeTab, isMobile, requestedConversationUserId, selectedConversationUserId, snapshot.users]);
 
   useEffect(() => {
     if (activeTab !== "messages") {
@@ -689,11 +708,7 @@ export default function Notifications() {
                   <p className="text-xs text-muted-foreground mb-2">Friends</p>
                   <FriendsList
                     onMessage={(friendId) => {
-                      setActiveTab("messages");
-                      setSelectedConversationUserId(friendId);
-                      if (isMobile) {
-                        setMobileMessagesView("thread");
-                      }
+                      setConversationAndUrl(friendId);
                     }}
                   />
                 </div>
@@ -710,10 +725,7 @@ export default function Notifications() {
                               conversation={conversation}
                               isActive={isActive}
                               onSelect={(id) => {
-                                setSelectedConversationUserId(id);
-                                if (isMobile) {
-                                  setMobileMessagesView("thread");
-                                }
+                                setConversationAndUrl(id);
                               }}
                               onHover={(id) => {
                                 const key = queryKeys.messaging.thread(id);
@@ -738,8 +750,7 @@ export default function Notifications() {
                         <button
                           type="button"
                           onClick={() => {
-                            setMobileMessagesView("list");
-                            router.replace("/notifications");
+                            setConversationAndUrl(null);
                           }}
                           className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-secondary text-muted-foreground md:hidden"
                           aria-label="Back to conversations"

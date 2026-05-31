@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { Users, UserPlus, Heart } from "lucide-react";
@@ -48,6 +48,7 @@ function UserList({ title, users }: { title: string; users: UserProfile[] }) {
 
 export default function PublicProfilePage() {
   const params = useParams<{ userId: string }>();
+  const router = useRouter();
   const userId = Array.isArray(params.userId) ? params.userId[0] : params.userId;
   const { data: session } = useSession();
   const profileQuery = usePrefetchAwareQuery<PublicProfileSnapshot>({
@@ -112,7 +113,7 @@ export default function PublicProfilePage() {
               {showFollowButton ? <FollowButton userId={profile.id} initialFollowing={Boolean(profile.isFollowing)} className="w-full md:w-auto" /> : null}
               {showFollowButton ? (
                 <button
-                  onClick={() => window.location.assign(`/notifications?user=${profile.id}`)}
+                  onClick={() => router.push(`/notifications?user=${profile.id}`)}
                   className="rounded-full bg-primary/10 px-4 py-2 text-sm text-primary hover:bg-primary/20"
                 >
                   Message

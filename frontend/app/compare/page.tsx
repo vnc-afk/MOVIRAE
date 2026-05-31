@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { ArrowLeftRight, Check, X } from "lucide-react";
 import { getMovieDetails } from "@/lib/tmdb";
@@ -9,7 +10,10 @@ import type { Movie, UserProfile } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
 
 export default function CompareWatchlists() {
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const usersQuery = usePrefetchAwareQuery<UserProfile[]>({
     queryKey: queryKeys.compare.users(),
     queryFn: async () => {
@@ -22,11 +26,33 @@ export default function CompareWatchlists() {
 
   const users = usersQuery.data ?? [];
 
+  const selectedUser = selectedUserId ? users.find((user) => user.id === selectedUserId) ?? null : null;
+
   useEffect(() => {
-    if (!selectedUser && users.length > 0) {
-      setSelectedUser(users[1] ?? users[0] ?? null);
+    const requestedUserId = searchParams.get("user") ?? null;
+
+    if (requestedUserId) {
+      if (selectedUserId !== requestedUserId) {
+        setSelectedUserId(requestedUserId);
+      }
+      return;
     }
-  }, [selectedUser, users]);
+
+    if (!selectedUserId && users.length > 0) {
+      setSelectedUserId(users[1]?.id ?? users[0]?.id ?? null);
+    }
+  }, [searchParams, selectedUserId, users]);
+
+  const setSelectedUserAndUrl = (userId: string | null) => {
+    setSelectedUserId(userId);
+
+    if (userId) {
+      router.push(`${pathname}?user=${encodeURIComponent(userId)}`);
+      return;
+    }
+
+    router.push(pathname);
+  };
 
   const currentWatchlistQuery = usePrefetchAwareQuery<Movie[]>({
     queryKey: queryKeys.compare.watchlist("current"),
@@ -103,7 +129,7 @@ export default function CompareWatchlists() {
             <div className="h-14 w-14 rounded-full border-2 border-accent bg-muted" />
             <select
               value={selectedUser?.id || ""}
-              onChange={(e) => setSelectedUser(users.find((user) => user.id === e.target.value) || null)}
+              onChange={(e) => setSelectedUserAndUrl(e.target.value || null)}
               className="text-xs rounded-lg bg-secondary border border-border px-2 py-1 text-foreground outline-none"
             >
               {users.filter((user) => !users[0] || user.id !== users[0].id).map((user) => (

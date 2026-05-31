@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { queryKeys } from "@/lib/queryKeys";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
@@ -49,8 +50,52 @@ const defaultFilters: FilterState = {
   sortBy: "rating",
 };
 
+function readFiltersFromSearchParams(searchParams: { get: (key: string) => string | null }) {
+  const query = searchParams.get("q") ?? "";
+  const genreId = searchParams.get("genre") ?? "";
+  const minRuntime = Number(searchParams.get("min") ?? defaultFilters.runtimeRange[0]);
+  const maxRuntime = Number(searchParams.get("max") ?? defaultFilters.runtimeRange[1]);
+  const sortBy = searchParams.get("sort");
+
+  return {
+    query,
+    genreId,
+    runtimeRange: [
+      Number.isFinite(minRuntime) ? minRuntime : defaultFilters.runtimeRange[0],
+      Number.isFinite(maxRuntime) ? maxRuntime : defaultFilters.runtimeRange[1],
+    ] as [number, number],
+    sortBy: sortBy === "year" || sortBy === "title" || sortBy === "runtime" ? sortBy : "rating",
+  } satisfies FilterState;
+}
+
+function buildFiltersUrl(pathname: string, filters: FilterState) {
+  const params = new URLSearchParams();
+
+  if (filters.query.trim()) params.set("q", filters.query.trim());
+  if (filters.genreId) params.set("genre", filters.genreId);
+  if (filters.runtimeRange[0] > defaultFilters.runtimeRange[0]) params.set("min", String(filters.runtimeRange[0]));
+  if (filters.runtimeRange[1] < defaultFilters.runtimeRange[1]) params.set("max", String(filters.runtimeRange[1]));
+  if (filters.sortBy !== defaultFilters.sortBy) params.set("sort", filters.sortBy);
+
+  const search = params.toString();
+  return search ? `${pathname}?${search}` : pathname;
+}
+
+function filtersEqual(left: FilterState, right: FilterState) {
+  return (
+    left.query === right.query &&
+    left.genreId === right.genreId &&
+    left.sortBy === right.sortBy &&
+    left.runtimeRange[0] === right.runtimeRange[0] &&
+    left.runtimeRange[1] === right.runtimeRange[1]
+  );
+}
+
 export default function Discover() {
-  const [filters, setFilters] = useState<FilterState>(defaultFilters);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<FilterState>(() => readFiltersFromSearchParams(searchParams));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [showSavePreset, setShowSavePreset] = useState(false);
@@ -60,8 +105,18 @@ export default function Discover() {
   const toggleArr = <T extends string>(arr: T[], val: T): T[] =>
     arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val];
 
-  const update = <K extends keyof FilterState>(key: K, val: FilterState[K]) =>
-    setFilters((current) => ({ ...current, [key]: val }));
+  useEffect(() => {
+    const nextFilters = readFiltersFromSearchParams(searchParams);
+    setFilters((current) => (filtersEqual(current, nextFilters) ? current : nextFilters));
+  }, [searchParams]);
+
+  const update = <K extends keyof FilterState>(key: K, val: FilterState[K]) => {
+    setFilters((current) => {
+      const nextFilters = { ...current, [key]: val };
+      router.replace(buildFiltersUrl(pathname, nextFilters), { scroll: false });
+      return nextFilters;
+    });
+  };
 
   useEffect(() => {
     async function loadGenres() {
@@ -143,11 +198,14 @@ export default function Discover() {
   const activeCount = (filters.genreId ? 1 : 0) + (filters.runtimeRange[0] > 0 || filters.runtimeRange[1] < 200 ? 1 : 0);
 
   const applyPreset = (preset: FilterPreset) => {
-    setFilters({
+    const nextFilters: FilterState = {
       ...defaultFilters,
       genreId: preset.filters.genreId || "",
       runtimeRange: [preset.filters.minRuntime || 0, preset.filters.maxRuntime || 200],
-    });
+    };
+
+    setFilters(nextFilters);
+    router.replace(buildFiltersUrl(pathname, nextFilters), { scroll: false });
   };
 
   const resetAndLoad = useCallback(() => {
@@ -430,7 +488,10 @@ export default function Discover() {
           <div className="flex items-center gap-2">
             {activeCount > 0 && (
               <button
-                onClick={() => setFilters(defaultFilters)}
+                onClick={() => {
+                  setFilters(defaultFilters);
+                  router.replace(pathname, { scroll: false });
+                }}
                 className="flex items-center gap-1 text-xs text-destructive hover:underline"
               >
                 <X className="h-3 w-3" /> Clear {activeCount} filters

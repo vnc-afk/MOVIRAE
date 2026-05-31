@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { format, formatDistanceToNowStrict } from "date-fns";
@@ -86,6 +87,7 @@ export default function GroupDetail() {
   const params = useParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
   const queryClient = useQueryClient();
   const [group, setGroup] = useState<GroupRecord | null>(null);
@@ -109,6 +111,10 @@ export default function GroupDetail() {
   const [movieSearch, setMovieSearch] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get("tab");
+    return tab === "watchlist" || tab === "members" || tab === "events" ? tab : "discussions";
+  });
 
   const loadGroup = async (showLoadingState = false) => {
     if (showLoadingState) {
@@ -142,6 +148,17 @@ export default function GroupDetail() {
     setJoined(Boolean(nextGroup?.joined));
     setLoadState(nextGroup ? "ready" : "not-found");
     return nextGroup;
+  };
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const nextTab = tab === "watchlist" || tab === "members" || tab === "events" ? tab : "discussions";
+    setActiveTab(nextTab);
+  }, [searchParams]);
+
+  const setTabAndUrl = (tab: string) => {
+    setActiveTab(tab);
+    router.push(tab === "discussions" ? `/groups/${id}` : `/groups/${id}?tab=${encodeURIComponent(tab)}`);
   };
 
   function makeTempId(prefix = "temp") {
@@ -798,7 +815,7 @@ export default function GroupDetail() {
       </div>
 
       <div className="container py-8">
-        <Tabs defaultValue="discussions" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setTabAndUrl} className="space-y-6">
           <TabsList>
             <TabsTrigger value="discussions"><MessageCircle className="h-4 w-4 mr-1.5" /> Discussions</TabsTrigger>
             <TabsTrigger value="watchlist"><Film className="h-4 w-4 mr-1.5" /> Shared Watchlist</TabsTrigger>

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
 import { searchMovies } from "@/lib/tmdb";
@@ -33,6 +34,8 @@ const EMPTY_SHARED_LISTS_SNAPSHOT: SharedListsSnapshot = {
 
 export default function SharedListsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -105,15 +108,29 @@ export default function SharedListsPage() {
 
   const selectedList = useMemo(() => lists.find((list) => list.id === selectedListId) ?? null, [lists, selectedListId]);
 
+  const setSelectedListAndUrl = (listId: string | null) => {
+    setSelectedListId(listId);
+    if (listId) {
+      router.push(`${pathname}?listId=${encodeURIComponent(listId)}`);
+      return;
+    }
+
+    router.push(pathname);
+  };
+
   useEffect(() => {
     const listIdFromQuery = searchParams.get("listId");
     if (!listIdFromQuery) {
+      setSelectedListId(null);
       return;
     }
 
     if (lists.some((list) => list.id === listIdFromQuery)) {
       setSelectedListId(listIdFromQuery);
+      return;
     }
+
+    setSelectedListId(null);
   }, [lists, searchParams]);
 
   const parseResponsePayload = async (response: Response) => {
@@ -724,7 +741,7 @@ export default function SharedListsPage() {
       setNewGroupId={setNewGroupId}
       createList={createList}
       selectedListId={selectedListId}
-      setSelectedListId={setSelectedListId}
+      setSelectedListId={setSelectedListAndUrl}
       newCommentByList={newCommentByList}
       setNewCommentByList={setNewCommentByList}
       replyDrafts={replyDrafts}
