@@ -76,9 +76,10 @@ export function buildConversationSummaries(snapshot: MessagingSnapshot, currentU
 }
 
 export async function fetchMessagingSnapshot(): Promise<MessagingSnapshot> {
+  const PAGE_LIMIT = 50;
   const [notificationsResponse, messagesResponse, usersResponse, sessionResponse] = await Promise.all([
-    fetch("/api/data/user-notifications").then((response) => response.json()),
-    fetch("/api/data/user-messages").then((response) => response.json()),
+    fetch(`/api/data/user-notifications?limit=${PAGE_LIMIT}&offset=0`).then((response) => response.json()),
+    fetch(`/api/data/user-messages?limit=${PAGE_LIMIT}&offset=0`).then((response) => response.json()),
     fetch("/api/users").then((response) => response.json()),
     fetch("/api/auth/session").then((response) => response.json()),
   ]);
