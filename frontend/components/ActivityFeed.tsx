@@ -24,6 +24,33 @@ interface ActivityFeedProps {
 }
 
 export function ActivityFeed({ activities }: ActivityFeedProps) {
+  function formatRelativeDate(dateStr: string) {
+    try {
+      const d = new Date(dateStr);
+      if (Number.isNaN(d.getTime())) return dateStr;
+      const now = Date.now();
+      const diff = Math.round((d.getTime() - now));
+
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+      const seconds = Math.round(diff / 1000);
+      const minutes = Math.round(diff / 60000);
+      const hours = Math.round(diff / 3600000);
+      const days = Math.round(diff / 86400000);
+      const months = Math.round(diff / 2629800000);
+      const years = Math.round(diff / 31557600000);
+
+      if (Math.abs(seconds) < 45) return "just now";
+      if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+      if (Math.abs(hours) < 24) return rtf.format(hours, "hour");
+      if (Math.abs(days) < 30) return rtf.format(days, "day");
+      if (Math.abs(months) < 12) return rtf.format(months, "month");
+      return rtf.format(years, "year");
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
   return (
     <div className="space-y-4 pb-6">
       {activities.map((item) => {
@@ -70,7 +97,7 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
               )}
               <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Icon className="h-3 w-3" />
-                <span>{item.date}</span>
+                <span>{formatRelativeDate(item.date)}</span>
               </div>
             </div>
             {item.movie.poster ? (
