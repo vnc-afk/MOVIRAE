@@ -235,11 +235,11 @@ export default function Groups() {
 
                   <div className="flex items-center mt-4">
                     <div className="flex -space-x-2">
-                      {group.members.slice(0, 3).map((member) => (
+                      {group.members.slice(0, 3).map((member, index) => (
                         member.avatar ? (
-                          <img key={member.id} src={member.avatar} alt={member.displayName} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
+                          <img key={`${member.id}-${index}`} src={member.avatar} alt={member.displayName} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
                         ) : (
-                          <div key={member.id} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
+                          <div key={`${member.id}-${index}`} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
                         )
                       ))}
                     </div>
@@ -248,11 +248,11 @@ export default function Groups() {
 
                   {group.sharedList.length > 0 && (
                     <div className="flex gap-2 mt-4">
-                      {group.sharedList.slice(0, 3).map((movie) => (
+                      {group.sharedList.slice(0, 3).map((movie, index) => (
                         movie.poster ? (
-                          <img key={movie.id} src={movie.poster} alt={movie.title} className="h-16 w-11 rounded object-cover poster-shadow" />
+                          <img key={`${movie.id}-${index}`} src={movie.poster} alt={movie.title} className="h-16 w-11 rounded object-cover poster-shadow" />
                         ) : (
-                          <div key={movie.id} className="h-16 w-11 rounded bg-muted poster-shadow" />
+                          <div key={`${movie.id}-${index}`} className="h-16 w-11 rounded bg-muted poster-shadow" />
                         )
                       ))}
                     </div>
