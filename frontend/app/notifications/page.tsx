@@ -79,7 +79,7 @@ export default function Notifications() {
   const { data: session } = useSession();
   const isMobile = useIsMobile();
   const sessionEmail = session?.user?.email ?? null;
-  const notificationsKey = queryKeys.notifications.all(sessionEmail);
+  const notificationsKey = useMemo(() => queryKeys.notifications.all(sessionEmail), [sessionEmail]);
 
   const notificationsQuery = usePrefetchAwareQuery<MessagingSnapshot>({
     queryKey: notificationsKey,
@@ -106,7 +106,10 @@ export default function Notifications() {
         }
       : conversations[0] ?? null);
   const activeConversationPartnerId = activeConversation?.partner.id ?? null;
-  const threadQueryKey = queryKeys.messaging.thread(activeConversationPartnerId ?? "__idle__");
+  const threadQueryKey = useMemo(
+    () => queryKeys.messaging.thread(activeConversationPartnerId ?? "__idle__"),
+    [activeConversationPartnerId]
+  );
   const threadQuery = usePrefetchAwareQuery<MessageThreadSnapshot>({
     queryKey: threadQueryKey,
     queryFn: async () => fetchMessageThread(activeConversationPartnerId as string),
@@ -246,7 +249,7 @@ export default function Notifications() {
     return () => {
       eventSource.close();
     };
-  }, [currentUser, notificationsKey, notificationsQuery, queryClient]);
+  }, [currentUser?.id, notificationsKey, notificationsQuery.refetch, queryClient]);
 
   useEffect(() => {
     const eventSource = new EventSource("/api/messages/events");
@@ -273,7 +276,7 @@ export default function Notifications() {
     return () => {
       eventSource.close();
     };
-  }, [notificationsQuery, threadQuery, activeConversationPartnerId]);
+  }, [activeConversationPartnerId, notificationsQuery.refetch, threadQuery.refetch]);
 
   useEffect(() => {
     if (activeTab !== "messages" || !currentUser || !activeConversation || activeThread.messages.length === 0) return;
@@ -486,11 +489,15 @@ export default function Notifications() {
                         {formatRelativeDate(notif.date)}
                       </p>
                     </div>
-                    <img
-                      src={notif.user.avatar}
-                      alt=""
-                      className="h-8 w-8 rounded-full bg-muted flex-shrink-0"
-                    />
+                    {notif.user.avatar ? (
+                      <img
+                        src={notif.user.avatar}
+                        alt={notif.user.displayName}
+                        className="h-8 w-8 rounded-full bg-muted flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
+                    )}
                   </motion.div>
                 );
               })}
