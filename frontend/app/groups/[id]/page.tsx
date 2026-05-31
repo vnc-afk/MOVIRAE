@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -74,6 +74,26 @@ interface Discussion {
 type GroupRecord = Group & { discussions?: Discussion[]; joined?: boolean };
 type LoadState = "loading" | "ready" | "not-found" | "error";
 type GroupDetailResponse = { value?: GroupRecord | null; currentUser?: UserProfile | null };
+type GroupEventRecord = {
+  id: string;
+  title: string;
+  description?: string | null;
+  startDate: string;
+  startTime: string;
+  location?: string | null;
+  creator?: { id: string; displayName?: string | null; username?: string | null; avatar?: string | null } | null;
+  attendees?: Array<{ user?: { id: string; displayName?: string | null; username?: string | null; avatar?: string | null } | null; rsvpStatus?: string }>;
+  opId?: string;
+  tempId?: string;
+};
+
+function sortEventsByDate(events: GroupEventRecord[]) {
+  return [...events].sort((a, b) => {
+    const aDate = new Date(`${a.startDate}T${a.startTime || "00:00"}`).getTime();
+    const bDate = new Date(`${b.startDate}T${b.startTime || "00:00"}`).getTime();
+    return aDate - bDate;
+  });
+}
 
 function formatDiscussionDate(date: string) {
   const parsedDate = new Date(date);
@@ -88,13 +108,14 @@ export default function GroupDetail() {
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
+  const { isInFlight, addInFlightOp, removeInFlightOp, getInFlightByItemId } = useOptimisticOps();
   const queryClient = useQueryClient();
   const [group, setGroup] = useState<GroupRecord | null>(null);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [joined, setJoined] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newBody, setNewBody] = useState("");
+  const [discussionSort, setDiscussionSort] = useState<"latest" | "popular" | "oldest">("latest");
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [loadState, setLoadState] = useState<LoadState>("loading");
@@ -106,7 +127,7 @@ export default function GroupDetail() {
   const [eventTime, setEventTime] = useState("");
   const [eventLocation, setEventLocation] = useState("");
   const [eventDescription, setEventDescription] = useState("");
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<GroupEventRecord[]>([]);
   const [addMovieOpen, setAddMovieOpen] = useState(false);
   const [movieSearch, setMovieSearch] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -189,8 +210,9 @@ export default function GroupDetail() {
         const eventsResponse = await fetch(`/api/groups/${id}/events?data=1`, { cache: "no-store" });
         if (eventsResponse.ok && isActive) {
           const eventsPayload = await eventsResponse.json();
-          const newEvents = Array.isArray(eventsPayload.value) ? eventsPayload.value : [];
+          const newEvents = Array.isArray(eventsPayload.value) ? sortEventsByDate(eventsPayload.value as GroupEventRecord[]) : [];
           setEvents(newEvents);
+          queryClient.setQueryData(queryKeys.group.events(id), newEvents);
         }
       } catch (error) {
         console.error("Failed to load group detail:", error);
@@ -287,24 +309,40 @@ export default function GroupDetail() {
         }
 
         if (serverEvent) {
-          const nextEvent = serverEvent as any;
+          const nextEvent = serverEvent as GroupEventRecord;
           setEvents((prev) => {
             if (action === "deleted") {
               const targetId = typeof nextEvent.id === "string" ? nextEvent.id : serverEventId;
-              return prev.filter((event) => event.id !== targetId);
+              const next = prev.filter((event) => event.id !== targetId);
+              queryClient.setQueryData(queryKeys.group.events(id), next);
+              return next;
             }
 
-            const nextEvents = prev.map((event) => (event.id === nextEvent.id ? nextEvent : event));
+            const tempMatchId = incomingOpId
+              ? prev.find((event) => event.opId === incomingOpId || event.tempId === incomingOpId)?.id
+              : undefined;
+            const nextEvents = prev.map((event) => {
+              if (event.id === nextEvent.id) return nextEvent;
+              if (tempMatchId && event.id === tempMatchId) return nextEvent;
+              if (incomingOpId && (event.opId === incomingOpId || event.tempId === incomingOpId)) return nextEvent;
+              return event;
+            });
             if (!nextEvents.some((event) => event.id === nextEvent.id)) {
-              return [nextEvent, ...prev];
+              nextEvents.unshift(nextEvent);
             }
-            return nextEvents;
+            const sorted = sortEventsByDate(nextEvents);
+            queryClient.setQueryData(queryKeys.group.events(id), sorted);
+            return sorted;
           });
           return;
         }
 
         if (action === "deleted" && serverEventId) {
-          setEvents((prev) => prev.filter((event) => event.id !== serverEventId));
+          setEvents((prev) => {
+            const next = prev.filter((event) => event.id !== serverEventId);
+            queryClient.setQueryData(queryKeys.group.events(id), next);
+            return next;
+          });
           return;
         }
 
@@ -358,6 +396,24 @@ export default function GroupDetail() {
     return () => clearTimeout(timer);
   }, [movieSearch, handleSearchMovies]);
 
+  const discussions = group?.discussions ?? [];
+  const sortedDiscussions = useMemo(() => {
+    const items = [...discussions];
+
+    switch (discussionSort) {
+      case "popular":
+        return items.sort((a, b) => {
+          if (b.likes !== a.likes) return b.likes - a.likes;
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        });
+      case "oldest":
+        return items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      case "latest":
+      default:
+        return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+  }, [discussions, discussionSort]);
+
   if (loadState === "loading") {
     return (
       <div className="container py-20 text-center">
@@ -383,8 +439,6 @@ export default function GroupDetail() {
       </div>
     );
   }
-
-  const discussions = group.discussions ?? [];
 
   const refreshGroupFromResponse = async (response: Response) => {
     const payload = await response.json();
@@ -689,23 +743,74 @@ export default function GroupDetail() {
       return;
     }
 
+    const opId = generateOpId();
+    const tempId = makeOptimisticTempId("event");
+    const optimisticEvent: GroupEventRecord = {
+      id: tempId,
+      tempId,
+      opId,
+      title: eventTitle.trim(),
+      description: eventDescription.trim() || null,
+      startDate: eventDate,
+      startTime: eventTime,
+      location: eventLocation.trim() || null,
+      creator: currentUser
+        ? {
+            id: currentUser.id,
+            displayName: currentUser.displayName,
+            username: currentUser.username,
+            avatar: currentUser.avatar,
+          }
+        : null,
+      attendees: [],
+    };
+
+    setActiveTab("events");
+    router.push(`/groups/${id}?tab=events`);
+    setEvents((prev) => {
+      const next = sortEventsByDate([optimisticEvent, ...prev.filter((event) => event.id !== optimisticEvent.id)]);
+      queryClient.setQueryData(queryKeys.group.events(id), next);
+      return next;
+    });
+
     try {
-      const response = await fetch(`/api/groups/${id}/events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: eventTitle,
+      const body = attachOpToBody(
+        {
+          title: eventTitle.trim(),
           description: eventDescription,
           startDate: eventDate,
           startTime: eventTime,
           location: eventLocation,
-        }),
+        },
+        { opId, type: "create", tempId, ts: Date.now() }
+      );
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, { opId, type: "create", tempId, ts: Date.now() });
+
+      const response = await fetch(`/api/groups/${id}/events`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
+        setEvents((prev) => {
+          const next = prev.filter((event) => event.id !== tempId);
+          queryClient.setQueryData(queryKeys.group.events(id), next);
+          return next;
+        });
         toast.error(errorPayload?.error || "Could not create event.");
         return;
+      }
+
+      const createdEvent = await response.json().catch(() => null);
+      if (createdEvent?.id) {
+        setEvents((prev) => {
+          const nextEvents = prev.map((event) => (event.id === tempId || event.opId === opId ? { ...createdEvent, opId, tempId } : event));
+          const next = sortEventsByDate(nextEvents as GroupEventRecord[]);
+          queryClient.setQueryData(queryKeys.group.events(id), next);
+          return next;
+        });
       }
 
       setEventTitle("");
@@ -716,45 +821,198 @@ export default function GroupDetail() {
       setCreateEventOpen(false);
       toast.success("Event created!");
     } catch (error) {
+      setEvents((prev) => {
+        const next = prev.filter((event) => event.id !== tempId);
+        queryClient.setQueryData(queryKeys.group.events(id), next);
+        return next;
+      });
       toast.error("Failed to create event.");
     }
   };
 
   const handleRemoveMovie = async (movieId: string) => {
+    if (!group) return;
+
+    const opId = generateOpId();
+    const previousGroup = group;
+    const nextSharedList = group.sharedList.filter((movie) => movie.id !== movieId);
+    const nextGroup = { ...group, sharedList: nextSharedList };
+
+    setGroup(nextGroup);
+    queryClient.setQueryData(queryKeys.group.detail(id), nextGroup);
+    applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: { groups: GroupRecord[]; currentUser: UserProfile | null } | undefined) => {
+      if (!current) return current;
+      return {
+        ...current,
+        groups: current.groups.map((item) =>
+          item.id === id ? { ...item, sharedList: nextSharedList } : item
+        ),
+      };
+    });
+    addInFlightOp(opId, {
+      opId,
+      type: "delete",
+      itemId: movieId,
+      surface: "group",
+      payload: { tmdbId: movieId },
+    });
+
     try {
+      const body = attachOpToBody({ tmdbId: movieId }, { opId, type: "delete", tempId: movieId, ts: Date.now() });
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, { opId, type: "delete", tempId: movieId, ts: Date.now() });
+
       const response = await fetch(`/api/groups/${id}/movies/${movieId}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
-        toast.error("Could not remove movie.");
+        setGroup(previousGroup);
+        queryClient.setQueryData(queryKeys.group.detail(id), previousGroup);
+        applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: { groups: GroupRecord[]; currentUser: UserProfile | null } | undefined) => {
+          if (!current) return current;
+          return {
+            ...current,
+            groups: current.groups.map((item) =>
+              item.id === id ? previousGroup : item
+            ),
+          };
+        });
+        const errorPayload = await response.json().catch(() => null);
+        toast.error(errorPayload?.error || "Could not remove movie.");
         return;
       }
 
       toast.success("Movie removed from shared list.");
     } catch (error) {
+      setGroup(previousGroup);
+      queryClient.setQueryData(queryKeys.group.detail(id), previousGroup);
+      applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: { groups: GroupRecord[]; currentUser: UserProfile | null } | undefined) => {
+        if (!current) return current;
+        return {
+          ...current,
+          groups: current.groups.map((item) =>
+            item.id === id ? previousGroup : item
+          ),
+        };
+      });
       toast.error("Failed to remove movie.");
+    } finally {
+      removeInFlightOp(opId);
     }
   };
 
-  const handleAddMovie = async (tmdbId: string) => {
+  const handleAddMovie = async (movie: Movie) => {
+    const tmdbId = movie.id;
+    const opId = generateOpId();
+    const previousGroup = group;
+    const optimisticMovie: Movie = {
+      id: movie.id,
+      title: movie.title,
+      year: movie.year,
+      rating: movie.rating,
+      genre: movie.genre,
+      poster: movie.poster,
+      synopsis: movie.synopsis,
+      director: movie.director,
+      cast: movie.cast,
+      reviews: movie.reviews,
+      tags: movie.tags,
+      streamingOn: movie.streamingOn,
+      runtime: movie.runtime,
+      language: movie.language,
+      country: movie.country,
+      moods: movie.moods,
+    };
+
+    const nextSharedList = [optimisticMovie, ...(group?.sharedList ?? []).filter((item) => item.id !== tmdbId)];
+    const nextGroup = group ? { ...group, sharedList: nextSharedList } : group;
+
+    setGroup(nextGroup);
+    queryClient.setQueryData(queryKeys.group.detail(id), nextGroup);
+    applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: { groups: GroupRecord[]; currentUser: UserProfile | null } | undefined) => {
+      if (!current) return current;
+      return {
+        ...current,
+        groups: current.groups.map((item) =>
+          item.id === id ? { ...item, sharedList: nextSharedList } : item
+        ),
+      };
+    });
+    addInFlightOp(opId, {
+      opId,
+      type: "create",
+      itemId: tmdbId,
+      surface: "group",
+      payload: { tmdbId },
+    });
+
     try {
+      const body = attachOpToBody({
+        tmdbId,
+        metadata: movie,
+      }, { opId, type: "create", tempId: tmdbId, ts: Date.now() });
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, { opId, type: "create", tempId: tmdbId, ts: Date.now() });
+
       const response = await fetch(`/api/groups/${id}/movies`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tmdbId }),
+        headers,
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
-        toast.error("Could not add movie.");
+        setGroup(previousGroup);
+        queryClient.setQueryData(queryKeys.group.detail(id), previousGroup);
+        applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: { groups: GroupRecord[]; currentUser: UserProfile | null } | undefined) => {
+          if (!current || !previousGroup) return current;
+          return {
+            ...current,
+            groups: current.groups.map((item) =>
+              item.id === id ? previousGroup : item
+            ),
+          };
+        });
+        const errorPayload = await response.json().catch(() => null);
+        toast.error(errorPayload?.error || "Could not add movie.");
         return;
+      }
+
+      const savedMovie = await response.json().catch(() => null);
+      if (savedMovie?.tmdbId) {
+        const confirmedMovie = optimisticMovie;
+        const confirmedSharedList = [confirmedMovie, ...(previousGroup?.sharedList ?? []).filter((item) => item.id !== tmdbId)];
+        const confirmedGroup = previousGroup ? { ...previousGroup, sharedList: confirmedSharedList } : previousGroup;
+        setGroup(confirmedGroup);
+        queryClient.setQueryData(queryKeys.group.detail(id), confirmedGroup);
+        applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: { groups: GroupRecord[]; currentUser: UserProfile | null } | undefined) => {
+          if (!current || !confirmedGroup) return current;
+          return {
+            ...current,
+            groups: current.groups.map((item) =>
+              item.id === id ? confirmedGroup : item
+            ),
+          };
+        });
       }
 
       toast.success("Movie added to shared watchlist!");
       setAddMovieOpen(false);
     } catch (error) {
+      setGroup(previousGroup);
+      queryClient.setQueryData(queryKeys.group.detail(id), previousGroup);
+      applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: { groups: GroupRecord[]; currentUser: UserProfile | null } | undefined) => {
+        if (!current || !previousGroup) return current;
+        return {
+          ...current,
+          groups: current.groups.map((item) =>
+            item.id === id ? previousGroup : item
+          ),
+        };
+      });
       toast.error("Failed to add movie.");
+    } finally {
+      removeInFlightOp(opId);
     }
   };
 
@@ -764,21 +1022,117 @@ export default function GroupDetail() {
       return;
     }
 
+    const opId = generateOpId();
+    const previousEvents = events;
+    const nextEvents = events.map((event) => {
+      if (event.id !== eventId) return event;
+
+      const existingAttendees = event.attendees ?? [];
+      const nextAttendees = existingAttendees.filter((attendee) => attendee.user?.id !== currentUser.id);
+
+      if (rsvpStatus !== "pending") {
+        nextAttendees.push({
+          user: {
+            id: currentUser.id,
+            displayName: currentUser.displayName,
+            username: currentUser.username,
+            avatar: currentUser.avatar,
+          },
+          rsvpStatus,
+        });
+      }
+
+      return { ...event, attendees: nextAttendees };
+    });
+
+    setEvents(nextEvents);
+    queryClient.setQueryData(queryKeys.group.events(id), nextEvents);
+    addInFlightOp(opId, {
+      opId,
+      type: "update",
+      itemId: eventId,
+      surface: "group",
+      payload: { rsvpStatus },
+    });
+
     try {
+      const body = attachOpToBody({ rsvpStatus }, { opId, type: "update", tempId: eventId, ts: Date.now() });
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, { opId, type: "update", tempId: eventId, ts: Date.now() });
+
       const response = await fetch(`/api/groups/${id}/events/${eventId}/rsvp`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rsvpStatus }),
+        headers,
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => null);
+        setEvents(previousEvents);
+        queryClient.setQueryData(queryKeys.group.events(id), previousEvents);
         toast.error(errorPayload?.error || "Could not update RSVP.");
         return;
       }
+
+      const updatedEvent = await response.json().catch(() => null);
+      if (updatedEvent?.id) {
+        setEvents((currentEvents) => {
+          const next = currentEvents.map((event) => (event.id === updatedEvent.id ? updatedEvent : event));
+          queryClient.setQueryData(queryKeys.group.events(id), next);
+          return next;
+        });
+      }
       toast.success(rsvpStatus === "pending" ? "RSVP cleared." : `Marked as ${rsvpStatus}.`);
     } catch (error) {
+      setEvents(previousEvents);
+      queryClient.setQueryData(queryKeys.group.events(id), previousEvents);
       toast.error("Failed to update RSVP.");
+    }
+    finally {
+      removeInFlightOp(opId);
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    const eventToDelete = events.find((event) => event.id === eventId);
+    if (!eventToDelete) {
+      return;
+    }
+
+    const confirmed = window.confirm("Delete this event?");
+    if (!confirmed) {
+      return;
+    }
+
+    const opId = generateOpId();
+    const previousEvents = events;
+    const nextEvents = events.filter((event) => event.id !== eventId);
+
+    setEvents(nextEvents);
+    queryClient.setQueryData(queryKeys.group.events(id), nextEvents);
+
+    try {
+      const body = attachOpToBody({}, { opId, type: "delete", tempId: eventId, ts: Date.now() });
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, { opId, type: "delete", tempId: eventId, ts: Date.now() });
+
+      const response = await fetch(`/api/groups/${id}/events/${eventId}`, {
+        method: "DELETE",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        setEvents(previousEvents);
+        queryClient.setQueryData(queryKeys.group.events(id), previousEvents);
+        toast.error(errorPayload?.error || "Could not delete event.");
+        return;
+      }
+
+      toast.success("Event deleted.");
+    } catch (error) {
+      setEvents(previousEvents);
+      queryClient.setQueryData(queryKeys.group.events(id), previousEvents);
+      toast.error("Failed to delete event.");
     }
   };
 
@@ -824,6 +1178,39 @@ export default function GroupDetail() {
           </TabsList>
 
           <TabsContent value="discussions" className="space-y-6">
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-card p-3 card-shadow">
+              <p className="text-xs text-muted-foreground">Sort discussions</p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={discussionSort === "latest" ? "default" : "secondary"}
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setDiscussionSort("latest")}
+                >
+                  Latest
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={discussionSort === "popular" ? "default" : "secondary"}
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setDiscussionSort("popular")}
+                >
+                  Popular
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={discussionSort === "oldest" ? "default" : "secondary"}
+                  className="h-7 px-3 text-xs"
+                  onClick={() => setDiscussionSort("oldest")}
+                >
+                  Oldest
+                </Button>
+              </div>
+            </div>
+
             <div className="rounded-xl bg-card p-5 card-shadow space-y-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
@@ -839,11 +1226,12 @@ export default function GroupDetail() {
             </div>
 
             <div className="space-y-3">
-              {discussions.length === 0 ? (
+              {sortedDiscussions.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No discussions yet.</div>
-              ) : discussions.map((discussion, index) => {
+              ) : sortedDiscussions.map((discussion, index) => {
                 const movie = discussion.movieId ? movieLookup.get(discussion.movieId) ?? null : null;
                 const isLiked = Boolean(discussion.likedByMe);
+                const likeInFlight = Boolean(isInFlight(`group-like-${discussion.id}`));
                 return (
                   <motion.div key={discussion.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05 }} className="rounded-xl bg-card p-5 card-shadow hover:card-shadow-hover transition-shadow">
                     <div className="flex items-start gap-3">
@@ -873,11 +1261,19 @@ export default function GroupDetail() {
                         <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                           <button
                             onClick={() => toggleLike(discussion.id)}
-                            disabled={Boolean(isInFlight(`group-like-${discussion.id}`))}
-                            aria-busy={Boolean(isInFlight(`group-like-${discussion.id}`))}
-                            className="flex items-center gap-1 hover:text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={likeInFlight}
+                            aria-busy={likeInFlight}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                              isLiked
+                                ? "border-primary/40 bg-primary/10 text-primary"
+                                : "border-border text-muted-foreground hover:text-foreground"
+                            } ${likeInFlight ? "border-primary/40 bg-primary/10 text-primary" : ""}`}
                           >
-                            {isInFlight(`group-like-${discussion.id}`) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className={`h-3.5 w-3.5 ${isLiked ? "fill-primary text-primary" : ""}`} />}
+                            {likeInFlight ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Heart className={`h-3.5 w-3.5 ${isLiked ? "fill-primary text-primary" : ""}`} />
+                            )}
                             {discussion.likes}
                           </button>
                           <button
@@ -987,6 +1383,7 @@ export default function GroupDetail() {
                             const alreadyAdded = group.sharedList.some(
                               (m) => m.id === movie.id
                             );
+                            const isAdding = getInFlightByItemId(movie.id).some((op) => op.surface === "group" && op.type === "create");
                             return (
                               <motion.div
                                 key={movie.id}
@@ -1016,10 +1413,10 @@ export default function GroupDetail() {
                                   size="sm"
                                   variant={alreadyAdded ? "secondary" : "default"}
                                   className="h-7 px-2 text-[10px]"
-                                  onClick={() => handleAddMovie(movie.id)}
-                                  disabled={alreadyAdded}
+                                  onClick={() => handleAddMovie(movie)}
+                                  disabled={alreadyAdded || isAdding}
                                 >
-                                  {alreadyAdded ? "Added" : "Add"}
+                                  {alreadyAdded ? "Added" : isAdding ? "Adding..." : "Add"}
                                 </Button>
                               </motion.div>
                             );
@@ -1060,13 +1457,19 @@ export default function GroupDetail() {
                       </p>
                       <p className="text-[10px] text-muted-foreground">{m.year}</p>
                     </MoviePrefetchLink>
+                    {(() => {
+                      const isRemoving = getInFlightByItemId(m.id).some((op) => op.surface === "group" && op.type === "delete");
+                      return (
                     <button
                       onClick={() => handleRemoveMovie(m.id)}
-                      className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-background/90 text-muted-foreground hover:text-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      disabled={isRemoving}
+                      className={`absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-background/90 text-muted-foreground hover:text-foreground flex items-center justify-center transition-opacity disabled:cursor-not-allowed ${isRemoving ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                       title="Remove from list"
                     >
-                      <X className="h-3 w-3" />
+                      {isRemoving ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
                     </button>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -1213,12 +1616,17 @@ export default function GroupDetail() {
             ) : (
               <div className="space-y-3">
                 {events.map((e: any, index: number) => (
+                  (() => {
+                    const rsvpInFlight = getInFlightByItemId(e.id).some((op) => op.surface === "group" && op.type === "update");
+                    const attendeeCount = e.attendees?.filter((a: any) => a.rsvpStatus === "yes" || a.rsvpStatus === "maybe").length ?? 0;
+
+                    return (
                   <motion.div
                     key={e.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
-                    className="flex items-start gap-4 rounded-xl bg-card p-4 card-shadow"
+                    className={`flex items-start gap-4 rounded-xl bg-card p-4 card-shadow transition-all ${rsvpInFlight ? "ring-2 ring-primary/20 bg-primary/5" : ""}`}
                   >
                     <div className="h-12 w-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                       <Calendar className="h-5 w-5" />
@@ -1228,10 +1636,22 @@ export default function GroupDetail() {
                         <p className="text-sm font-semibold text-foreground">
                           {e.title}
                         </p>
-                        <Badge variant="secondary" className="text-[10px] gap-1">
-                          <Clock className="h-3 w-3" />
-                          {e.startDate} · {e.startTime}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[10px] gap-1">
+                            <Clock className="h-3 w-3" />
+                            {e.startDate} · {e.startTime}
+                          </Badge>
+                          {(currentUser?.id === e.creator?.id || currentUser?.id === group.creatorId) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-[10px] text-muted-foreground hover:text-destructive"
+                              onClick={() => handleDeleteEvent(e.id)}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Hosted by {e.creator?.displayName || e.creator?.username || "Unknown"}
@@ -1247,8 +1667,10 @@ export default function GroupDetail() {
                         </p>
                       )}
                       <div className="flex items-center gap-3 mt-3">
-                        <span className="text-[10px] text-muted-foreground">
-                          {e.attendees?.filter((a: any) => a.rsvpStatus === "yes" || a.rsvpStatus === "maybe").length ?? 0} attending
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium border ${rsvpInFlight ? "border-primary/30 bg-primary/10 text-primary animate-pulse" : "border-border text-muted-foreground"}`}>
+                          {rsvpInFlight ? <Loader2 className="h-3 w-3 animate-spin" /> : <Users className="h-3 w-3" />}
+                          {attendeeCount} attending
+                          {rsvpInFlight ? " updating" : ""}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-3">
@@ -1262,6 +1684,7 @@ export default function GroupDetail() {
                               size="sm"
                               variant={isActive ? "default" : "secondary"}
                               className="h-7 px-3 text-xs capitalize"
+                              disabled={rsvpInFlight}
                               onClick={() => handleRsvp(e.id, status)}
                             >
                               {status}
@@ -1272,6 +1695,7 @@ export default function GroupDetail() {
                           size="sm"
                           variant="ghost"
                           className="h-7 px-3 text-xs"
+                          disabled={rsvpInFlight}
                           onClick={() => handleRsvp(e.id, "pending")}
                         >
                           Clear
@@ -1279,6 +1703,8 @@ export default function GroupDetail() {
                       </div>
                     </div>
                   </motion.div>
+                    );
+                  })()
                 ))}
               </div>
             )}
