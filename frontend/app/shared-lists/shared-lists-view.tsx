@@ -232,7 +232,9 @@ export function SharedListsView({
 
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setOpenCreate(false)}><X className="h-4 w-4 mr-1" /> Cancel</Button>
-                  <Button onClick={createList}><Check className="h-4 w-4 mr-1" /> Create</Button>
+                  <Button onClick={createList} disabled={isInFlight("shared-list-create")}>
+                    {isInFlight("shared-list-create") ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />} Create
+                  </Button>
                 </div>
               </div>
             </DialogContent>
@@ -275,6 +277,8 @@ export function SharedListsView({
                           onLike={toggleLike}
                           onDelete={removeList}
                           onOpen={setSelectedListId}
+                          addingMovieToListId={addingMovieToListId}
+                          removingMovieFromListId={removingMovieFromListId}
                         />
                       ) : (
                         <PublicListCard
@@ -284,6 +288,8 @@ export function SharedListsView({
                           isInFlight={isInFlight}
                           onLike={toggleLike}
                           onOpen={setSelectedListId}
+                          addingMovieToListId={addingMovieToListId}
+                          removingMovieFromListId={removingMovieFromListId}
                         />
                       );
                     })}
@@ -374,17 +380,21 @@ export function SharedListsView({
   );
 }
 
-function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOpen }: { list: SharedList; index: number; currentUser: UserProfile | null; isInFlight: (opId: string) => boolean; onLike: (list: SharedList) => void; onDelete: (id: string) => void; onOpen: (id: string) => void; }) {
+function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOpen, addingMovieToListId, removingMovieFromListId }: { list: SharedList; index: number; currentUser: UserProfile | null; isInFlight: (opId: string) => boolean; onLike: (list: SharedList) => void; onDelete: (id: string) => void; onOpen: (id: string) => void; addingMovieToListId: string | null; removingMovieFromListId: string | null; }) {
   const vis = visibilityConfig[list.visibility];
   const VisIcon = vis.icon;
   const isOwner = currentUser?.id === list.owner.id;
   const isCollaborator = currentUser ? list.collaborators.some((c) => c.id === currentUser.id) : false;
   const canEdit = isOwner || isCollaborator;
+  const isDeleting = isInFlight(`shared-list-delete-${list.id}`);
+  const adding = addingMovieToListId === list.id;
+  const removing = removingMovieFromListId === list.id;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2 } }}
       transition={{ delay: index * 0.08 }}
       className="rounded-xl bg-card p-5 card-shadow hover:card-shadow-hover transition-all duration-300 group"
     >
@@ -410,8 +420,8 @@ function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOp
               <DropdownMenuItem className="gap-2"><UserPlus className="h-3.5 w-3.5" /> Invite Collaborator</DropdownMenuItem>
               <DropdownMenuItem className="gap-2" onClick={() => onOpen(list.id)}><Film className="h-3.5 w-3.5" /> Add Movie</DropdownMenuItem>
               {isOwner && (
-                <DropdownMenuItem className="gap-2 text-destructive" onClick={() => onDelete(list.id)}>
-                  <Trash2 className="h-3.5 w-3.5" /> Delete List
+                <DropdownMenuItem className="gap-2 text-destructive" onClick={() => onDelete(list.id)} disabled={isDeleting}>
+                  {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete List
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -420,7 +430,14 @@ function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOp
       </div>
 
       {/* Movie posters strip */}
-      <div className="flex gap-2 mt-4 overflow-hidden">
+      <div className="flex gap-2 mt-4 overflow-hidden relative">
+        {(adding || removing) && (
+          <div className="absolute -top-2 right-3 z-20">
+            <span className={`inline-flex items-center gap-2 rounded-full px-2 py-1 text-[10px] font-medium border ${adding ? "border-primary/30 bg-primary/10 text-primary animate-pulse" : "border-destructive/30 bg-destructive/10 text-destructive animate-pulse"}`}>
+              <Loader2 className="h-3 w-3" /> {adding ? "adding" : "removing"}
+            </span>
+          </div>
+        )}
         {list.movies.slice(0, 5).map((movie) => (
           <MoviePrefetchLink key={movie.id} movieId={movie.id} href={`/movie/${movie.id}`} className="flex-1 min-w-0">
             <img
@@ -470,15 +487,24 @@ function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOp
           <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {list.comments}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs gap-1 hover:text-primary"
-            onClick={() => onLike(list)}
-            disabled={isInFlight(`shared-list-like-${list.id}`)}
-          >
-            {isInFlight(`shared-list-like-${list.id}`) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Heart className={`h-3 w-3 ${list.likedByMe ? "fill-primary text-primary" : ""}`} />} {list.likedByMe ? "Liked" : "Like"}
-          </Button>
+            {(() => {
+              const likeInFlight = isInFlight(`shared-list-like-${list.id}`);
+              const isLiked = Boolean(list.likedByMe);
+              return (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                    isLiked ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"
+                  } ${likeInFlight ? "border-primary/40 bg-primary/10 text-primary" : ""}`}
+                  onClick={() => onLike(list)}
+                  disabled={likeInFlight}
+                  aria-busy={likeInFlight}
+                >
+                  {likeInFlight ? <Loader2 className="h-3 w-3 animate-spin" /> : <Heart className={`h-3 w-3 ${isLiked ? "fill-primary text-primary" : ""}`} />} {list.likedByMe ? "Liked" : "Like"}
+                </Button>
+              );
+            })()}
           <Button
             size="sm"
             variant="outline"
@@ -493,7 +519,7 @@ function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOp
   );
 }
 
-function PublicListCard({ list, index, isInFlight, onLike, onOpen }: { list: SharedList; index: number; isInFlight: (opId: string) => boolean; onLike: (list: SharedList) => void; onOpen: (id: string) => void; }) {
+function PublicListCard({ list, index, isInFlight, onLike, onOpen, addingMovieToListId, removingMovieFromListId }: { list: SharedList; index: number; isInFlight: (opId: string) => boolean; onLike: (list: SharedList) => void; onOpen: (id: string) => void; addingMovieToListId: string | null; removingMovieFromListId: string | null; }) {
   const vis = visibilityConfig[list.visibility];
   const VisIcon = vis.icon;
 
@@ -501,6 +527,7 @@ function PublicListCard({ list, index, isInFlight, onLike, onOpen }: { list: Sha
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.2 } }}
       transition={{ delay: index * 0.08 }}
       className="rounded-xl bg-card p-5 card-shadow hover:card-shadow-hover transition-all duration-300"
     >
@@ -516,7 +543,14 @@ function PublicListCard({ list, index, isInFlight, onLike, onOpen }: { list: Sha
         </div>
       </div>
 
-      <div className="flex gap-2 mt-4 overflow-hidden">
+      <div className="flex gap-2 mt-4 overflow-hidden relative">
+        {(addingMovieToListId === list.id || removingMovieFromListId === list.id) && (
+          <div className="absolute -top-2 right-3 z-20">
+            <span className={`inline-flex items-center gap-2 rounded-full px-2 py-1 text-[10px] font-medium border ${addingMovieToListId === list.id ? "border-primary/30 bg-primary/10 text-primary animate-pulse" : "border-destructive/30 bg-destructive/10 text-destructive animate-pulse"}`}>
+              <Loader2 className="h-3 w-3" /> {addingMovieToListId === list.id ? "adding" : "removing"}
+            </span>
+          </div>
+        )}
         {list.movies.slice(0, 5).map((movie) => (
           <MoviePrefetchLink key={movie.id} movieId={movie.id} href={`/movie/${movie.id}`} className="flex-1 min-w-0">
             <img
@@ -551,15 +585,24 @@ function PublicListCard({ list, index, isInFlight, onLike, onOpen }: { list: Sha
           <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {list.comments}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 text-xs gap-1 hover:text-primary"
-            onClick={() => onLike(list)}
-            disabled={isInFlight(`shared-list-like-${list.id}`)}
-          >
-            {isInFlight(`shared-list-like-${list.id}`) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Heart className={`h-3 w-3 ${list.likedByMe ? "fill-primary text-primary" : ""}`} />} {list.likedByMe ? "Liked" : "Like"}
-          </Button>
+          {(() => {
+            const likeInFlight = isInFlight(`shared-list-like-${list.id}`);
+            const isLiked = Boolean(list.likedByMe);
+            return (
+              <Button
+                size="sm"
+                variant="ghost"
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                  isLiked ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"
+                } ${likeInFlight ? "border-primary/40 bg-primary/10 text-primary" : ""}`}
+                onClick={() => onLike(list)}
+                disabled={likeInFlight}
+                aria-busy={likeInFlight}
+              >
+                {likeInFlight ? <Loader2 className="h-3 w-3 animate-spin" /> : <Heart className={`h-3 w-3 ${isLiked ? "fill-primary text-primary" : ""}`} />} {list.likedByMe ? "Liked" : "Like"}
+              </Button>
+            );
+          })()}
           <Button
             size="sm"
             variant="outline"
@@ -632,6 +675,7 @@ function ListDetail({
   const isOwner = currentUser?.id === list.owner.id;
   const isCollaborator = currentUser ? list.collaborators.some((collaborator) => collaborator.id === currentUser.id) : false;
   const canEdit = isOwner || isCollaborator;
+  const isDeleting = isInFlight(`shared-list-delete-${list.id}`);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -653,8 +697,8 @@ function ListDetail({
               {list.likes}
             </Button>
             {isOwner && (
-              <Button variant="destructive" size="sm" onClick={onDelete} className="gap-2">
-                <Trash2 className="h-4 w-4" /> Delete
+              <Button variant="destructive" size="sm" onClick={onDelete} className="gap-2" disabled={isDeleting}>
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete
               </Button>
             )}
           </div>
@@ -679,6 +723,16 @@ function ListDetail({
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Film className="h-4 w-4" /> Movies
+            {addingMovieToListId === list.id && (
+              <span className="ml-2 inline-flex items-center gap-2 rounded-full px-2 py-1 text-[10px] font-medium border border-primary/30 bg-primary/10 text-primary animate-pulse">
+                <Loader2 className="h-3 w-3" /> adding
+              </span>
+            )}
+            {removingMovieFromListId === list.id && (
+              <span className="ml-2 inline-flex items-center gap-2 rounded-full px-2 py-1 text-[10px] font-medium border border-destructive/30 bg-destructive/10 text-destructive animate-pulse">
+                <Loader2 className="h-3 w-3" /> removing
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -729,6 +783,11 @@ function ListDetail({
         <div className="space-y-3 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <MessageSquareReply className="h-4 w-4" /> Comments
+            {isInFlight(`shared-list-comment-${list.id}`) && (
+              <span className="ml-2 inline-flex items-center gap-2 rounded-full px-2 py-1 text-[10px] font-medium border border-primary/30 bg-primary/10 text-primary animate-pulse">
+                <Loader2 className="h-3 w-3" /> posting
+              </span>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -888,10 +947,16 @@ function PublicListDetail({
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onLike} className="gap-2" disabled={isInFlight(`shared-list-like-${list.id}`)}>
-            {isInFlight(`shared-list-like-${list.id}`) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Heart className={`h-4 w-4 ${list.likedByMe ? "fill-primary text-primary" : ""}`} />}
-            {list.likes}
-          </Button>
+          {(() => {
+            const likeInFlight = isInFlight(`shared-list-like-${list.id}`);
+            const isLiked = Boolean(list.likedByMe);
+            return (
+              <Button variant="outline" size="sm" onClick={onLike} className={`gap-2 inline-flex items-center ${likeInFlight ? "border-primary/40 bg-primary/10 text-primary" : ""}`} disabled={likeInFlight} aria-busy={likeInFlight}>
+                {likeInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <Heart className={`h-4 w-4 ${isLiked ? "fill-primary text-primary" : ""}`} />}
+                {list.likes}
+              </Button>
+            );
+          })()}
         </div>
       </div>
 
