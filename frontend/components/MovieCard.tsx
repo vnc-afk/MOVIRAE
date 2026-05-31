@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { scheduleMovieDetailPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
@@ -19,39 +19,43 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const prefetchTokenRef = useRef(`movie-card:${movie.id}:${Math.random().toString(36).slice(2)}`);
-  const [isWatched, setIsWatched] = useState(false);
-  const [isWatchlist, setIsWatchlist] = useState(false);
   const [loading, setLoading] = useState({ watched: false, watchlist: false });
   const posterSrc = movie.poster.trim();
 
-  useEffect(() => {
-    if (!session?.user?.email) return;
+  const watchlistQueryKey = ["movie-card", "watchlist-current", session?.user?.email ?? "anonymous"] as const;
+  const watchedQueryKey = ["movie-card", "watched-current", session?.user?.email ?? "anonymous"] as const;
 
-    async function loadMovieState() {
-      try {
-        const responses = await Promise.all([
-          fetch("/api/data/user-watchlist-current"),
-          fetch("/api/data/user-watched-current"),
-        ]);
+  const watchlistQuery = useQuery<string[]>({
+    queryKey: watchlistQueryKey,
+    queryFn: async () => {
+      const response = await fetch("/api/data/user-watchlist-current");
+      const json = await response.json().catch(() => null);
+      return Array.isArray(json?.value) ? json.value : [];
+    },
+    enabled: Boolean(session?.user?.email),
+    staleTime: 5 * 60 * 1000,
+  });
 
-        const data = await Promise.all(responses.map(async (response) => {
-          if (!response.ok) return [] as string[];
-          const json = await response.json().catch(() => null);
-          return Array.isArray(json?.value) ? json.value : [];
-        }));
+  const watchedQuery = useQuery<string[]>({
+    queryKey: watchedQueryKey,
+    queryFn: async () => {
+      const response = await fetch("/api/data/user-watched-current");
+      const json = await response.json().catch(() => null);
+      return Array.isArray(json?.value) ? json.value : [];
+    },
+    enabled: Boolean(session?.user?.email),
+    staleTime: 5 * 60 * 1000,
+  });
 
-        const [watchlistIds, watchedIds] = data;
-        setIsWatchlist(watchlistIds.includes(movie.id));
-        setIsWatched(watchedIds.includes(movie.id));
-      } catch (error) {
-        console.error("Failed to load movie state:", error);
-      }
-    }
+  const isWatched = watchedQuery.data?.includes(movie.id) ?? false;
+  const isWatchlist = watchlistQuery.data?.includes(movie.id) ?? false;
 
-    loadMovieState();
-  }, [movie.id, session?.user?.email]);
-
-  async function toggleAction(key: "user-watchlist-current" | "user-watched-current", currentState: boolean, setter: (val: boolean) => void, loadingKey: "watchlist" | "watched") {
+  async function toggleAction(
+    key: "user-watchlist-current" | "user-watched-current",
+    currentState: boolean,
+    loadingKey: "watchlist" | "watched",
+    queryKey: readonly unknown[]
+  ) {
     if (!session?.user?.email) {
       console.warn("Not authenticated");
       return;
@@ -68,7 +72,13 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
       if (response.ok) {
         const json = await response.json().catch(() => null);
         if (Array.isArray(json?.value)) {
-          setter(json.value.includes(movie.id));
+          queryClient.setQueryData<string[]>(queryKey, json.value);
+        } else {
+          queryClient.setQueryData<string[]>(queryKey, (current = []) =>
+            current.includes(movie.id)
+              ? current.filter((item) => item !== movie.id)
+              : [...current, movie.id]
+          );
         }
       }
     } catch (error) {
@@ -81,13 +91,13 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
   const handleToggleWatched = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    await toggleAction("user-watched-current", isWatched, setIsWatched, "watched");
+    await toggleAction("user-watched-current", isWatched, "watched", watchedQueryKey);
   };
 
   const handleToggleWatchlist = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    await toggleAction("user-watchlist-current", isWatchlist, setIsWatchlist, "watchlist");
+    await toggleAction("user-watchlist-current", isWatchlist, "watchlist", watchlistQueryKey);
   };
 
   return (
