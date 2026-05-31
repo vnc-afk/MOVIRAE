@@ -10,6 +10,12 @@ import { getWatchExperienceStats } from "@/lib/watch-experiences";
 
 export const runtime = "nodejs";
 
+function makeJsonResponse(body: unknown, cacheControl?: string) {
+  const headers: Record<string, string> = {};
+  if (cacheControl) headers["Cache-Control"] = cacheControl;
+  return NextResponse.json(body, { headers });
+}
+
 type UserSession = { user?: { email?: string | null } } | null;
 
 async function getCurrentUser(session: UserSession) {
@@ -91,14 +97,33 @@ async function setSharedLists(payload: unknown, currentUser: Awaited<ReturnType<
   }
 
   await prisma.sharedList.deleteMany();
+  // Collect owner IDs from payload and batch-lookup existing users to avoid N+1 queries
+  const ownerIdsToCheck = new Set<string>();
+  for (const item of payload) {
+    if (!item || typeof item !== "object") continue;
+    const list = item as any;
+    const ownerId = typeof list.owner?.id === "string" ? list.owner.id : undefined;
+    if (ownerId) ownerIdsToCheck.add(ownerId);
+  }
+
+  // Exclude currentUser.id from the lookup set since we'll treat it as existing
+  if (currentUser?.id) ownerIdsToCheck.delete(currentUser.id);
+
+  const ownerIdsArray = Array.from(ownerIdsToCheck);
+  let existingOwners = new Set<string>();
+  if (ownerIdsArray.length > 0) {
+    const owners = await prisma.user.findMany({ where: { id: { in: ownerIdsArray } }, select: { id: true } });
+    existingOwners = new Set(owners.map((o) => o.id));
+  }
 
   for (const item of payload) {
     if (!item || typeof item !== "object") continue;
     const list = item as any;
-    const ownerId = typeof list.owner?.id === "string" ? list.owner.id : currentUser?.id;
+    const rawOwnerId = typeof list.owner?.id === "string" ? list.owner.id : undefined;
+    const ownerId = rawOwnerId ?? currentUser?.id;
     if (!ownerId) continue;
 
-    const ownerExists = await prisma.user.findUnique({ where: { id: ownerId } });
+    const ownerExists = existingOwners.has(ownerId) || (currentUser && ownerId === currentUser.id);
     if (!ownerExists && !currentUser) continue;
 
     const movies = Array.isArray(list.movies) ? list.movies : [];
@@ -582,13 +607,21 @@ async function getActivityFeed() {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
-async function getUserNotifications(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
+async function getUserNotifications(
+  currentUser: Awaited<ReturnType<typeof getCurrentUser>>,
+  opts?: { limit?: number; offset?: number }
+) {
   if (!currentUser) return [];
+
+  const limit = opts?.limit ?? 50;
+  const offset = opts?.offset ?? 0;
 
   const notifications = await prisma.notification.findMany({
     where: { recipientId: currentUser.id },
     include: { actor: true },
     orderBy: { createdAt: "desc" },
+    take: limit,
+    skip: offset,
   });
 
   const missingMovieByReviewIds = Array.from(
@@ -675,8 +708,14 @@ async function setUserNotifications(payload: unknown, currentUser: Awaited<Retur
   return getUserNotifications(currentUser);
 }
 
-async function getUserMessages(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
+async function getUserMessages(
+  currentUser: Awaited<ReturnType<typeof getCurrentUser>>,
+  opts?: { limit?: number; offset?: number }
+) {
   if (!currentUser) return [];
+
+  const limit = opts?.limit ?? 50;
+  const offset = opts?.offset ?? 0;
 
   const messages = await prisma.message.findMany({
     where: {
@@ -684,6 +723,8 @@ async function getUserMessages(currentUser: Awaited<ReturnType<typeof getCurrent
     },
     include: { from: true, to: true },
     orderBy: { createdAt: "asc" },
+    take: limit,
+    skip: offset,
   });
 
   const conversationPartnerIds = Array.from(
@@ -876,24 +917,37 @@ export async function GET(
 
     switch (true) {
       case key === "shared-lists":
-        return NextResponse.json({ value: await getSharedLists() });
+        // Shared lists are read-heavy and mostly public — cache briefly at CDN edge
+        return makeJsonResponse({ value: await getSharedLists() }, "public, s-maxage=30, stale-while-revalidate=60");
       case key === "groups":
-        return NextResponse.json({
+        // Groups include per-user 'joined' flags; avoid public caching to prevent stale joins
+        return makeJsonResponse({
           value: await getGroups(currentUser),
           currentUser: buildUserProfile(currentUser),
         });
       case key === "user-filter-presets":
         return NextResponse.json({ value: await getUserFilterPresets(currentUser) });
       case key === "user-stats":
-        return NextResponse.json({ value: await getUserStats(currentUser) });
+        // User stats are read-heavy but user-specific — cache privately for a short window
+        return makeJsonResponse({ value: await getUserStats(currentUser) }, "private, max-age=30, stale-while-revalidate=60");
       case key === "user-wrapped":
         return NextResponse.json({ value: await getUserStats(currentUser) });
       case key === "home-activity-feed":
-        return NextResponse.json({ value: await getActivityFeed() });
-      case key === "user-notifications":
-        return NextResponse.json({ value: await getUserNotifications(currentUser) });
-      case key === "user-messages":
-        return NextResponse.json({ value: await getUserMessages(currentUser) });
+        // Public activity feed: short CDN cache to reduce DB pressure
+        return makeJsonResponse({ value: await getActivityFeed() }, "public, s-maxage=30, stale-while-revalidate=60");
+          case key === "user-notifications": {
+            // Support pagination via ?limit=&offset=
+            const url = new URL(_request.url);
+            const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? 50)));
+            const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+            return NextResponse.json({ value: await getUserNotifications(currentUser, { limit, offset }) });
+          }
+          case key === "user-messages": {
+            const url = new URL(_request.url);
+            const limit = Math.max(1, Math.min(1000, Number(url.searchParams.get("limit") ?? 50)));
+            const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+            return NextResponse.json({ value: await getUserMessages(currentUser, { limit, offset }) });
+          }
       case key === "user-watchlist-current":
         return NextResponse.json({ value: currentUser ? await getUserWatchlist(currentUser.id) : [] });
       case key === "user-watched-current":
