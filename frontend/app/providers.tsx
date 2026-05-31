@@ -6,7 +6,6 @@ import { SessionProvider, useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { OptimisticProvider } from "@/hooks/OptimisticProvider";
 import { Navbar } from "@/components/Navbar";
-import { PrefetchDebugPanel } from "@/components/PrefetchDebugPanel";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -67,7 +66,6 @@ export function Providers({ children }: ProvidersProps) {
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            {process.env.NODE_ENV !== "production" ? <PrefetchDebugPanel /> : null}
             <AuthGuard>{children}</AuthGuard>
           </TooltipProvider>
         </OptimisticProvider>
