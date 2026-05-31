@@ -2,6 +2,8 @@ import { type QueryKey } from "@tanstack/react-query";
 
 const STORAGE_KEY = "movirae_prefetch_telemetry_v1";
 const PREFETCH_TTL_MS = 5 * 60 * 1000; // Keep prefetch records for 5m
+const MAX_PREFETCH_RECORDS = 500; // soft cap for in-memory prefetch store
+const SAVE_DEBOUNCE_MS = 5000; // debounce localStorage writes
 
 type TelemetrySnapshot = {
   attempts: number;
@@ -40,8 +42,7 @@ globalTelemetry.telemetry = telemetry;
 
 let autoFlushIntervalId: ReturnType<typeof setInterval> | null = null;
 let ttlCleanupIntervalId: ReturnType<typeof setInterval> | null = null;
-const AUTO_FLUSH_MS = 30 * 1000; // 30 seconds
-const UPLOAD_URL = "/api/telemetry/prefetch";
+const AUTO_FLUSH_MS = 30 * 1000; // 30 seconds (used only for local save)
 let listenersRegistered = false;
 
 // Optional debug logging
@@ -59,13 +60,21 @@ function handleBeforeUnload() {
   } catch {}
 }
 
+let saveScheduled = false;
 function save() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(telemetry));
-    globalTelemetry.telemetry = telemetry;
-  } catch {
-    // ignore
-  }
+  // Debounced write to avoid frequent synchronous localStorage I/O
+  if (saveScheduled) return;
+  saveScheduled = true;
+  setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(telemetry));
+      globalTelemetry.telemetry = telemetry;
+    } catch {
+      // ignore
+    } finally {
+      saveScheduled = false;
+    }
+  }, SAVE_DEBOUNCE_MS);
 }
 
 function load(): TelemetrySnapshot | null {
@@ -112,6 +121,19 @@ export function recordPrefetchSucceeded(queryKey: QueryKey) {
   const keyHash = hashKey(queryKey);
   // Store in prefetch store so we can detect hits later
   prefetchStore.set(keyHash, Date.now());
+  // Evict oldest entries when exceeding soft cap
+  if (prefetchStore.size > MAX_PREFETCH_RECORDS) {
+    // Find oldest key
+    let oldestKey: string | null = null;
+    let oldestTs = Infinity;
+    for (const [k, ts] of prefetchStore.entries()) {
+      if (ts < oldestTs) {
+        oldestTs = ts;
+        oldestKey = k;
+      }
+    }
+    if (oldestKey) prefetchStore.delete(oldestKey);
+  }
   telemetry.lastUpdated = Date.now();
   save();
 }
@@ -175,49 +197,31 @@ async function postJson(url: string, body: any) {
 }
 
 export async function flushTelemetry(): Promise<boolean> {
-  const payload = {
-    attempts: telemetry.attempts,
-    skipped: telemetry.skipped,
-    succeeded: telemetry.succeeded,
-    failed: telemetry.failed,
-    cancelled: telemetry.cancelled,
-    hits: telemetry.hits,
-    misses: telemetry.misses,
-    lastUpdated: telemetry.lastUpdated,
-  };
-
-  // try sendBeacon for unload scenarios
+  // Persist current counters to localStorage only. We no longer upload telemetry to the server
+  // from client to avoid extra network/DB cost; operators can opt-in to server-side telemetry later.
   try {
-    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-      const ok = navigator.sendBeacon(UPLOAD_URL, blob);
-      if (ok) return true;
-    }
-  } catch {}
-
-  // fallback to fetch
-  try {
-    const ok = await postJson(UPLOAD_URL, payload);
-    if (ok) return true;
-  } catch {}
-
-  return false;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(telemetry));
+    globalTelemetry.telemetry = telemetry;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function startAutoFlush() {
   if (autoFlushIntervalId) return;
 
-  // start TTL cleanup
+  // start TTL cleanup and periodic local save
   ttlCleanupIntervalId = setInterval(cleanupExpiredPrefetches, 5000);
 
   autoFlushIntervalId = setInterval(() => {
     try {
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      // Only persist locally; avoid network uploads in lightweight mode
       void flushTelemetry();
     } catch {}
   }, AUTO_FLUSH_MS);
 
-  // flush on visibility change and unload
+  // persist on visibility change and unload as a last-resort
   try {
     if (typeof window !== "undefined" && !listenersRegistered) {
       window.addEventListener("visibilitychange", handleVisibilityChange);
