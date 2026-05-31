@@ -109,7 +109,7 @@ export default function LoginPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-md bg-card rounded-2xl p-8 card-shadow"
       >
-        <div className="flex items-center justify-center gap-2 mb-8">
+        <div className="flex items-center justify-center gap-2 mb-4">
           <img src={logo.src} alt="Movirae" className="h-10 w-auto" />
           <span className="font-display text-xl font-bold text-foreground">MOVIRAE</span>
         </div>
