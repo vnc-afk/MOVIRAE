@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Film, Eye, EyeOff, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import logo from "@/assets/logo.svg";
 
 export default function LoginPage() {
   const [isSignup, setIsSignup] = useState(false);
@@ -109,8 +110,8 @@ export default function LoginPage() {
         className="w-full max-w-md bg-card rounded-2xl p-8 card-shadow"
       >
         <div className="flex items-center justify-center gap-2 mb-8">
-          <Film className="h-7 w-7 text-primary" />
-          <span className="font-display text-xl font-bold text-foreground">MOVIRIE</span>
+          <img src={logo.src} alt="Movirae" className="h-10 w-auto" />
+          <span className="font-display text-xl font-bold text-foreground">MOVIRAE</span>
         </div>
 
         <h1 className="font-display text-2xl font-bold text-foreground text-center">

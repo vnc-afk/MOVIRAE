@@ -20,6 +20,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Movirae",
   description: "Movirae",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default async function RootLayout({
