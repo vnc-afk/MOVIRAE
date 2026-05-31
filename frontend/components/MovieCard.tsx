@@ -13,14 +13,16 @@ import type { Movie } from "@/lib/types";
 interface MovieCardProps {
   movie: Movie;
   index?: number;
+  priority?: boolean;
 }
 
-export function MovieCard({ movie, index = 0 }: MovieCardProps) {
+export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const prefetchTokenRef = useRef(`movie-card:${movie.id}:${Math.random().toString(36).slice(2)}`);
   const [loading, setLoading] = useState({ watched: false, watchlist: false });
   const posterSrc = movie.poster.trim();
+  const shouldPrioritizePoster = priority;
 
   const watchlistQueryKey = ["movie-card", "watchlist-current", session?.user?.email ?? "anonymous"] as const;
   const watchedQueryKey = ["movie-card", "watched-current", session?.user?.email ?? "anonymous"] as const;
@@ -104,7 +106,7 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: index * 0.08 }}
+      transition={{ duration: 0.35, delay: Math.min(index, 6) * 0.03 }}
     >
       <Link
         href={`/movie/${movie.id}`}
@@ -121,7 +123,9 @@ export function MovieCard({ movie, index = 0 }: MovieCardProps) {
             <img
               src={posterSrc}
               alt={movie.title}
-              loading="lazy"
+              loading={shouldPrioritizePoster ? "eager" : "lazy"}
+              fetchPriority={shouldPrioritizePoster ? "high" : "auto"}
+              decoding="async"
               width={640}
               height={960}
               className="w-full aspect-[2/3] object-cover transition-transform duration-500 group-hover:scale-105"

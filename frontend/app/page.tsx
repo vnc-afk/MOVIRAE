@@ -95,7 +95,7 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {movies.map((movie, i) => (
-                <MovieCard key={movie.id} movie={movie} index={i} />
+                <MovieCard key={movie.id} movie={movie} index={i} priority={i < 4} />
               ))}
             </div>
           )}

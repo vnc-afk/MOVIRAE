@@ -82,6 +82,13 @@ export default function Discover() {
   const trimmedQuery = filters.query.trim();
   const isSearchMode = Boolean(trimmedQuery);
   const isGenreMode = !isSearchMode && Boolean(filters.genreId);
+  const isDefaultMode = !isSearchMode && !isGenreMode;
+
+  const trendingQuery = usePrefetchAwareQuery<Movie[]>({
+    queryKey: queryKeys.discover.seeds(),
+    queryFn: () => getTrendingMovies(1),
+    enabled: isDefaultMode,
+  });
 
   // Pagination / infinite-scroll state
   const [pages, setPages] = useState<Movie[][]>([]);
@@ -92,8 +99,15 @@ export default function Discover() {
   const seenMovieIdsRef = useRef<Set<string>>(new Set());
   const requestGenerationRef = useRef(0);
   const pageSize = 20; // TMDB default page size
+  const baseMovies = trendingQuery.data ?? [];
 
-  const loading = pages.length === 0 && !isFetchingNextPage;
+  const visiblePages = useMemo(() => {
+    return isDefaultMode ? [baseMovies, ...pages] : pages;
+  }, [baseMovies, isDefaultMode, pages]);
+
+  const loading = isDefaultMode
+    ? trendingQuery.isPending && baseMovies.length === 0 && pages.length === 0
+    : pages.length === 0 && !isFetchingNextPage;
 
   const filtered = useMemo(() => {
     const sortMovies = (list: Movie[]) =>
@@ -104,14 +118,27 @@ export default function Discover() {
         return a.title.localeCompare(b.title);
       });
 
-    return pages
+    return visiblePages
       .map((page) =>
         sortMovies(
           page.filter((movie) => movie.runtime >= filters.runtimeRange[0] && movie.runtime <= filters.runtimeRange[1])
         )
       )
       .flat();
-  }, [filters.runtimeRange, filters.sortBy, pages]);
+  }, [filters.runtimeRange, filters.sortBy, visiblePages]);
+
+  const uniqueFiltered = useMemo(() => {
+    const seenIds = new Set<string>();
+
+    return filtered.filter((movie) => {
+      if (seenIds.has(movie.id)) {
+        return false;
+      }
+
+      seenIds.add(movie.id);
+      return true;
+    });
+  }, [filtered]);
 
   const activeCount = (filters.genreId ? 1 : 0) + (filters.runtimeRange[0] > 0 || filters.runtimeRange[1] < 200 ? 1 : 0);
 
@@ -186,8 +213,9 @@ export default function Discover() {
 
   // Load first page when filters change
   useEffect(() => {
+    if (isDefaultMode) return;
     fetchPage(1);
-  }, [fetchPage]);
+  }, [fetchPage, isDefaultMode]);
 
   const loadNext = useCallback(() => {
     if (isFetchingNextPage || !hasMore) return;
@@ -409,7 +437,7 @@ export default function Discover() {
               </button>
             )}
             <span className="text-xs text-muted-foreground">
-              {loading ? "Loading films..." : `${filtered.length} ${filtered.length === 1 ? "film" : "films"}`}
+              {loading ? "Loading films..." : `${uniqueFiltered.length} ${uniqueFiltered.length === 1 ? "film" : "films"}`}
             </span>
           </div>
           <select
@@ -433,8 +461,8 @@ export default function Discover() {
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {filtered.map((movie, index) => (
-                <MovieCard key={movie.id} movie={movie} index={index} />
+              {uniqueFiltered.map((movie, index) => (
+                <MovieCard key={movie.id} movie={movie} index={index} priority={index < 4} />
               ))}
             </div>
 
@@ -457,7 +485,7 @@ export default function Discover() {
           </>
         )}
 
-        {!loading && filtered.length === 0 && (
+        {!loading && uniqueFiltered.length === 0 && (
           <div className="text-center py-16">
             <p className="text-muted-foreground">No films match your filters.</p>
           </div>
