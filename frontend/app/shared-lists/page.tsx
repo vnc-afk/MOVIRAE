@@ -347,8 +347,20 @@ export default function SharedListsPage() {
       return;
     }
 
+    const createInFlightOpId = "shared-list-create";
+    if (isInFlight(createInFlightOpId)) {
+      return;
+    }
+
     const tempId = makeTempId("list");
     const op = { opId: generateOpId("list"), type: "create" as const, tempId, ts: Date.now() };
+
+    addInFlightOp(createInFlightOpId, {
+      opId: createInFlightOpId,
+      type: "create",
+      surface: "shared-list",
+      itemId: tempId,
+    });
 
     const optimisticList = {
       id: tempId,
@@ -418,6 +430,8 @@ export default function SharedListsPage() {
       });
       const message = error instanceof Error ? error.message : "Failed to create list.";
       toast.error(message);
+    } finally {
+      removeInFlightOp(createInFlightOpId);
     }
   };
 
@@ -480,18 +494,64 @@ export default function SharedListsPage() {
   };
 
   const removeList = async (id: string) => {
-    try {
-      const response = await fetch(`/api/shared-lists/${id}`, { method: "DELETE" });
-      await updateListsFromResponse(response);
+    const deleteInFlightOpId = `shared-list-delete-${id}`;
+    if (isInFlight(deleteInFlightOpId)) {
+      return;
+    }
 
-      if (selectedListId === id) {
-        setSelectedListId(null);
+    const previousLists = lists;
+    const wasSelected = selectedListId === id;
+
+    addInFlightOp(deleteInFlightOpId, {
+      opId: deleteInFlightOpId,
+      type: "delete",
+      surface: "shared-list",
+      itemId: id,
+    });
+
+    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      if (!current) return current;
+      return {
+        ...current,
+        lists: current.lists.filter((list) => list.id !== id),
+      };
+    });
+
+    if (wasSelected) {
+      setSelectedListId(null);
+    }
+
+    try {
+      const op = { opId: generateOpId("shared-list-delete"), type: "delete" as const, itemId: id, ts: Date.now() };
+      const body = attachOpToBody({}, op);
+      const headers = attachOpToHeaders({ "Content-Type": "application/json" }, op);
+
+      const response = await fetch(`/api/shared-lists/${id}`, {
+        method: "DELETE",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const payload = await parseResponsePayload(response);
+        throw new Error(payload?.error || "Could not remove the list.");
       }
+
+      await updateListsFromResponse(response);
 
       toast.success("List removed");
     } catch (error) {
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, lists: previousLists };
+      });
+      if (wasSelected) {
+        setSelectedListId(id);
+      }
       const message = error instanceof Error ? error.message : "Could not remove the list.";
       toast.error(message);
+    } finally {
+      removeInFlightOp(deleteInFlightOpId);
     }
   };
 
