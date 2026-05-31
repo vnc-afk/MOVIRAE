@@ -15,7 +15,8 @@ export const queryKeys = {
     detail: (id: string) => ["shared-lists", "detail", id] as const,
   },
   notifications: {
-    all: (sessionEmail?: string | null) => ["notifications", "all", sessionEmail ?? "anonymous"] as const,
+    // Accept either a stable user id or session email. Prefer passing a stable user id when available.
+    all: (userIdOrEmail?: string | null) => ["notifications", "all", userIdOrEmail ?? "anonymous"] as const,
   },
   messaging: {
     snapshot: () => ["messaging", "snapshot"] as const,
