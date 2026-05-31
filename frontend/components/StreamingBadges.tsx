@@ -4,6 +4,7 @@ import { Tv } from "lucide-react";
 
 interface StreamingBadgesProps {
   platforms: string[];
+  loading?: boolean;
 }
 
 const platformColors: Record<string, string> = {
@@ -15,7 +16,7 @@ const platformColors: Record<string, string> = {
   "HBO Max": "bg-purple-500/10 text-purple-400 border-purple-500/20",
 };
 
-export function StreamingBadges({ platforms }: StreamingBadgesProps) {
+export function StreamingBadges({ platforms, loading = false }: StreamingBadgesProps) {
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
@@ -24,7 +25,9 @@ export function StreamingBadges({ platforms }: StreamingBadgesProps) {
           Available on
         </span>
       </div>
-      {platforms.length > 0 ? (
+      {loading ? (
+        <p className="text-xs text-muted-foreground">Checking streaming availability...</p>
+      ) : platforms.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {platforms.map((p) => (
             <span

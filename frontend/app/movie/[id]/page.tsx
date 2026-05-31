@@ -52,6 +52,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const [isLiked, setIsLiked] = useState(false);
   const [watchExperience, setWatchExperience] = useState<WatchExperience | null>(null);
   const [buttonLoading, setButtonLoading] = useState({ watched: false, watchlist: false, liked: false });
+  const [streamingLoading, setStreamingLoading] = useState(true);
   const reviewsRef = useRef<Review[]>([]);
 
   useEffect(() => {
@@ -97,26 +98,28 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
     let cancelled = false;
 
-    async function fetchMovieExtras(movieId: string) {
-      try {
-        const [platformsResult, reviewsResult] = await Promise.allSettled([
-          getStreamingPlatforms(movieId),
-          fetchReviews(movieId),
-        ]);
+    setStreamingLoading(true);
+    setStreamingOn([]);
 
-        if (!cancelled && platformsResult.status === "fulfilled") {
-          setStreamingOn(platformsResult.value);
+    void getStreamingPlatforms(movie.id)
+      .then((platforms) => {
+        if (!cancelled) {
+          setStreamingOn(platforms);
         }
-
-        if (reviewsResult.status === "rejected") {
-          console.error("Failed to fetch reviews:", reviewsResult.reason);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch streaming platforms:", error);
+        if (!cancelled) {
+          setStreamingOn([]);
         }
-      } catch (error) {
-        console.error("Failed to fetch movie extras:", error);
-      }
-    }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setStreamingLoading(false);
+        }
+      });
 
-    fetchMovieExtras(movie.id);
+    void fetchReviews(movie.id);
 
     return () => {
       cancelled = true;
@@ -638,7 +641,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
             </div>
 
             <div className="mt-6">
-              <StreamingBadges platforms={movieWithStreaming?.streamingOn ?? []} />
+              <StreamingBadges platforms={movieWithStreaming?.streamingOn ?? []} loading={streamingLoading} />
             </div>
           </motion.div>
         </div>
