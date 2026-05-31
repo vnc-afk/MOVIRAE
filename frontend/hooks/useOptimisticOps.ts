@@ -4,7 +4,7 @@ import { createContext, useContext, useState, useCallback } from "react";
 
 export interface InFlightOp {
   opId: string;
-  type: "like" | "reply" | "post" | "comment" | "delete" | "update";
+  type: "like" | "reply" | "post" | "comment" | "delete" | "update" | "create";
   itemId?: string;
   parentId?: string;
   payload?: Record<string, any>;
