@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { MovieCard } from "@/components/MovieCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
@@ -79,9 +80,9 @@ export default function Home() {
             <h2 className="font-display text-xl font-bold text-foreground">
               Trending This Week
             </h2>
-            <button className="text-xs text-primary font-medium hover:underline">
+            <Link href="/discover" className="text-xs text-primary font-medium hover:underline">
               See all
-            </button>
+            </Link>
           </div>
           {loading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
