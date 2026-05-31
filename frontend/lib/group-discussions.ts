@@ -101,10 +101,32 @@ function serializeDiscussion(discussion: any, currentUserId?: string | null): Di
 }
 
 async function normalizeGroupMovie(movie: any): Promise<Movie> {
-  const metadata = movie.metadata && typeof movie.metadata === "object" ? movie.metadata : null;
+  const metadata = movie.metadata && typeof movie.metadata === "object" ? (movie.metadata as Record<string, unknown>) : null;
 
-  if (metadata && typeof metadata.poster === "string" && metadata.poster.trim() !== "") {
-    return metadata as Movie;
+  if (metadata) {
+    const metadataId = typeof metadata.id === "string" && metadata.id.trim() ? metadata.id : movie.tmdbId;
+    const title = typeof metadata.title === "string" ? metadata.title : "";
+
+    if (title.trim()) {
+      return {
+        id: metadataId,
+        title,
+        year: typeof metadata.year === "number" ? metadata.year : 0,
+        rating: typeof metadata.rating === "number" ? metadata.rating : 0,
+        genre: typeof metadata.genre === "string" ? metadata.genre : "Unknown",
+        poster: typeof metadata.poster === "string" ? metadata.poster : "",
+        synopsis: typeof metadata.synopsis === "string" ? metadata.synopsis : "",
+        director: typeof metadata.director === "string" ? metadata.director : "Unknown",
+        cast: Array.isArray(metadata.cast) ? (metadata.cast as any[]) : [],
+        reviews: Array.isArray(metadata.reviews) ? (metadata.reviews as any[]) : [],
+        tags: Array.isArray(metadata.tags) ? (metadata.tags as string[]) : [],
+        streamingOn: Array.isArray(metadata.streamingOn) ? (metadata.streamingOn as string[]) : [],
+        runtime: typeof metadata.runtime === "number" ? metadata.runtime : 0,
+        language: typeof metadata.language === "string" ? metadata.language : "Unknown",
+        country: typeof metadata.country === "string" ? metadata.country : "Unknown",
+        moods: Array.isArray(metadata.moods) ? (metadata.moods as any[]) : [],
+      };
+    }
   }
 
   const tmdbDetails = await getMovieDetails(movie.tmdbId);
@@ -113,22 +135,22 @@ async function normalizeGroupMovie(movie: any): Promise<Movie> {
   }
 
   return {
-    id: movie.tmdbId,
-    title: metadata?.title || "Unknown",
-    year: metadata?.year || 0,
-    rating: metadata?.rating || 0,
-    genre: metadata?.genre || "Unknown",
-    poster: metadata?.poster || "",
-    synopsis: metadata?.synopsis || "",
-    director: metadata?.director || "Unknown",
-    cast: metadata?.cast || [],
-    reviews: metadata?.reviews || [],
-    tags: metadata?.tags || [],
-    streamingOn: metadata?.streamingOn || [],
-    runtime: metadata?.runtime || 0,
-    language: metadata?.language || "Unknown",
-    country: metadata?.country || "Unknown",
-    moods: metadata?.moods || [],
+    id: typeof metadata?.id === "string" && metadata.id.trim() ? metadata.id : movie.tmdbId,
+    title: typeof metadata?.title === "string" ? metadata.title : "Unknown",
+    year: typeof metadata?.year === "number" ? metadata.year : typeof metadata?.year === "string" && !Number.isNaN(Number(metadata.year)) ? Number(metadata.year) : 0,
+    rating: typeof metadata?.rating === "number" ? metadata.rating : 0,
+    genre: typeof metadata?.genre === "string" ? metadata.genre : "Unknown",
+    poster: typeof metadata?.poster === "string" ? metadata.poster : "",
+    synopsis: typeof metadata?.synopsis === "string" ? metadata.synopsis : "",
+    director: typeof metadata?.director === "string" ? metadata.director : "Unknown",
+    cast: Array.isArray(metadata?.cast) ? (metadata.cast as any[]) : [],
+    reviews: Array.isArray(metadata?.reviews) ? (metadata.reviews as any[]) : [],
+    tags: Array.isArray(metadata?.tags) ? (metadata.tags as string[]) : [],
+    streamingOn: Array.isArray(metadata?.streamingOn) ? (metadata.streamingOn as string[]) : [],
+    runtime: typeof metadata?.runtime === "number" ? metadata.runtime : typeof metadata?.runtime === "string" && !Number.isNaN(Number(metadata.runtime)) ? Number(metadata.runtime) : 0,
+    language: typeof metadata?.language === "string" ? metadata.language : "Unknown",
+    country: typeof metadata?.country === "string" ? metadata.country : "Unknown",
+    moods: Array.isArray(metadata?.moods) ? (metadata.moods as any[]) : [],
   };
 }
 
