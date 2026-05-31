@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { SearchInput } from "./SearchInput";
 import { useQueryClient } from "@tanstack/react-query";
 import { scheduleDiscoverSeedsPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
@@ -27,9 +27,9 @@ const navLinks = [
   { label: "Discover", path: "/discover", icon: SlidersHorizontal },
   { label: "For You", path: "/recommendations", icon: Sparkles },
   { label: "Groups", path: "/groups", icon: Users },
+  { label: "Shared Lists", path: "/shared-lists", icon: ListPlus },
   { label: "Stats", path: "/stats", icon: BarChart3 },
   { label: "Wrapped", path: "/wrapped", icon: Gift },
-  { label: "Shared Lists", path: "/shared-lists", icon: ListPlus },
 ];
 
 export function Navbar() {
@@ -38,7 +38,7 @@ export function Navbar() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
   const sessionEmail = session?.user?.email ?? null;
-  const notificationsKey = queryKeys.notifications.all(sessionEmail);
+  const notificationsKey = useMemo(() => queryKeys.notifications.all(sessionEmail), [sessionEmail]);
   const notificationsQuery = usePrefetchAwareQuery<MessagingSnapshot>({
     queryKey: notificationsKey,
     queryFn: fetchMessagingSnapshot,
@@ -80,7 +80,7 @@ export function Navbar() {
     return () => {
       eventSource.close();
     };
-  }, [notificationsKey, notificationsQuery, queryClient]);
+  }, [notificationsKey, notificationsQuery.refetch, queryClient, session?.user?.email]);
 
   const snapshot = notificationsQuery.data;
   const currentUser = snapshot ? getCurrentUserFromSnapshot(snapshot) : null;
@@ -107,7 +107,7 @@ export function Navbar() {
         <div className="container flex items-center justify-between h-16 gap-4">
           <Link href="/" className="flex items-center gap-2 flex-shrink-0">
             <img src={logo.src} alt="Movirae" className="h-7" />
-            <span className="font-display text-lg font-bold text-foreground">MOVIRIE</span>
+            <span className="font-display text-lg font-bold text-foreground">MOVIRAE</span>
           </Link>
 
           {/* Desktop nav links */}
