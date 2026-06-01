@@ -49,6 +49,8 @@ type WatchExperienceModel = {
   }): Promise<WatchExperienceRow[]>;
 };
 
+type WatchExperienceStatsRow = Pick<WatchExperienceRow, "tmdbId" | "platform" | "context" | "mood" | "watchedAt">;
+
 const watchExperienceModel = (
   prisma as typeof prisma & {
     userWatchExperience: WatchExperienceModel;
@@ -166,15 +168,24 @@ export async function saveUserWatchExperience(userId: string, tmdbId: string, in
 export async function getWatchExperienceStats(userId: string) {
   const records = await getUserWatchExperienceRows(userId);
 
-  const buildCounts = <T extends string>(selector: (record: WatchExperienceRow) => T) => {
-    const counts = records.reduce<Record<string, number>>((acc, record) => {
-      const key = selector(record);
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    return Object.entries(counts).map(([label, count]) => ({ label, count }));
-  };
+  // Use Prisma groupBy for categorical aggregations instead of in-memory processing
+  const [platformGroups, contextGroups, moodGroups] = await Promise.all([
+    prisma.userWatchExperience.groupBy({
+      by: ["platform"],
+      where: { userId },
+      _count: true,
+    }),
+    prisma.userWatchExperience.groupBy({
+      by: ["context"],
+      where: { userId },
+      _count: true,
+    }),
+    prisma.userWatchExperience.groupBy({
+      by: ["mood"],
+      where: { userId },
+      _count: true,
+    }),
+  ]);
 
   return {
     records,
@@ -196,22 +207,22 @@ export async function getWatchExperienceStats(userId: string) {
     )
       .sort(([leftDay], [rightDay]) => WEEKDAY_ORDER.indexOf(leftDay as (typeof WEEKDAY_ORDER)[number]) - WEEKDAY_ORDER.indexOf(rightDay as (typeof WEEKDAY_ORDER)[number]))
       .map(([day, count]) => ({ day, count })),
-    platformBreakdown: buildCounts((record) => record.platform)
-      .map((entry) => ({
-        platform: entry.label as WatchPlatform,
-        count: entry.count,
+    platformBreakdown: platformGroups
+      .map((group) => ({
+        platform: group.platform as WatchPlatform,
+        count: group._count,
       }))
       .sort((a, b) => b.count - a.count || a.platform.localeCompare(b.platform)),
-    contextBreakdown: buildCounts((record) => record.context)
-      .map((entry) => ({
-        context: entry.label as WatchContext,
-        count: entry.count,
+    contextBreakdown: contextGroups
+      .map((group) => ({
+        context: group.context as WatchContext,
+        count: group._count,
       }))
       .sort((a, b) => b.count - a.count || a.context.localeCompare(b.context)),
-    moodBreakdown: buildCounts((record) => record.mood)
-      .map((entry) => ({
-        mood: entry.label as Mood,
-        count: entry.count,
+    moodBreakdown: moodGroups
+      .map((group) => ({
+        mood: group.mood as Mood,
+        count: group._count,
       }))
       .sort((a, b) => b.count - a.count || a.mood.localeCompare(b.mood)),
   };
@@ -221,5 +232,5 @@ async function getUserWatchExperienceRows(userId: string) {
   return watchExperienceModel.findMany({
     where: { userId },
     orderBy: { watchedAt: "desc" },
-  });
+  }) as Promise<WatchExperienceStatsRow[]>;
 }
