@@ -32,6 +32,7 @@ interface TMDBGenre {
 }
 
 const genreMap = new Map<number, string>();
+const movieDetailsCache = new Map<string, Promise<Movie | null>>();
 
 function reportTmdbError(message: string, error: unknown, options?: TMDBRequestOptions) {
   if (options?.suppressClientErrors && typeof window !== "undefined") {
@@ -172,22 +173,49 @@ export async function getMovieDetails(movieId: string, options?: TMDBRequestOpti
     return null;
   }
 
-  try {
-    const response = await fetch(
-      `${TMDB_BASE_URL}/movie/${movieId}?api_key=${TMDB_API_KEY}&append_to_response=credits`
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const movie = await response.json();
-
-    return transformTMDBMovie(movie);
-  } catch (error) {
-    reportTmdbError("Failed to fetch movie details:", error, options);
+  const normalizedMovieId = movieId.trim();
+  if (!normalizedMovieId) {
     return null;
   }
+
+  const cached = movieDetailsCache.get(normalizedMovieId);
+  if (cached) {
+    return cached;
+  }
+
+  const request = (async () => {
+    try {
+      const response = await fetch(
+        `${TMDB_BASE_URL}/movie/${normalizedMovieId}?api_key=${TMDB_API_KEY}&append_to_response=credits`
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const movie = await response.json();
+
+      return transformTMDBMovie(movie);
+    } catch (error) {
+      reportTmdbError("Failed to fetch movie details:", error, options);
+      return null;
+    }
+  })();
+
+  const trackedRequest = request.then((movie) => {
+    movieDetailsCache.set(normalizedMovieId, Promise.resolve(movie));
+    return movie;
+  });
+
+  movieDetailsCache.set(normalizedMovieId, trackedRequest);
+
+  return trackedRequest;
+}
+
+export async function getMovieDetailsBatch(movieIds: string[], options?: TMDBRequestOptions): Promise<Movie[]> {
+  const uniqueIds = Array.from(new Set(movieIds.map((id) => id.trim()).filter(Boolean)));
+  const results = await Promise.all(uniqueIds.map((movieId) => getMovieDetails(movieId, options)));
+  return results.filter((movie): movie is Movie => movie !== null);
 }
 
 /**
