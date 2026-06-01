@@ -13,7 +13,10 @@ async function getCurrentUser() {
 
   if (!email) return null;
 
-  return prisma.user.findUnique({ where: { email } });
+  return prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ userId: string }> }) {
@@ -23,7 +26,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        image: true,
+        bio: true,
         _count: {
           select: {
             followers: true,

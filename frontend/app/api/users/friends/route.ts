@@ -34,7 +34,19 @@ export async function GET() {
       return NextResponse.json({ value: [] });
     }
 
-    const users = await prisma.user.findMany({ where: { id: { in: mutualIds } } });
+    const users = await prisma.user.findMany({
+      where: { id: { in: mutualIds } },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        image: true,
+        bio: true,
+      },
+    });
 
     const profiles = users.map(u => buildUserProfile(u)).filter(Boolean);
 

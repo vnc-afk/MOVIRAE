@@ -28,9 +28,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
 
     const followers = await prisma.userFollow.findMany({
       where: { followingId: userId },
-      include: {
+      select: {
+        followerId: true,
         follower: {
-          include: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
             _count: {
               select: {
                 followers: true,
