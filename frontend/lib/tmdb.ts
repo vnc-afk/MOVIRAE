@@ -1,7 +1,10 @@
+import { cache } from "react";
 import type { Movie, CastMember } from "@/lib/types";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+const TMDB_REVALIDATE_SECONDS = 60;
+const TMDB_MEMORY_CACHE_TTL_MS = 60 * 1000;
 
 type TMDBRequestOptions = {
   suppressClientErrors?: boolean;
@@ -32,7 +35,8 @@ interface TMDBGenre {
 }
 
 const genreMap = new Map<number, string>();
-const movieDetailsCache = new Map<string, Promise<Movie | null>>();
+const movieDetailsCache = new Map<string, { expiresAt: number; value: Promise<Movie | null> }>();
+const tmdbJsonCache = new Map<string, { expiresAt: number; value: Promise<unknown> }>();
 
 function reportTmdbError(message: string, error: unknown, options?: TMDBRequestOptions) {
   if (options?.suppressClientErrors && typeof window !== "undefined") {
@@ -41,6 +45,52 @@ function reportTmdbError(message: string, error: unknown, options?: TMDBRequestO
 
   console.error(message, error);
 }
+
+type TMDBFetchInit = RequestInit & {
+  next?: {
+    revalidate?: number;
+  };
+};
+
+function getCachedValue<T>(cacheStore: Map<string, { expiresAt: number; value: Promise<T> }>, key: string) {
+  const cached = cacheStore.get(key);
+  if (!cached) return null;
+
+  if (cached.expiresAt <= Date.now()) {
+    cacheStore.delete(key);
+    return null;
+  }
+
+  return cached.value;
+}
+
+function setCachedValue<T>(cacheStore: Map<string, { expiresAt: number; value: Promise<T> }>, key: string, value: Promise<T>, ttlMs = TMDB_MEMORY_CACHE_TTL_MS) {
+  cacheStore.set(key, { expiresAt: Date.now() + ttlMs, value });
+}
+
+const fetchTmdbJson = cache(async <T>(url: string): Promise<T | null> => {
+  const cacheKey = `json:${url}`;
+  const cached = getCachedValue(tmdbJsonCache as Map<string, { expiresAt: number; value: Promise<T | null> }>, cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const request = (async () => {
+    const response = await fetch(url, {
+      next: { revalidate: TMDB_REVALIDATE_SECONDS },
+      cache: "force-cache",
+    } satisfies TMDBFetchInit);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as T;
+  })();
+
+  setCachedValue(tmdbJsonCache as Map<string, { expiresAt: number; value: Promise<T | null> }>, cacheKey, request);
+  return request;
+});
 
 /**
  * Initialize genre map from TMDB
@@ -51,16 +101,16 @@ export async function initializeGenreMap() {
   }
 
   try {
-    const response = await fetch(
+    const data = await fetchTmdbJson<{ genres?: TMDBGenre[] }>(
       `${TMDB_BASE_URL}/genre/movie/list?api_key=${TMDB_API_KEY}`
     );
 
-    if (!response.ok) {
+    const genres = data?.genres;
+    if (!Array.isArray(genres)) {
       return;
     }
 
-    const data = await response.json();
-    data.genres.forEach((genre: TMDBGenre) => {
+    genres.forEach((genre: TMDBGenre) => {
       genreMap.set(genre.id, genre.name);
     });
   } catch (error) {
@@ -78,15 +128,9 @@ export async function getGenres(): Promise<TMDBGenre[]> {
   }
 
   try {
-    const response = await fetch(
+    const data = await fetchTmdbJson<{ genres?: TMDBGenre[] }>(
       `${TMDB_BASE_URL}/genre/movie/list?api_key=${TMDB_API_KEY}`
     );
-
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
 
     return Array.isArray(data?.genres) ? data.genres : [];
   } catch (error) {
@@ -112,17 +156,11 @@ export async function getTrendingMovies(page = 1, options?: TMDBRequestOptions):
   }
 
   try {
-    const response = await fetch(
+    const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
       `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&page=${page}`
     );
 
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-
-    if (!data.results) return [];
+    if (!data || !data.results) return [];
 
     return Promise.all(
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
@@ -143,17 +181,11 @@ export async function searchMovies(query: string, page = 1, options?: TMDBReques
   }
 
   try {
-    const response = await fetch(
+    const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
       `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}`
     );
 
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-
-    if (!data.results) return [];
+    if (!data || !data.results) return [];
 
     return Promise.all(
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
@@ -179,21 +211,19 @@ export async function getMovieDetails(movieId: string, options?: TMDBRequestOpti
   }
 
   const cached = movieDetailsCache.get(normalizedMovieId);
-  if (cached) {
-    return cached;
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
   }
 
   const request = (async () => {
     try {
-      const response = await fetch(
+      const movie = await fetchTmdbJson<TMDBMovie>(
         `${TMDB_BASE_URL}/movie/${normalizedMovieId}?api_key=${TMDB_API_KEY}&append_to_response=credits`
       );
 
-      if (!response.ok) {
+      if (!movie) {
         return null;
       }
-
-      const movie = await response.json();
 
       return transformTMDBMovie(movie);
     } catch (error) {
@@ -203,11 +233,17 @@ export async function getMovieDetails(movieId: string, options?: TMDBRequestOpti
   })();
 
   const trackedRequest = request.then((movie) => {
-    movieDetailsCache.set(normalizedMovieId, Promise.resolve(movie));
+    movieDetailsCache.set(normalizedMovieId, {
+      expiresAt: Date.now() + TMDB_MEMORY_CACHE_TTL_MS,
+      value: Promise.resolve(movie),
+    });
     return movie;
   });
 
-  movieDetailsCache.set(normalizedMovieId, trackedRequest);
+  movieDetailsCache.set(normalizedMovieId, {
+    expiresAt: Date.now() + TMDB_MEMORY_CACHE_TTL_MS,
+    value: trackedRequest,
+  });
 
   return trackedRequest;
 }
@@ -228,17 +264,11 @@ export async function getSimilarMovies(movieId: string, options?: TMDBRequestOpt
   }
 
   try {
-    const response = await fetch(
+    const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
       `${TMDB_BASE_URL}/movie/${movieId}/similar?api_key=${TMDB_API_KEY}`
     );
 
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-
-    if (!data.results) return [];
+    if (!data || !data.results) return [];
 
     return Promise.all(
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
@@ -315,17 +345,11 @@ export async function getMoviesByGenre(
   }
 
   try {
-    const response = await fetch(
+    const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
       `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}`
     );
 
-    if (!response.ok) {
-      return [];
-    }
-
-    const data = await response.json();
-
-    if (!data.results) return [];
+    if (!data || !data.results) return [];
 
     return Promise.all(
       data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
