@@ -30,12 +30,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ grou
     try {
       const events = await prisma.event.findMany({
         where: { groupId },
-        include: {
+        select: {
+          id: true,
+          groupId: true,
+          createdBy: true,
+          title: true,
+          description: true,
+          startDate: true,
+          startTime: true,
+          location: true,
           creator: {
             select: { id: true, displayName: true, username: true, avatar: true },
           },
           attendees: {
-            include: {
+            select: {
+              id: true,
+              rsvpStatus: true,
+              rsvpAt: true,
               user: {
                 select: { id: true, displayName: true, username: true, avatar: true },
               },
@@ -164,12 +175,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
         startTime,
         location: location || null,
       },
-      include: {
+      select: {
+        id: true,
+        groupId: true,
+        createdBy: true,
+        title: true,
+        description: true,
+        startDate: true,
+        startTime: true,
+        location: true,
         creator: {
           select: { id: true, displayName: true, username: true, avatar: true },
         },
         attendees: {
-          include: {
+          select: {
+            id: true,
+            rsvpStatus: true,
+            rsvpAt: true,
             user: {
               select: { id: true, displayName: true, username: true, avatar: true },
             },
@@ -179,10 +201,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
     });
 
     // Create notifications for other group members
-    const groupMembers = await prisma.groupMember.findMany({
-      where: { groupId },
-      select: { userId: true },
-    });
+    const groupMembers = await prisma.groupMember.findMany({ where: { groupId }, select: { userId: true } });
 
     const otherMembers = groupMembers.filter((m) => m.userId !== user.id);
     const actorName = user.displayName?.trim();

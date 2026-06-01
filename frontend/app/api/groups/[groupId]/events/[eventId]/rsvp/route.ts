@@ -86,7 +86,12 @@ export async function POST(
         rsvpStatus,
         rsvpAt: new Date(),
       },
-      include: {
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        rsvpStatus: true,
+        rsvpAt: true,
         user: {
           select: { id: true, displayName: true, username: true, avatar: true },
         },
@@ -95,12 +100,23 @@ export async function POST(
 
     const updatedEvent = await prisma.event.findUnique({
       where: { id: eventId },
-      include: {
+      select: {
+        id: true,
+        groupId: true,
+        createdBy: true,
+        title: true,
+        description: true,
+        startDate: true,
+        startTime: true,
+        location: true,
         creator: {
           select: { id: true, displayName: true, username: true, avatar: true },
         },
         attendees: {
-          include: {
+          select: {
+            id: true,
+            rsvpStatus: true,
+            rsvpAt: true,
             user: {
               select: { id: true, displayName: true, username: true, avatar: true },
             },

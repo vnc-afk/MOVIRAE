@@ -18,6 +18,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ gro
 
   const currentUser = await prisma.user.findUnique({
     where: { email: session.user.email },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      username: true,
+      displayName: true,
+      avatar: true,
+      image: true,
+      bio: true,
+    },
   });
   const actorName = currentUser?.displayName?.trim();
 
