@@ -10,6 +10,16 @@ import { getWatchExperienceStats } from "@/lib/watch-experiences";
 
 export const runtime = "nodejs";
 
+const WEEKDAY_ORDER = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
 function makeJsonResponse(body: unknown, cacheControl?: string) {
   const headers: Record<string, string> = {};
   if (cacheControl) headers["Cache-Control"] = cacheControl;
@@ -445,7 +455,7 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
   );
   const watchedMovies = watchedMovieDetails.filter((movie): movie is Movie => movie !== null);
 
-  const avgRating = totalWatched > 0 ? reviews.reduce((sum, review) => sum + review.rating, 0) / totalWatched : 0;
+  const avgRating = reviews.length > 0 ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0;
 
   const monthlyCounts = watchExperienceStats.monthlyBreakdown.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.month] = entry.count;
@@ -523,15 +533,20 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     .filter((value) => !Number.isNaN(value.getTime()));
 
   const longestStreak = computeLongestStreak(watchDates);
+  const sortedWatchDates = [...watchDates].sort((left, right) => left.getTime() - right.getTime());
+  const activityStart = sortedWatchDates[0]?.toISOString() ?? null;
+  const activityEnd = sortedWatchDates.at(-1)?.toISOString() ?? null;
 
   return {
     totalWatched,
-    totalHours: Math.round(totalRuntimeMinutes / 60),
+    totalHours: Number((totalRuntimeMinutes / 60).toFixed(1)),
     avgRating,
     favoriteGenre: genreBreakdown[0]?.genre ?? "",
     topDirector,
     longestStreak,
     countriesExplored,
+    activityStart,
+    activityEnd,
     monthlyBreakdown: Object.entries(monthlyCounts)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, count]) => ({ month, count })),
@@ -539,10 +554,18 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     ratingDistribution: Object.entries(ratingCounts)
       .map(([stars, count]) => ({ stars: Number(stars), count }))
       .sort((a, b) => a.stars - b.stars),
-    moodBreakdown: Object.entries(moodCounts).map(([mood, count]) => ({ mood: mood as any, count })),
-    platformBreakdown: Object.entries(platformCounts).map(([platform, count]) => ({ platform: platform as any, count })),
-    contextBreakdown: Object.entries(contextCounts).map(([context, count]) => ({ context: context as any, count })),
-    weekdayBreakdown: Object.entries(weekdayCounts).map(([day, count]) => ({ day, count })),
+    moodBreakdown: Object.entries(moodCounts)
+      .map(([mood, count]) => ({ mood: mood as any, count }))
+      .sort((a, b) => b.count - a.count || a.mood.localeCompare(b.mood)),
+    platformBreakdown: Object.entries(platformCounts)
+      .map(([platform, count]) => ({ platform: platform as any, count }))
+      .sort((a, b) => b.count - a.count || a.platform.localeCompare(b.platform)),
+    contextBreakdown: Object.entries(contextCounts)
+      .map(([context, count]) => ({ context: context as any, count }))
+      .sort((a, b) => b.count - a.count || a.context.localeCompare(b.context)),
+    weekdayBreakdown: Object.entries(weekdayCounts)
+      .map(([day, count]) => ({ day, count }))
+      .sort((a, b) => WEEKDAY_ORDER.indexOf(a.day as (typeof WEEKDAY_ORDER)[number]) - WEEKDAY_ORDER.indexOf(b.day as (typeof WEEKDAY_ORDER)[number])),
   };
 }
 
@@ -928,10 +951,10 @@ export async function GET(
       case key === "user-filter-presets":
         return NextResponse.json({ value: await getUserFilterPresets(currentUser) });
       case key === "user-stats":
-        // User stats are read-heavy but user-specific — cache privately for a short window
-        return makeJsonResponse({ value: await getUserStats(currentUser) }, "private, max-age=30, stale-while-revalidate=60");
+        // User stats are user-specific and should always reflect the latest watch/review data.
+        return makeJsonResponse({ value: await getUserStats(currentUser) }, "private, no-store");
       case key === "user-wrapped":
-        return NextResponse.json({ value: await getUserStats(currentUser) });
+        return makeJsonResponse({ value: await getUserStats(currentUser) }, "private, no-store");
       case key === "home-activity-feed":
         // Public activity feed: short CDN cache to reduce DB pressure
         return makeJsonResponse({ value: await getActivityFeed() }, "public, s-maxage=30, stale-while-revalidate=60");
