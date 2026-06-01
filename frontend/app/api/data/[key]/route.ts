@@ -7,6 +7,7 @@ import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
 import { getMessageThreadReadState } from "@/lib/message-threads";
 import type { Movie, UserProfile } from "@/lib/types";
 import { getWatchExperienceStats } from "@/lib/watch-experiences";
+import { getHomeActivityFeedSnapshot, getUserStatsSnapshot, refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot } from "@/lib/aggregations";
 
 export const runtime = "nodejs";
 
@@ -439,6 +440,9 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
 
   const reviews = await prisma.review.findMany({
     where: { userId: currentUser.id },
+    select: {
+      rating: true,
+    },
     orderBy: { createdAt: "desc" },
   });
 
@@ -638,7 +642,31 @@ async function getUserNotifications(
 
   const notifications = await prisma.notification.findMany({
     where: { recipientId: currentUser.id },
-    include: { actor: true },
+    select: {
+      id: true,
+      type: true,
+      message: true,
+      createdAt: true,
+      read: true,
+      movieId: true,
+      reviewId: true,
+      discussionId: true,
+      eventId: true,
+      sharedListId: true,
+      groupId: true,
+      actor: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          bio: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
     skip: offset,
@@ -741,7 +769,37 @@ async function getUserMessages(
     where: {
       OR: [{ fromId: currentUser.id }, { toId: currentUser.id }],
     },
-    include: { from: true, to: true },
+    select: {
+      id: true,
+      fromId: true,
+      toId: true,
+      text: true,
+      createdAt: true,
+      from: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          bio: true,
+        },
+      },
+      to: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          image: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          bio: true,
+        },
+      },
+    },
     orderBy: { createdAt: "asc" },
     take: limit,
     skip: offset,
@@ -948,13 +1006,13 @@ export async function GET(
       case key === "user-filter-presets":
         return NextResponse.json({ value: await getUserFilterPresets(currentUser) });
       case key === "user-stats":
-        // User stats are user-specific and should always reflect the latest watch/review data.
-        return makeJsonResponse({ value: await getUserStats(currentUser) }, "private, no-store");
+              // User stats are user-specific and should always reflect the latest watch/review data.
+        return makeJsonResponse({ value: currentUser ? await getUserStatsSnapshot(currentUser.id) : await getUserStats(currentUser) }, "private, no-store");
       case key === "user-wrapped":
-        return makeJsonResponse({ value: await getUserStats(currentUser) }, "private, no-store");
+        return makeJsonResponse({ value: currentUser ? await getUserStatsSnapshot(currentUser.id) : await getUserStats(currentUser) }, "private, no-store");
       case key === "home-activity-feed":
         // Public activity feed: short CDN cache to reduce DB pressure
-        return makeJsonResponse({ value: await getActivityFeed() }, "public, s-maxage=30, stale-while-revalidate=60");
+              return makeJsonResponse({ value: await getHomeActivityFeedSnapshot() }, "public, s-maxage=30, stale-while-revalidate=60");
           case key === "user-notifications": {
             // Support pagination via ?limit=&offset=
             const url = new URL(_request.url);
@@ -1021,7 +1079,9 @@ export async function PUT(
       if (!togglePayload) {
         return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
       }
-      return NextResponse.json({ value: await setUserWatchlist(togglePayload.movieId, togglePayload.active, currentUser.id) });
+      const value = await setUserWatchlist(togglePayload.movieId, togglePayload.active, currentUser.id);
+      void refreshHomeActivityFeedSnapshot().catch((error) => console.error("refreshHomeActivityFeedSnapshot failed", error));
+      return NextResponse.json({ value });
     }
     case key === "user-favorites-current": {
       const togglePayload = extractTogglePayload(payload);
@@ -1035,7 +1095,9 @@ export async function PUT(
       if (!togglePayload) {
         return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
       }
-      return NextResponse.json({ value: await setUserWatched(togglePayload.movieId, togglePayload.active, currentUser.id) });
+      const value = await setUserWatched(togglePayload.movieId, togglePayload.active, currentUser.id);
+      void refreshUserStatsSnapshot(currentUser.id).catch((error) => console.error("refreshUserStatsSnapshot failed", error));
+      return NextResponse.json({ value });
     }
     default:
       return NextResponse.json({ error: "Unknown or read-only data key" }, { status: 400 });
