@@ -9,6 +9,7 @@ import { Navbar } from "@/components/Navbar";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { initializeGenreMap } from "@/lib/tmdb";
 
 type ProvidersProps = {
@@ -107,12 +108,22 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // while session is loading or we're redirecting, don't render protected UI
-  if (status === "loading" || status === "unauthenticated") return null;
+  const showAuthSkeleton = status === "loading" || status === "unauthenticated";
 
   return (
     <>
       <Navbar />
+      {showAuthSkeleton ? (
+        <div className="container py-6 space-y-4">
+          <Skeleton className="h-10 w-56 rounded-full" />
+          <Skeleton className="h-56 w-full rounded-2xl" />
+          <div className="grid gap-4 md:grid-cols-3">
+            <Skeleton className="h-36 w-full rounded-2xl" />
+            <Skeleton className="h-36 w-full rounded-2xl" />
+            <Skeleton className="h-36 w-full rounded-2xl" />
+          </div>
+        </div>
+      ) : null}
       {children}
     </>
   );
