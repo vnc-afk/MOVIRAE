@@ -18,7 +18,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const currentUser = await prisma.user.findUnique({ where: { email } });
+    const currentUser = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        image: true,
+        bio: true,
+      },
+    });
 
     if (!currentUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -32,7 +44,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Recipient and message text are required" }, { status: 400 });
     }
 
-    const recipient = await prisma.user.findUnique({ where: { id: toUserId } });
+    const recipient = await prisma.user.findUnique({
+      where: { id: toUserId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        image: true,
+        bio: true,
+      },
+    });
 
     if (!recipient) {
       return NextResponse.json({ error: "Recipient not found" }, { status: 404 });
@@ -52,9 +76,36 @@ export async function POST(request: Request) {
         toId: recipient.id,
         text,
       },
-      include: {
-        from: true,
-        to: true,
+      select: {
+        id: true,
+        fromId: true,
+        toId: true,
+        text: true,
+        createdAt: true,
+        from: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        to: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
       },
     });
 

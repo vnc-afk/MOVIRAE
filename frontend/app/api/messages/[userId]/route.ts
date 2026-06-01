@@ -17,14 +17,32 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const currentUser = await prisma.user.findUnique({ where: { email } });
+    const currentUser = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
 
     if (!currentUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const { userId: otherUserId } = await params;
-    const otherUser = await prisma.user.findUnique({ where: { id: otherUserId } });
+    const otherUser = await prisma.user.findUnique({
+      where: { id: otherUserId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+        image: true,
+        bio: true,
+      },
+    });
 
     if (!otherUser) {
       return NextResponse.json({ error: "Conversation partner not found" }, { status: 404 });
@@ -37,7 +55,37 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
           { fromId: otherUser.id, toId: currentUser.id },
         ],
       },
-      include: { from: true, to: true },
+      select: {
+        id: true,
+        fromId: true,
+        toId: true,
+        text: true,
+        createdAt: true,
+        from: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        to: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+      },
       orderBy: { createdAt: "asc" },
     });
 
