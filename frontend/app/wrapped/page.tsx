@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, ChevronLeft, Film, Clock, Star, Award, MapPin, Heart, Users, Sparkles, BarChart3 } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
-import type { Movie, UserStats } from "@/lib/types";
+import type { UserStats } from "@/lib/types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, Radar, PieChart, Pie, Cell } from "recharts";
 
 const COLORS = [
@@ -40,15 +41,18 @@ function Slide({ children, bgClass = "" }: SlideProps) {
 
 export default function Wrapped() {
   const [slideIndex, setSlideIndex] = useState(0);
+  const { data: session, status } = useSession();
+  const sessionKey = session?.user?.email ?? null;
+  const wrappedQueryKey = useMemo(() => [...queryKeys.wrapped.current(), sessionKey ?? "anonymous"] as const, [sessionKey]);
   const totalSlides = 7;
   const wrappedQuery = usePrefetchAwareQuery<UserStats | null>({
-    queryKey: queryKeys.wrapped.current(),
+    queryKey: wrappedQueryKey,
     queryFn: async () => {
-      const response = await fetch("/api/data/user-wrapped");
+      const response = await fetch("/api/data/user-wrapped", { cache: "no-store" });
       const data = await response.json();
       return data.value ?? null;
     },
-    enabled: true,
+    enabled: status === "authenticated",
   });
 
   const stats = wrappedQuery.data ?? null;
@@ -69,7 +73,45 @@ export default function Wrapped() {
     contextBreakdown: [],
     weekdayBreakdown: [],
   };
-  const movies: Movie[] = [];
+
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let refreshTimer: number | null = null;
+
+    try {
+      eventSource = new EventSource("/api/reviews/events");
+      eventSource.addEventListener("review-updated", () => {
+        if (refreshTimer) window.clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+          void wrappedQuery.refetch();
+        }, 600);
+      });
+    } catch {
+      /* best-effort */
+    }
+
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      eventSource?.close();
+    };
+  }, [wrappedQuery.refetch]);
+
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    []
+  );
+
+  const activityStartLabel = userStats.activityStart ? dateFormatter.format(new Date(userStats.activityStart)) : null;
+  const activityEndLabel = userStats.activityEnd ? dateFormatter.format(new Date(userStats.activityEnd)) : null;
+  const wrappedYear = userStats.activityEnd ? new Date(userStats.activityEnd).getFullYear() : new Date().getFullYear();
+  const peakWeekday = userStats.weekdayBreakdown.reduce<{ day: string; count: number } | null>((best, entry) => {
+    if (!best || entry.count > best.count) {
+      return { day: entry.day, count: entry.count };
+    }
+    return best;
+  }, null);
+  const maxPlatformCount = Math.max(1, ...userStats.platformBreakdown.map((entry) => entry.count));
+  const maxContextCount = Math.max(1, ...userStats.contextBreakdown.map((entry) => entry.count));
 
   const next = () => setSlideIndex((i) => Math.min(i + 1, totalSlides - 1));
   const prev = () => setSlideIndex((i) => Math.max(i - 1, 0));
@@ -79,14 +121,27 @@ export default function Wrapped() {
     value: m.count,
   }));
 
+  const summaryTitle = useMemo(() => {
+    if (!stats) return "";
+    if (userStats.totalWatched >= 100) return "You're a Cinema Connoisseur";
+    if (userStats.totalWatched >= 50) return "You're a Film Aficionado";
+    if (userStats.totalWatched >= 10) return "You're a Movie Lover";
+    if (userStats.totalWatched > 0) return "You're Getting Into Movies";
+    return "You're a Curious Viewer";
+  }, [stats, userStats.totalWatched]);
+
   const slides = [
     // Slide 0: Intro
     <Slide key="intro">
       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2, type: "spring" }}>
         <Sparkles className="h-16 w-16 text-primary mx-auto mb-6" />
       </motion.div>
-      <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-3">Your 2025 Wrapped</h1>
-      <p className="text-muted-foreground text-lg max-w-md">A look back at your year in cinema. Every frame, every feeling, every moment.</p>
+      <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-3">Your {wrappedYear} Wrapped</h1>
+      <p className="text-muted-foreground text-lg max-w-md">
+        {activityStartLabel && activityEndLabel
+          ? `A precise look at your cinema year, from ${activityStartLabel} to ${activityEndLabel}.`
+          : "A precise look at your cinema year, updated in real time from your activity."}
+      </p>
     </Slide>,
 
     // Slide 1: Big numbers
@@ -202,14 +257,13 @@ export default function Wrapped() {
           <p className="text-xs text-muted-foreground mb-3 font-medium">Platform</p>
           <div className="space-y-2">
             {userStats.platformBreakdown.slice(0, 5).map((p, i) => {
-              const maxCount = Math.max(...userStats.platformBreakdown.map((x) => x.count));
               return (
                 <div key={p.platform} className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground w-20 text-right truncate">{p.platform}</span>
                   <div className="flex-1 h-5 bg-secondary rounded-full overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${(p.count / maxCount) * 100}%` }}
+                      animate={{ width: `${(p.count / maxPlatformCount) * 100}%` }}
                       transition={{ duration: 0.6, delay: i * 0.1 }}
                       className="h-full rounded-full"
                       style={{ backgroundColor: COLORS[i % COLORS.length] }}
@@ -226,14 +280,13 @@ export default function Wrapped() {
           <p className="text-xs text-muted-foreground mb-3 font-medium">Watch Context</p>
           <div className="space-y-2">
             {userStats.contextBreakdown.map((c, i) => {
-              const maxCount = Math.max(...userStats.contextBreakdown.map((x) => x.count));
               return (
                 <div key={c.context} className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground w-20 text-right truncate">{c.context}</span>
                   <div className="flex-1 h-5 bg-secondary rounded-full overflow-hidden">
                     <motion.div
                       initial={{ width: 0 }}
-                      animate={{ width: `${(c.count / maxCount) * 100}%` }}
+                      animate={{ width: `${(c.count / maxContextCount) * 100}%` }}
                       transition={{ duration: 0.6, delay: i * 0.1 }}
                       className="h-full bg-accent rounded-full"
                     />
@@ -276,7 +329,8 @@ export default function Wrapped() {
         </div>
       </motion.div>
       <p className="text-sm text-muted-foreground mt-3">
-        Peak day: <span className="text-primary font-bold">Saturday</span> with 48 films 🍿
+        Peak day: <span className="text-primary font-bold">{peakWeekday?.day ?? "No data yet"}</span>
+        {peakWeekday ? ` with ${peakWeekday.count} films 🍿` : ""}
       </p>
     </Slide>,
 
@@ -285,24 +339,51 @@ export default function Wrapped() {
       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1, type: "spring" }}>
         <Award className="h-16 w-16 text-primary mx-auto mb-6" />
       </motion.div>
-      <h2 className="font-display text-3xl font-bold text-foreground mb-3">You're a Cinema Connoisseur</h2>
-      <p className="text-muted-foreground max-w-md mb-8">
-        {userStats.totalWatched} films, {userStats.totalHours} hours, {userStats.countriesExplored} countries explored.
-        Your love for {userStats.favoriteGenre || "movies"} defines your taste, and your {userStats.longestStreak}-day streak shows true dedication.
-      </p>
-      <div className="flex flex-wrap gap-2 justify-center">
-        {["🎬 Cinephile", "🔥 Streak Master", "🌍 World Explorer", `⭐ ${userStats.favoriteGenre} Fan`].map((badge) => (
-          <motion.span
-            key={badge}
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 + Math.random() * 0.3, type: "spring" }}
-            className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium"
-          >
-            {badge}
-          </motion.span>
-        ))}
-      </div>
+
+      {/** Only show the summary, title and badges when we have real data. Otherwise render nothing (blank). */}
+      {stats ? (
+        <>
+          <h2 className="font-display text-3xl font-bold text-foreground mb-3">{summaryTitle}</h2>
+        <>
+          <p className="text-muted-foreground max-w-md mb-8">
+            {userStats.totalWatched} films, {userStats.totalHours} hours, {userStats.countriesExplored} countries explored.
+            {activityEndLabel ? ` Updated through ${activityEndLabel}.` : ""}
+            {' '}Your love for {userStats.favoriteGenre || "movies"} defines your taste, and your {userStats.longestStreak}-day streak shows true dedication.
+          </p>
+
+          <div className="flex flex-wrap gap-2 justify-center">
+            {/** compute a small set of personalized badges based on the user's stats */}
+            {(() => {
+              const badges: string[] = [];
+              if (userStats.totalWatched >= 100) badges.push('🎬 Cinephile');
+              else if (userStats.totalWatched >= 10) badges.push('🎬 Moviegoer');
+
+              if (userStats.longestStreak >= 14) badges.push('🔥 Streak Master');
+              else if (userStats.longestStreak >= 3) badges.push('🔥 Rising Streak');
+
+              if (userStats.countriesExplored >= 5) badges.push('🌍 World Explorer');
+              else if (userStats.countriesExplored > 0) badges.push('🌍 Traveler');
+
+              if (userStats.favoriteGenre) badges.push(`⭐ ${userStats.favoriteGenre} Fan`);
+
+              if (badges.length === 0) badges.push('👀 Explorer');
+
+              return badges.map((badge) => (
+                <motion.span
+                  key={badge}
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3 + Math.random() * 0.3, type: 'spring' }}
+                  className="text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium"
+                >
+                  {badge}
+                </motion.span>
+              ));
+            })()}
+          </div>
+        </>
+        </>
+      ) : null}
     </Slide>,
   ];
 
