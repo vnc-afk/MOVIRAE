@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { refreshUserStatsSnapshot } from "@/lib/aggregations";
 import {
   getUserWatchExperience,
   parseWatchExperiencePayload,
@@ -61,6 +62,7 @@ export async function PUT(
     }
 
     const value = await saveUserWatchExperience(currentUser.id, tmdbId, input);
+    void refreshUserStatsSnapshot(currentUser.id).catch((error) => console.error("refreshUserStatsSnapshot failed", error));
     return NextResponse.json({ value, watched: true });
   } catch (error) {
     console.error("/api/watch-experiences/[tmdbId] PUT error:", error);
