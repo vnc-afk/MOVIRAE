@@ -124,7 +124,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       ) : null}
-      {children}
+      {!showAuthSkeleton ? children : null}
     </>
   );
 }
