@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getMovieDetails } from "@/lib/tmdb";
+import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
 import { getMessageThreadReadState } from "@/lib/message-threads";
 import type { Movie, UserProfile } from "@/lib/types";
 import { getWatchExperienceStats } from "@/lib/watch-experiences";
@@ -450,10 +450,7 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
   ]);
   const totalWatched = watchedMovieIdSet.size;
 
-  const watchedMovieDetails = await Promise.all(
-    Array.from(watchedMovieIdSet).map((tmdbId) => getMovieDetails(tmdbId))
-  );
-  const watchedMovies = watchedMovieDetails.filter((movie): movie is Movie => movie !== null);
+  const watchedMovies = await getMovieDetailsBatch(Array.from(watchedMovieIdSet));
 
   const avgRating = reviews.length > 0 ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0;
 
@@ -603,8 +600,8 @@ async function getActivityFeed() {
   const feedItems = [...reviewFeedItems, ...watchlistFeedItems];
 
   const uniqueMovieIds = Array.from(new Set(feedItems.map((item) => item.movieId))).slice(0, 10);
-  const movies = await Promise.all(uniqueMovieIds.map((id) => getMovieDetails(id)));
-  const movieMap = new Map(movies.filter((movie): movie is NonNullable<typeof movie> => movie !== null).map((movie) => [movie.id, movie]));
+  const movies = await getMovieDetailsBatch(uniqueMovieIds);
+  const movieMap = new Map(movies.map((movie) => [movie.id, movie]));
 
   return feedItems
     .filter((item) => movieMap.has(item.movieId))

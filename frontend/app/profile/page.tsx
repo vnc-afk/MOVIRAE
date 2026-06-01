@@ -11,7 +11,7 @@ import { MovieCard } from "@/components/MovieCard";
 import { StarRating } from "@/components/StarRating";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Movie, UserProfile } from "@/lib/types";
-import { getMovieDetails } from "@/lib/tmdb";
+import { getMovieDetailsBatch, getMovieDetails } from "@/lib/tmdb";
 import { queryKeys } from "@/lib/queryKeys";
 import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
@@ -62,16 +62,15 @@ export default function ProfilePage() {
       const currentUser = users.find((item: UserProfile) => item.email === session?.user?.email) ?? users[0] ?? null;
 
       const favoriteIds = currentUser?.favoriteMovies ?? [];
-      const favoriteResults = await Promise.all(favoriteIds.map((movieId: string) => getMovieDetails(movieId)));
+      const favoriteResults = await getMovieDetailsBatch(favoriteIds);
 
       const watchlistIds = Array.isArray(watchlistResponse.value) ? watchlistResponse.value : [];
-      const watchlistResults = await Promise.all(watchlistIds.map((movieId: string) => getMovieDetails(movieId)));
+      const watchlistResults = await getMovieDetailsBatch(watchlistIds);
 
       const reviewList = Array.isArray(reviewsResponse.value) ? reviewsResponse.value : [];
-      const reviewedMovieResults = await Promise.all(
-        reviewList.map(async (review: ReviewSummary) => [review.movieId, await getMovieDetails(review.movieId)] as const)
-      );
-      const nextReviewMovies = Object.fromEntries(reviewedMovieResults);
+      const reviewedMovies = await getMovieDetailsBatch(reviewList.map((review: ReviewSummary) => review.movieId));
+      const reviewedMovieMap = new Map(reviewedMovies.map((movie) => [movie.id, movie] as const));
+      const nextReviewMovies = Object.fromEntries(reviewList.map((review: ReviewSummary) => [review.movieId, reviewedMovieMap.get(review.movieId) ?? null] as const));
 
       return {
         user: currentUser,

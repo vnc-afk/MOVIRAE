@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { ArrowLeftRight, Check, X } from "lucide-react";
-import { getMovieDetails } from "@/lib/tmdb";
+import { getMovieDetailsBatch } from "@/lib/tmdb";
 import type { Movie, UserProfile } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -60,8 +60,7 @@ export default function CompareWatchlists() {
       const response = await fetch("/api/data/user-watchlist-current");
       const data = await response.json();
       const ids = Array.isArray(data.value) ? data.value : [];
-      const movies = await Promise.all(ids.map((movieId: string) => getMovieDetails(movieId)));
-      return movies.filter((movie): movie is Movie => movie !== null);
+      return getMovieDetailsBatch(ids);
     },
     enabled: true,
   });
@@ -73,8 +72,7 @@ export default function CompareWatchlists() {
       const response = await fetch(`/api/data/user-watchlist-${selectedUser.id}`);
       const data = await response.json();
       const ids = Array.isArray(data.value) ? data.value : [];
-      const movies = await Promise.all(ids.map((movieId: string) => getMovieDetails(movieId)));
-      return movies.filter((movie): movie is Movie => movie !== null);
+      return getMovieDetailsBatch(ids);
     },
     enabled: Boolean(selectedUser?.id),
   });
