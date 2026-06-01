@@ -330,6 +330,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     setButtonLoading((prev) => ({ ...prev, watched: false }));
     if (Array.isArray(value)) {
       setIsWatched(value.includes(movie.id));
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats.current() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wrapped.current() });
     }
   };
 
@@ -356,6 +358,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
     setWatchExperience(json?.value ?? experience);
     setIsWatched(true);
+    queryClient.invalidateQueries({ queryKey: queryKeys.stats.current() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.wrapped.current() });
     toast.success("Watch experience saved");
   };
 
@@ -446,6 +450,9 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           await refreshReviews();
         }
 
+        queryClient.invalidateQueries({ queryKey: queryKeys.stats.current() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.wrapped.current() });
+
         toast.success("Review posted");
       } catch (error) {
         // rollback
@@ -482,6 +489,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       setReviewRating(0);
       setReviewComment("");
       setReviewSubmitting(false);
+      queryClient.invalidateQueries({ queryKey: queryKeys.stats.current() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.wrapped.current() });
       await refreshReviews();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to save review.");
