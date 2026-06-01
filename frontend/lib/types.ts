@@ -194,6 +194,8 @@ export interface UserStats {
   topDirector: string;
   longestStreak: number;
   countriesExplored: number;
+  activityStart?: string | null;
+  activityEnd?: string | null;
   monthlyBreakdown: Array<{ month: string; count: number }>;
   genreBreakdown: Array<{ genre: string; count: number; pct: number }>;
   ratingDistribution: Array<{ stars: number; count: number }>;
