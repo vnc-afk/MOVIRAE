@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { BarChart3, Clock, Film, Star, TrendingUp, Award, Calendar, Monitor, Users, Sparkles, MapPin } from "lucide-react";
+import { useSession } from "next-auth/react";
 import type { UserStats } from "@/lib/types";
 import { WATCH_MOODS } from "@/lib/watch-options";
 import { queryKeys } from "@/lib/queryKeys";
@@ -44,15 +45,18 @@ function formatMonthLabel(monthValue: string) {
 
 export default function UserStats() {
   const queryClient = useQueryClient();
+  const { data: session, status } = useSession();
+  const sessionKey = session?.user?.email ?? null;
+  const statsQueryKey = useMemo(() => [...queryKeys.stats.current(), sessionKey ?? "anonymous"] as const, [sessionKey]);
 
   const statsQuery = usePrefetchAwareQuery<UserStats | null>({
-    queryKey: queryKeys.stats.current(),
+    queryKey: statsQueryKey,
     queryFn: async () => {
-      const response = await fetch("/api/data/user-stats");
+      const response = await fetch("/api/data/user-stats", { cache: "no-store" });
       const data = await response.json();
       return data.value ?? null;
     },
-    enabled: true,
+    enabled: status === "authenticated",
   });
 
   const stats = statsQuery.data ?? null;
@@ -61,11 +65,11 @@ export default function UserStats() {
     if (!stats) return;
 
     try {
-      applyEntityUpdate(queryClient, [queryKeys.stats.current()], () => stats);
+      applyEntityUpdate(queryClient, [statsQueryKey], () => stats);
     } catch {
       /* best-effort */
     }
-  }, [queryClient, stats]);
+  }, [queryClient, stats, statsQueryKey]);
 
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -87,7 +91,7 @@ export default function UserStats() {
       if (refreshTimer) window.clearTimeout(refreshTimer);
       eventSource?.close();
     };
-  }, [statsQuery]);
+  }, [statsQuery.refetch]);
 
   const userStats = stats ?? {
     totalWatched: 0,
