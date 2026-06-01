@@ -24,11 +24,54 @@ export async function GET(_request: Request, { params }: { params: Promise<{ tmd
     const currentUserPromise = getCurrentUser();
     const reviewsPromise = prisma.review.findMany({
       where: { tmdbId },
-      include: {
-        user: true,
-        likesRecords: true,
+      select: {
+        id: true,
+        tmdbId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: {
+          select: {
+            userId: true,
+          },
+        },
         replies: {
-          include: { user: true, likesRecords: true },
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: {
+              select: {
+                userId: true,
+              },
+            },
+          },
           orderBy: { createdAt: "asc" },
         },
       },

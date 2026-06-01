@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canReviewMovie, serializeReview } from "@/lib/reviews";
 import { publishReviewEvent } from "@/lib/review-events";
+import { refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot } from "@/lib/aggregations";
 
 export const runtime = "nodejs";
 
@@ -51,9 +52,53 @@ export async function POST(request: Request) {
         userId: currentUser.id,
         tmdbId,
       },
-      include: {
-        user: true,
-        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
+      select: {
+        id: true,
+        tmdbId: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: {
+          select: { userId: true },
+        },
+        replies: {
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: {
+              select: { userId: true },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -68,9 +113,49 @@ export async function POST(request: Request) {
         rating,
         comment: comment || null,
       },
-      include: {
-        user: true,
-        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
+      select: {
+        id: true,
+        tmdbId: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: { select: { userId: true } },
+        replies: {
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: { select: { userId: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -82,6 +167,9 @@ export async function POST(request: Request) {
       // non-fatal
       console.warn("publishReviewEvent failed:", e);
     }
+
+    void refreshUserStatsSnapshot(currentUser.id).catch((error) => console.error("refreshUserStatsSnapshot failed", error));
+    void refreshHomeActivityFeedSnapshot().catch((error) => console.error("refreshHomeActivityFeedSnapshot failed", error));
 
     return NextResponse.json({ value: serializeReview(review, currentUser.id), opId });
   } catch (error) {

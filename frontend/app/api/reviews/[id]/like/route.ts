@@ -35,9 +35,49 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
     const existing = await prisma.review.findUnique({
       where: { id },
-      include: {
-        user: true,
-        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
+      select: {
+        id: true,
+        tmdbId: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: { select: { userId: true } },
+        replies: {
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: { select: { userId: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -109,9 +149,49 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     const review = await prisma.review.findUnique({
       where: { id },
-      include: {
-        user: true,
-        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
+      select: {
+        id: true,
+        tmdbId: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: { select: { userId: true } },
+        replies: {
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: { select: { userId: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 

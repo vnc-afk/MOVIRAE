@@ -69,10 +69,47 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const review = await prisma.review.findUnique({
       where: { id },
-      include: {
-        user: true,
+      select: {
+        id: true,
+        tmdbId: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: { select: { userId: true } },
         replies: {
-          include: { user: true, likesRecords: true },
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: { select: { userId: true } },
+          },
           orderBy: { createdAt: "asc" },
         },
       },

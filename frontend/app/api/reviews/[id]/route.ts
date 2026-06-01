@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeReview } from "@/lib/reviews";
 import { publishReviewEvent } from "@/lib/review-events";
+import { refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot } from "@/lib/aggregations";
 
 export const runtime = "nodejs";
 
@@ -50,9 +51,49 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         rating,
         comment: comment || null,
       },
-      include: {
-        user: true,
-        replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
+      select: {
+        id: true,
+        tmdbId: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: { select: { userId: true } },
+        replies: {
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: { select: { userId: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -62,6 +103,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     } catch (e) {
       console.warn("publishReviewEvent failed:", e);
     }
+
+    void refreshUserStatsSnapshot(currentUser.id).catch((error) => console.error("refreshUserStatsSnapshot failed", error));
+    void refreshHomeActivityFeedSnapshot().catch((error) => console.error("refreshHomeActivityFeedSnapshot failed", error));
 
     return NextResponse.json({ value: serializeReview(review, currentUser.id) });
   } catch (error) {
@@ -78,7 +122,53 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
 
     const { id } = await params;
-    const existing = await prisma.review.findUnique({ where: { id } });
+    const existing = await prisma.review.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        tmdbId: true,
+        userId: true,
+        rating: true,
+        comment: true,
+        likes: true,
+        createdAt: true,
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            username: true,
+            displayName: true,
+            avatar: true,
+            image: true,
+            bio: true,
+          },
+        },
+        likesRecords: { select: { userId: true } },
+        replies: {
+          select: {
+            id: true,
+            comment: true,
+            likes: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                image: true,
+                bio: true,
+              },
+            },
+            likesRecords: { select: { userId: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
     if (!existing) {
       return NextResponse.json({ error: "Review not found" }, { status: 404 });
     }
@@ -95,6 +185,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     } catch (e) {
       console.warn("publishReviewEvent failed:", e);
     }
+
+    void refreshUserStatsSnapshot(currentUser.id).catch((error) => console.error("refreshUserStatsSnapshot failed", error));
+    void refreshHomeActivityFeedSnapshot().catch((error) => console.error("refreshHomeActivityFeedSnapshot failed", error));
 
     return NextResponse.json({ value: true });
   } catch (error) {
