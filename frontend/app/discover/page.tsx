@@ -110,12 +110,18 @@ export default function Discover() {
     setFilters((current) => (filtersEqual(current, nextFilters) ? current : nextFilters));
   }, [searchParams]);
 
+  useEffect(() => {
+    const nextUrl = buildFiltersUrl(pathname, filters);
+    const currentSearch = searchParams.toString();
+    const currentUrl = currentSearch ? `${pathname}?${currentSearch}` : pathname;
+
+    if (currentUrl !== nextUrl) {
+      router.replace(nextUrl, { scroll: false });
+    }
+  }, [filters, pathname, router, searchParams]);
+
   const update = <K extends keyof FilterState>(key: K, val: FilterState[K]) => {
-    setFilters((current) => {
-      const nextFilters = { ...current, [key]: val };
-      router.replace(buildFiltersUrl(pathname, nextFilters), { scroll: false });
-      return nextFilters;
-    });
+    setFilters((current) => ({ ...current, [key]: val }));
   };
 
   useEffect(() => {
@@ -205,7 +211,6 @@ export default function Discover() {
     };
 
     setFilters(nextFilters);
-    router.replace(buildFiltersUrl(pathname, nextFilters), { scroll: false });
   };
 
   const resetAndLoad = useCallback(() => {
@@ -490,7 +495,6 @@ export default function Discover() {
               <button
                 onClick={() => {
                   setFilters(defaultFilters);
-                  router.replace(pathname, { scroll: false });
                 }}
                 className="flex items-center gap-1 text-xs text-destructive hover:underline"
               >
