@@ -34,7 +34,7 @@ export type GroupDetailRecord = Group & {
   joined: boolean;
 };
 
-export type CurrentUser = NonNullable<PrismaUser>;
+export type CurrentUser = { id: string } | NonNullable<PrismaUser>;
 
 const fallbackProfile: UserProfile = {
   id: "unknown",
@@ -53,7 +53,19 @@ export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
 
-  return prisma.user.findUnique({ where: { email: session.user.email } });
+  return prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      username: true,
+      displayName: true,
+      avatar: true,
+      image: true,
+      bio: true,
+    },
+  });
 }
 
 function normalizeLikedBy(value: unknown) {
@@ -157,10 +169,62 @@ async function normalizeGroupMovie(movie: any): Promise<Movie> {
 export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser | null) {
   const group = await prisma.group.findUnique({
     where: { id: groupId },
-    include: {
-      members: { include: { user: { include: { _count: { select: { followers: true, followings: true, reviews: true, watchlist: true } } } } } },
-      movies: true,
-      discussions: { include: { author: true }, orderBy: { createdAt: "desc" } },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      avatar: true,
+      creatorId: true,
+      members: {
+        select: {
+          userId: true,
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              username: true,
+              displayName: true,
+              avatar: true,
+              image: true,
+              bio: true,
+            },
+          },
+        },
+      },
+      movies: {
+        select: {
+          tmdbId: true,
+          metadata: true,
+        },
+      },
+      discussions: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          author: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              username: true,
+              displayName: true,
+              avatar: true,
+              image: true,
+              bio: true,
+            },
+          },
+          title: true,
+          body: true,
+          createdAt: true,
+          likes: true,
+          replies: true,
+          likedBy: true,
+          replyItems: true,
+          pinned: true,
+          movieId: true,
+        },
+      },
     },
   });
 
