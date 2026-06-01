@@ -55,6 +55,20 @@ const watchExperienceModel = (
   }
 ).userWatchExperience;
 
+const WEEKDAY_ORDER = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+function getWeekdayLabel(value: Date) {
+  return new Intl.DateTimeFormat("en-US", { weekday: "long", timeZone: "UTC" }).format(value);
+}
+
 function isAllowedValue<T extends string>(value: string, options: readonly T[]): value is T {
   return options.includes(value as T);
 }
@@ -170,26 +184,36 @@ export async function getWatchExperienceStats(userId: string) {
         acc[month] = (acc[month] ?? 0) + 1;
         return acc;
       }, {})
-    ).map(([month, count]) => ({ month, count })),
+    )
+      .sort(([leftMonth], [rightMonth]) => leftMonth.localeCompare(rightMonth))
+      .map(([month, count]) => ({ month, count })),
     weekdayBreakdown: Object.entries(
       records.reduce<Record<string, number>>((acc, record) => {
-        const day = record.watchedAt.toLocaleDateString("en-US", { weekday: "long" });
+        const day = getWeekdayLabel(record.watchedAt);
         acc[day] = (acc[day] ?? 0) + 1;
         return acc;
       }, {})
-    ).map(([day, count]) => ({ day, count })),
-    platformBreakdown: buildCounts((record) => record.platform).map((entry) => ({
-      platform: entry.label as WatchPlatform,
-      count: entry.count,
-    })),
-    contextBreakdown: buildCounts((record) => record.context).map((entry) => ({
-      context: entry.label as WatchContext,
-      count: entry.count,
-    })),
-    moodBreakdown: buildCounts((record) => record.mood).map((entry) => ({
-      mood: entry.label as Mood,
-      count: entry.count,
-    })),
+    )
+      .sort(([leftDay], [rightDay]) => WEEKDAY_ORDER.indexOf(leftDay as (typeof WEEKDAY_ORDER)[number]) - WEEKDAY_ORDER.indexOf(rightDay as (typeof WEEKDAY_ORDER)[number]))
+      .map(([day, count]) => ({ day, count })),
+    platformBreakdown: buildCounts((record) => record.platform)
+      .map((entry) => ({
+        platform: entry.label as WatchPlatform,
+        count: entry.count,
+      }))
+      .sort((a, b) => b.count - a.count || a.platform.localeCompare(b.platform)),
+    contextBreakdown: buildCounts((record) => record.context)
+      .map((entry) => ({
+        context: entry.label as WatchContext,
+        count: entry.count,
+      }))
+      .sort((a, b) => b.count - a.count || a.context.localeCompare(b.context)),
+    moodBreakdown: buildCounts((record) => record.mood)
+      .map((entry) => ({
+        mood: entry.label as Mood,
+        count: entry.count,
+      }))
+      .sort((a, b) => b.count - a.count || a.mood.localeCompare(b.mood)),
   };
 }
 
