@@ -1,5 +1,5 @@
-import { subscribeToSharedListEvents } from "@/lib/shared-list-events";
-import type { SharedListEvent } from "@/lib/shared-list-events";
+import { subscribeToSharedListEvents } from "@/app/shared-lists/lib/events";
+import type { SharedListEvent } from "@/app/shared-lists/lib/events";
 
 export const runtime = "nodejs";
 
