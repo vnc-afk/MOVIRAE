@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentUser, toggleSharedListLike, getSharedListForView, fetchSharedLists } from "@/lib/shared-lists";
-import { publishSharedListEvent } from "@/lib/shared-list-events";
+import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
+import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
+import { getSharedListForView, toggleSharedListLike } from "@/app/shared-lists/lib/shared-lists-service";
 import { publishNotificationEvent } from "@/lib/group-events";
 import { prisma } from "@/lib/prisma";
 
@@ -10,45 +11,22 @@ export const runtime = "nodejs";
 export async function POST(_request: Request, { params }: { params: Promise<{ listId: string }> }) {
   try {
     const { listId } = await params;
-    const currentUser = await getCurrentUser();
-    const actorName = currentUser?.displayName?.trim();
-
-    if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await _request.json().catch(() => null);
-    const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
+    const currentUser = await requireAuth(_request);
+    const actorName = currentUser.displayName?.trim();
+    const body = await parseRequestJson(_request);
+    const opId = getOpId(_request, body);
 
     const list = await getSharedListForView(listId, currentUser);
     if (!list) {
       return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
     }
 
-    const existingLike = await prisma.sharedListLike.findUnique({
-      where: { sharedListId_userId: { sharedListId: listId, userId: currentUser.id } },
-    });
+    const result = await toggleSharedListLike(listId, currentUser);
+    if ("error" in result) {
+      return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
+    }
 
-    const isNewLike = !existingLike;
-
-    await prisma.$transaction(async (tx) => {
-      if (existingLike) {
-        await tx.sharedListLike.delete({
-          where: { sharedListId_userId: { sharedListId: listId, userId: currentUser.id } },
-        });
-        await tx.sharedList.update({ where: { id: listId }, data: { likes: { decrement: 1 } } });
-        return;
-      }
-
-      await tx.sharedListLike.create({
-        data: { sharedListId: listId, userId: currentUser.id },
-      });
-      await tx.sharedList.update({ where: { id: listId }, data: { likes: { increment: 1 } } });
-    });
-
-    // Create notification if liking someone else's list
-    if (isNewLike && list.owner.id !== currentUser.id && actorName) {
-      // Check for duplicate notification within 5 minutes
+    if (result.isNewLike && list.owner.id !== currentUser.id && actorName) {
       const recentNotification = await prisma.notification.findFirst({
         where: {
           recipientId: list.owner.id,
@@ -72,11 +50,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ li
       }
     }
 
-    const result = await fetchSharedLists(currentUser);
-    const updatedList = result.find((list) => list.id === listId);
-    publishSharedListEvent(listId, "updated", opId, updatedList);
-    return NextResponse.json({ value: result, opId });
+    publishSharedListEvent(listId, "updated", opId, result.value);
+    return NextResponse.json({ value: [result.value], opId });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     console.error("Failed to toggle shared list like:", error);
     return NextResponse.json({ error: "Failed to update like." }, { status: 500 });
   }
