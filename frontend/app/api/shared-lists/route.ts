@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { createSharedList, getCurrentUser, fetchSharedLists } from "@/lib/shared-lists";
-import { publishSharedListEvent } from "@/lib/shared-list-events";
+import { createSharedList, fetchSharedLists } from "@/lib/shared-lists";
+import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
+import { getCurrentUser, getOpId, parseRequestJson, requireAuth } from "@/app/shared-lists/lib/api-utils";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const currentUser = await getCurrentUser();
-    const body = await request.json().catch(() => null);
-    const headerOpId = request.headers.get("x-op-id");
-    const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
+    const currentUser = await requireAuth(request);
+    const body = await parseRequestJson(request);
+    const opId = getOpId(request, body);
 
     const name = typeof body?.name === "string" ? body.name.trim() : "";
     const description = typeof body?.description === "string" ? body.description.trim() : "";
@@ -31,6 +31,10 @@ export async function POST(request: Request) {
     publishSharedListEvent(createdListId, "created", opId, createdList);
     return NextResponse.json({ ...result, opId });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     console.error("Failed to create shared list:", error);
     return NextResponse.json({ error: "Failed to create shared list." }, { status: 500 });
   }
