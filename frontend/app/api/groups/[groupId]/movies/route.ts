@@ -1,76 +1,96 @@
-import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
-
-import { fetchGroupDetail } from "@/lib/group-discussions";
-import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  requireAuth,
+  buildLogContext,
+} from "@/app/groups/lib/api-utils";
+import {
+  apiNotFound,
+  apiForbidden,
+  apiBadRequest,
+  apiConflict,
+  apiInternalError,
+} from "@/app/groups/lib/api-response";
+import { fetchGroupDetail } from "@/lib/group-discussions";
 import { publishGroupEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request, { params }: { params: Promise<{ groupId: string }> }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ groupId: string }> }
+) {
   const { groupId } = await params;
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: session.user.email },
-  });
-
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-
-  // Validate user is a member of the group
-  const member = await prisma.groupMember.findUnique({
-    where: {
-      groupId_userId: { groupId, userId: user.id },
-    },
-  });
-
-  if (!member) {
-    return NextResponse.json({ error: "Not a member of this group" }, { status: 403 });
-  }
-
-  const body = await request.json().catch(() => null);
-  const tmdbId = typeof body?.tmdbId === "string" ? body.tmdbId.trim() : "";
-  const metadata = body?.metadata || null;
-
-  if (!tmdbId) {
-    return NextResponse.json({ error: "tmdbId is required" }, { status: 400 });
-  }
+  const logCtx = buildLogContext(_request);
 
   try {
-    // Check if movie already exists in group
+    const currentUser = await requireAuth(_request);
+    logCtx.userId = currentUser.id;
+
+    const group = await fetchGroupDetail(groupId, currentUser);
+    if (!group) {
+      return apiNotFound("Group");
+    }
+
+    return NextResponse.json({ value: group.sharedList });
+  } catch (err) {
+    console.error("/api/groups/[groupId]/movies GET error:", err);
+    return apiInternalError();
+  }
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ groupId: string }> }
+) {
+  const { groupId } = await params;
+  const logCtx = buildLogContext(request);
+
+  try {
+    const user = await requireAuth(request);
+    logCtx.userId = user.id;
+
+    const member = await prisma.groupMember.findUnique({
+      where: { groupId_userId: { groupId, userId: user.id } },
+    });
+
+    if (!member) {
+      return apiForbidden("Not a member of this group");
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const tmdbId =
+      typeof body?.tmdbId === "string"
+        ? body.tmdbId.trim()
+        : typeof body?.movieId === "string"
+        ? body.movieId.trim()
+        : "";
+    const metadata = body?.metadata ?? null;
+
+    if (!tmdbId) {
+      return apiBadRequest("tmdbId is required");
+    }
+
     const existing = await prisma.groupMovie.findUnique({
-      where: {
-        groupId_tmdbId: { groupId, tmdbId },
-      },
+      where: { groupId_tmdbId: { groupId, tmdbId } },
     });
 
     if (existing) {
-      return NextResponse.json({ error: "Movie already in watchlist" }, { status: 409 });
+      return apiConflict("Movie already in watchlist");
     }
 
-    // Add movie to group
     const movie = await prisma.groupMovie.create({
-      data: {
-        groupId,
-        tmdbId,
-        metadata,
-      },
+      data: { groupId, tmdbId, metadata },
     });
 
     const headerOpId = request.headers.get("x-op-id");
     const opId = typeof body?.opId === "string" ? body.opId : headerOpId ?? undefined;
     const group = await fetchGroupDetail(groupId, user);
     publishGroupEvent(groupId, { type: "group-updated", group: group ?? undefined }, opId);
-    return NextResponse.json(movie, { status: 201 });
+
+    return NextResponse.json({ value: movie }, { status: 201 });
   } catch (err) {
     console.error("/api/groups/[groupId]/movies POST error:", err);
-    return NextResponse.json({ error: "Failed to add movie" }, { status: 500 });
+    return apiInternalError();
   }
 }
