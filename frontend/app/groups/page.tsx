@@ -1,278 +1,206 @@
 "use client";
 
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { useQueryClient } from "@tanstack/react-query";
-import { Users, Plus, MessageCircle, Film } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { useCallback, useEffect, useRef } from "react";
+import { useGroupsList, useGroupMembership, useCreateGroup, type GroupsError } from "./hooks";
+import {
+  GroupsContainer,
+  GroupsHeader,
+  CreateGroupDialog,
+  GroupsGrid,
+  EmptyState,
+  ErrorState,
+} from "./components";
 import { toast } from "sonner";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
-import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
-import type { Group, UserProfile } from "@/lib/types";
 
-const avatarUrl = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+/**
+ * Groups List Page - Orchestrator Component
+ *
+ * Composition:
+ * - Hooks: useGroupsList, useGroupMembership, useCreateGroup
+ * - Components: GroupsHeader, CreateGroupDialog, GroupsGrid, EmptyState, ErrorState
+ *
+ * Responsibilities:
+ * - Orchestrate data loading with error handling
+ * - Coordinate user interactions with feedback
+ * - Manage optimistic updates with rollback
+ *
+ * Error Handling:
+ * - Network errors: Retry with exponential backoff
+ * - Validation errors: Show toast with clear message
+ * - Auth errors: Prompt to sign in
+ * - Server errors: Show error state with retry option
+ */
+export default function GroupsPage() {
+  const toastIdRef = useRef<string | number | null>(null);
 
-type GroupRecord = Group & { joined?: boolean };
-type GroupsResponse = { value?: GroupRecord[]; currentUser?: UserProfile | null };
+  // Load groups with error handling
+  const { groups, currentUser, isLoading, error, refetch } = useGroupsList();
 
-type GroupsSnapshot = {
-  groups: GroupRecord[];
-  currentUser: UserProfile | null;
-};
-
-async function fetchJsonValue<T>(url: string): Promise<T | null> {
-  try {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => "");
-      console.error(`fetchJsonValue: ${url} returned ${response.status}: ${errText}`);
-      return null;
+  // Handle membership changes with callbacks
+  const { toggleJoin, isToggling } = useGroupMembership(
+    (error) => handleMembershipError(error),
+    (action) => {
+      toast.dismiss(toastIdRef.current ?? undefined);
+      toast.success(`Group ${action === 'joined' ? 'joined' : 'left'}!`);
     }
+  );
 
-    const text = await response.text();
-    if (!text.trim()) return null;
+  // Handle group creation with callbacks
+  const { create: createGroup, isCreating } = useCreateGroup(
+    (error) => handleCreationError(error),
+    (group) => {
+      toast.dismiss(toastIdRef.current ?? undefined);
+      toast.success(`Group "${group.name}" created!`);
+    }
+  );
 
-    return JSON.parse(text) as T;
-  } catch (err) {
-    console.error("fetchJsonValue error for", url, err);
-    return null;
-  }
-}
+  // Load groups on mount
+  useEffect(() => {
+    if (isLoading) {
+      refetch();
+    }
+  }, [isLoading, refetch]);
 
-export default function Groups() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  // Handle membership errors with user feedback
+  const handleMembershipError = useCallback((error: GroupsError) => {
+    toast.dismiss(toastIdRef.current ?? undefined);
 
-  const groupsQuery = usePrefetchAwareQuery<GroupsSnapshot>({
-    queryKey: queryKeys.group.list(),
-    queryFn: async () => {
-      const payload = await fetchJsonValue<GroupsResponse>("/api/data/groups");
-      return {
-        groups: Array.isArray(payload?.value) ? payload.value : [],
-        currentUser: payload?.currentUser ?? null,
-      };
+    switch (error.type) {
+      case 'AUTH':
+        toast.error('Please sign in to join groups');
+        break;
+      case 'NETWORK':
+        toast.error('Connection error. Please check your internet and try again.');
+        break;
+      case 'VALIDATION':
+        toast.error(error.message);
+        break;
+      case 'SERVER':
+        toast.error('Failed to update membership. Please try again.');
+        break;
+      default:
+        toast.error('An unexpected error occurred');
+    }
+  }, []);
+
+  // Handle creation errors with user feedback
+  const handleCreationError = useCallback((error: GroupsError) => {
+    toast.dismiss(toastIdRef.current ?? undefined);
+
+    switch (error.type) {
+      case 'AUTH':
+        toast.error('Please sign in to create groups');
+        break;
+      case 'NETWORK':
+        toast.error('Connection error. Please check your internet and try again.');
+        break;
+      case 'VALIDATION':
+        toast.error(error.message);
+        break;
+      case 'SERVER':
+        toast.error('Failed to create group. Please try again.');
+        break;
+      default:
+        toast.error('An unexpected error occurred');
+    }
+  }, []);
+
+  // Handle group creation dialog submission
+  const handleCreateGroup = useCallback(
+    async (name: string, description: string) => {
+      toastIdRef.current = toast.loading('Creating group...');
+      try {
+        await createGroup(name, description);
+      } catch (err) {
+        // Error already handled by callback
+      }
     },
-    enabled: true,
-  });
+    [createGroup]
+  );
 
-  const snapshot = groupsQuery.data ?? { groups: [], currentUser: null };
-  const groups = snapshot.groups;
-  const currentUser = snapshot.currentUser;
+  // Handle join/leave button click
+  const handleToggleJoin = useCallback(
+    async (groupId: string) => {
+      toastIdRef.current = toast.loading('Updating membership...');
+      try {
+        await toggleJoin(groupId);
+      } catch (err) {
+        // Error already handled by callback
+      }
+    },
+    [toggleJoin]
+  );
 
-  const loading = groupsQuery.isPending;
+  // Handle retry
+  const handleRetry = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
-  const persistSnapshot = async (nextGroups: GroupRecord[]) => {
-    applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: GroupsSnapshot | undefined) => {
-      if (!current) return current;
-      return { ...current, groups: nextGroups };
-    });
-
-    const response = await fetch("/api/data/groups", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(nextGroups),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to persist groups: ${response.status}`);
-    }
-
-    const payload = await response.json();
-    const savedGroups = Array.isArray(payload.value) ? payload.value as GroupRecord[] : nextGroups;
-    applyEntityUpdate(queryClient, [queryKeys.group.list()], (current: GroupsSnapshot | undefined) => {
-      if (!current) return current;
-      return { ...current, groups: savedGroups };
-    });
-    return savedGroups;
-  };
-
-  const applyMembership = (group: GroupRecord, shouldJoin: boolean) => {
-    if (!currentUser) return group;
-
-    const alreadyMember = group.members.some((member) => member.id === currentUser.id);
-    const members = shouldJoin
-      ? alreadyMember
-        ? group.members
-        : [currentUser, ...group.members]
-      : group.members.filter((member) => member.id !== currentUser.id);
-
-    return {
-      ...group,
-      members,
-      memberCount: members.length,
-      joined: shouldJoin,
-    };
-  };
-
-  const handleJoin = async (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!currentUser) {
-      toast.error("Sign in to join a group.");
-      return;
-    }
-
-    const nextGroups = groups.map((group) =>
-      group.id === id ? applyMembership(group, !group.joined) : group
+  // Render error state
+  if (error) {
+    return (
+      <GroupsContainer>
+        <GroupsHeader>
+          <h1 className="text-3xl font-bold">Groups</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Discover and join communities to watch and discuss movies together
+          </p>
+        </GroupsHeader>
+        <ErrorState 
+          error={error} 
+          onRetry={handleRetry}
+          isRetrying={isLoading}
+        />
+      </GroupsContainer>
     );
-    const savedGroups = await persistSnapshot(nextGroups);
-
-    const group = savedGroups.find((item: GroupRecord) => item.id === id);
-    toast.success(group?.joined ? `Joined ${group.name}!` : `Left ${group?.name}`);
-  };
-
-  const handleCreate = async () => {
-    if (!name.trim() || !description.trim()) {
-      toast.error("Add a name and description.");
-      return;
-    }
-
-    if (!currentUser) {
-      toast.error("Sign in to create a group.");
-      return;
-    }
-
-    const newGroup: GroupRecord = {
-      id: `g-${Date.now()}`,
-      name,
-      description,
-      memberCount: 1,
-      avatar: avatarUrl(name),
-      creatorId: currentUser.id,
-      members: [currentUser],
-      sharedList: [],
-      joined: true,
-    };
-
-    const savedGroups = await persistSnapshot([newGroup, ...groups]);
-    const createdGroup = savedGroups.find((group: GroupRecord) => group.id === newGroup.id) ?? savedGroups[0] ?? newGroup;
-    setOpen(false);
-    setName("");
-    setDescription("");
-    toast.success(`${createdGroup.name} created!`);
-    router.push(`/groups/${createdGroup.id}`);
-  };
-
-  if (loading) {
-    return <div className="container py-20 text-center text-sm text-muted-foreground">Loading groups...</div>;
   }
 
   return (
-    <div className="pb-20 md:pb-0">
-      <div className="container py-8 space-y-8">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Users className="h-5 w-5 text-primary" />
-              <h1 className="font-display text-2xl font-bold text-foreground">Groups & Clubs</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">Join communities, share watchlists, and discuss films together.</p>
-          </div>
+    <GroupsContainer>
+      <GroupsHeader>
+        <h1 className="text-3xl font-bold">Groups</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Discover and join communities to watch and discuss movies together
+        </p>
+      </GroupsHeader>
 
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2"><Plus className="h-4 w-4" /> Create Group</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create a new group</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="g-name">Group name</Label>
-                  <Input id="g-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="g-desc">Description</Label>
-                  <Textarea id="g-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Group description" rows={3} />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button onClick={handleCreate}>Create Group</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </motion.div>
+      <CreateGroupDialog 
+        onCreate={handleCreateGroup} 
+        isLoading={isCreating}
+        disabled={isLoading}
+      />
 
-        {groups.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            No groups yet. Create one to get started.
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {groups.map((group, i) => (
-              <motion.div key={group.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.1 }} className="rounded-xl bg-card p-6 card-shadow hover:card-shadow-hover transition-shadow duration-300">
-                <Link href={`/groups/${group.id}`} className="block">
-                  <div className="flex items-start gap-4">
-                    {group.avatar ? (
-                      <img src={group.avatar} alt={group.name} className="h-14 w-14 rounded-xl bg-muted" />
-                    ) : (
-                      <div className="h-14 w-14 rounded-xl bg-muted" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground hover:text-primary transition-colors">{group.name}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{group.description}</p>
-                    </div>
-                  </div>
+      {isLoading ? (
+        <GroupsLoadingSkeleton count={Math.max(3, groups.length)} />
+      ) : groups.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <GroupsGrid
+          groups={groups}
+          onJoinLeave={handleToggleJoin}
+          isToggling={isToggling}
+          currentUserId={currentUser?.id}
+        />
+      )}
+    </GroupsContainer>
+  );
+}
 
-                  <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {group.memberCount} members</span>
-                    <span className="flex items-center gap-1"><Film className="h-3.5 w-3.5" /> {group.sharedList.length} shared films</span>
-                  </div>
-
-                  <div className="flex items-center mt-4">
-                    <div className="flex -space-x-2">
-                      {group.members.slice(0, 3).map((member, index) => (
-                        member.avatar ? (
-                          <img key={`${member.id}-${index}`} src={member.avatar} alt={member.displayName} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
-                        ) : (
-                          <div key={`${member.id}-${index}`} className="h-7 w-7 rounded-full border-2 border-card bg-muted" />
-                        )
-                      ))}
-                    </div>
-                    {group.memberCount > 3 && <span className="ml-2 text-xs text-muted-foreground">+{group.memberCount - 3} more</span>}
-                  </div>
-
-                  {group.sharedList.length > 0 && (
-                    <div className="flex gap-2 mt-4">
-                      {group.sharedList.slice(0, 3).map((movie, index) => (
-                        movie.poster ? (
-                          <img key={`${movie.id}-${index}`} src={movie.poster} alt={movie.title} className="h-16 w-11 rounded object-cover poster-shadow" />
-                        ) : (
-                          <div key={`${movie.id}-${index}`} className="h-16 w-11 rounded bg-muted poster-shadow" />
-                        )
-                      ))}
-                    </div>
-                  )}
-                </Link>
-
-                <div className="flex gap-2 mt-5">
-                  <Button size="sm" variant={group.joined ? "secondary" : "default"} className="flex-1 gap-1.5" onClick={(e) => handleJoin(group.id, e)}>
-                    <Users className="h-3.5 w-3.5" />
-                    {group.joined ? "Joined" : "Join"}
-                  </Button>
-                  <Button size="sm" variant="secondary" className="flex-1 gap-1.5" asChild>
-                    <Link href={`/groups/${group.id}`}><MessageCircle className="h-3.5 w-3.5" /> Discuss</Link>
-                  </Button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </div>
+/**
+ * Loading skeleton component
+ * Shows dynamic number of skeletons based on expected group count
+ */
+function GroupsLoadingSkeleton({ count }: { count: number }) {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="h-64 animate-pulse rounded-lg bg-muted"
+          role="status"
+          aria-label={`Loading group ${i + 1}`}
+        />
+      ))}
     </div>
   );
 }
