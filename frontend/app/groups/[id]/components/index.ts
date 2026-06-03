@@ -1,0 +1,9 @@
+export { GroupDetailHeader } from "./GroupDetailHeader";
+export { DiscussionsList } from "./DiscussionsList";
+export { DiscussionItem } from "./DiscussionItem";
+export { AddDiscussionForm } from "./AddDiscussionForm";
+export { EventsList } from "./EventsList";
+export { EventCard } from "./EventCard";
+export { AddEventForm } from "./AddEventForm";
+export { WatchlistTab } from "./WatchlistTab";
+export { MembersTab } from "./MembersTab";
