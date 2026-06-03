@@ -1,101 +1,129 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-
+import { prisma } from "@/lib/prisma";
+import {
+  getCurrentUser,
+  requireAuth,
+  buildLogContext,
+} from "@/app/groups/lib/api-utils";
+import {
+  apiNotFound,
+  apiValidationError,
+  apiInternalError,
+} from "@/app/groups/lib/api-response";
+import { createDiscussionSchema } from "@/app/groups/lib/api-schemas";
 import { fetchGroupDetail } from "@/lib/group-discussions";
 import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request, { params }: { params: Promise<{ groupId: string }> }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ groupId: string }> }
+) {
   const { groupId } = await params;
-  const session = await getServerSession(authOptions);
-  
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const logCtx = buildLogContext(_request);
+
+  try {
+    const currentUser = await getCurrentUser();
+    const group = await fetchGroupDetail(groupId, currentUser);
+
+    if (!group) {
+      return apiNotFound("Group");
+    }
+
+    return NextResponse.json({ value: group.discussions });
+  } catch (err) {
+    console.error("/api/groups/[groupId]/discussions GET error:", err);
+    return apiInternalError();
   }
+}
 
-  const currentUser = await prisma.user.findUnique({
-    where: { email: session.user.email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      username: true,
-      displayName: true,
-      avatar: true,
-      image: true,
-      bio: true,
-    },
-  });
-  const actorName = currentUser?.displayName?.trim();
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ groupId: string }> }
+) {
+  const { groupId } = await params;
+  const logCtx = buildLogContext(request);
 
-  if (!currentUser) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
+  try {
+    const currentUser = await requireAuth(request);
+    logCtx.userId = currentUser.id;
 
-  const body = await request.json().catch(() => null);
-  const opId = typeof body?.opId === "string" ? body.opId : request.headers.get("x-op-id") ?? undefined;
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
-  const discussionBody = typeof body?.body === "string" ? body.body.trim() : "";
-  const movieId = typeof body?.movieId === "string" ? body.movieId : undefined;
+    const body = await request.json().catch(() => ({}));
+    const parseResult = createDiscussionSchema.safeParse(body);
 
-  if (!title || !discussionBody) {
-    return NextResponse.json({ error: "Title and body are required." }, { status: 400 });
-  }
+    if (!parseResult.success) {
+      return apiValidationError("Invalid request body", {
+        fields: parseResult.error.flatten().fieldErrors,
+      });
+    }
 
-  // Verify group exists
-  const group = await prisma.group.findUnique({ where: { id: groupId } });
-  if (!group) {
-    return NextResponse.json({ error: "Group not found." }, { status: 404 });
-  }
+    const { title, body: discussionBody, movieId, opId } = parseResult.data;
 
-  // Create discussion
-  const discussion = await prisma.groupDiscussion.create({
-    data: {
-      groupId,
-      authorId: currentUser.id,
-      title,
-      body: discussionBody,
-      movieId,
-      likes: 0,
-      replies: 0,
-      likedBy: [],
-      replyItems: [],
-    },
-  });
-
-  // Create notifications for other group members
-  const groupMembers = await prisma.groupMember.findMany({
-    where: { groupId },
-    select: { userId: true },
-  });
-
-  const otherMembers = groupMembers.filter((m) => m.userId !== currentUser.id);
-  if (otherMembers.length > 0 && actorName) {
-    const notificationData = otherMembers.map((member) => ({
-      recipientId: member.userId,
-      actorId: currentUser.id,
-      type: "discussion_created" as const,
-      groupId: groupId,
-      discussionId: discussion.id,
-      message: `started a discussion in your group: "${title}"`,
-    }));
-    
-    const createdNotifications = await prisma.notification.createMany({
-      data: notificationData,
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: { id: true },
     });
 
-    // Publish notification events
-    if (createdNotifications.count > 0) {
-      for (const member of otherMembers) {
-        publishNotificationEvent(`${groupId}-${member.userId}`);
+    if (!group) {
+      return apiNotFound("Group");
+    }
+
+    const discussion = await prisma.groupDiscussion.create({
+      data: {
+        groupId,
+        authorId: currentUser.id,
+        title,
+        body: discussionBody,
+        movieId,
+        likes: 0,
+        replies: 0,
+        likedBy: [],
+        replyItems: [],
+      },
+    });
+
+    const groupMembers = await prisma.groupMember.findMany({
+      where: { groupId },
+      select: { userId: true },
+    });
+
+    const otherMembers = groupMembers.filter((member) => member.userId !== currentUser.id);
+    if (otherMembers.length > 0) {
+      const notificationData = otherMembers.map((member) => ({
+        recipientId: member.userId,
+        actorId: currentUser.id,
+        type: "discussion_created" as const,
+        groupId,
+        discussionId: discussion.id,
+        message: `started a discussion in your group: "${title}"`,
+      }));
+
+      const createdNotifications = await prisma.notification.createMany({
+        data: notificationData,
+      });
+
+      if (createdNotifications.count > 0) {
+        for (const member of otherMembers) {
+          publishNotificationEvent(`${groupId}-${member.userId}`);
+        }
       }
     }
-  }
 
-  const result = await fetchGroupDetail(groupId, currentUser);
-  publishGroupEvent(groupId, { type: "group-updated", group: result ?? undefined }, opId);
-  return NextResponse.json({ value: result, opId });
+    publishGroupEvent(
+      groupId,
+      {
+        type: "group-updated",
+        action: "created",
+        eventId: discussion.id,
+        event: discussion,
+      },
+      opId
+    );
+
+    return NextResponse.json({ value: discussion, opId }, { status: 201 });
+  } catch (err) {
+    console.error("/api/groups/[groupId]/discussions POST error:", err);
+    return apiInternalError();
+  }
 }
