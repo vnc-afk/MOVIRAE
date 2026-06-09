@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-import { subscribeToNotifications } from "@/lib/group-events";
+import { subscribeToNotifications } from "@/app/notifications/lib/events";
 
 export const runtime = "nodejs";
 
