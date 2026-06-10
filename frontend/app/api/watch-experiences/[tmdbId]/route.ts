@@ -1,43 +1,24 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { apiBadRequest, apiInternalError, apiNotFound, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
+import { requireAuth, parseRequestJson } from "@/app/movie/lib/api-utils";
+import { getWatchExperience, parseWatchExperiencePayload, saveWatchExperience } from "@/app/movie/lib/movie-service";
 import { refreshUserStatsSnapshot } from "@/lib/aggregations";
-import {
-  getUserWatchExperience,
-  parseWatchExperiencePayload,
-  saveUserWatchExperience,
-} from "@/lib/watch-experiences";
 
 export const runtime = "nodejs";
 
-type UserSession = { user?: { email?: string | null } } | null;
-
-async function getCurrentUser(session: UserSession) {
-  if (!session?.user?.email) return null;
-  return prisma.user.findUnique({ where: { email: session.user.email } });
-}
-
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ tmdbId: string }> }
 ) {
   try {
+    const currentUser = await requireAuth(request);
     const { tmdbId } = await params;
-    const session = await getServerSession(authOptions);
-    const currentUser = await getCurrentUser(session);
 
-    if (!currentUser) {
-      return NextResponse.json({ value: null });
-    }
-
-    const value = await getUserWatchExperience(currentUser.id, tmdbId);
-    return NextResponse.json({ value });
+    const value = await getWatchExperience(currentUser.id, tmdbId);
+    return apiSuccess(value);
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") return apiSuccess(null);
     console.error("/api/watch-experiences/[tmdbId] GET error:", error);
-    const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError("Failed to get watch experience");
   }
 }
 
@@ -46,27 +27,19 @@ export async function PUT(
   { params }: { params: Promise<{ tmdbId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    const currentUser = await getCurrentUser(session);
-
-    if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const currentUser = await requireAuth(request);
     const { tmdbId } = await params;
-    const payload = await request.json().catch(() => null);
+
+    const payload = await parseRequestJson(request);
     const input = parseWatchExperiencePayload(payload);
+    if (!input) return apiBadRequest("Invalid payload");
 
-    if (!input) {
-      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
-    }
-
-    const value = await saveUserWatchExperience(currentUser.id, tmdbId, input);
-    void refreshUserStatsSnapshot(currentUser.id).catch((error) => console.error("refreshUserStatsSnapshot failed", error));
-    return NextResponse.json({ value, watched: true });
+    const value = await saveWatchExperience(currentUser.id, tmdbId, input);
+    void refreshUserStatsSnapshot(currentUser.id).catch((err: unknown) => console.error("refreshUserStatsSnapshot failed", err));
+    return apiSuccess({ value, watched: true });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") return apiUnauthorized();
     console.error("/api/watch-experiences/[tmdbId] PUT error:", error);
-    const message = error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return apiInternalError("Failed to save watch experience");
   }
 }
