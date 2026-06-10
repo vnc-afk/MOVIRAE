@@ -1,0 +1,85 @@
+/**
+ * MovieActions Component
+ * Displays action buttons (watched, watchlist, liked, review)
+ */
+
+import { Eye, Heart, ListPlus, Play, Star, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { Review } from "@/lib/types";
+
+interface MovieActionsProps {
+  movieId: string;
+  isWatched: boolean;
+  isWatchlist: boolean;
+  isLiked: boolean;
+  loading: { watched: boolean; watchlist: boolean; liked: boolean };
+  isAuthenticated: boolean;
+  hasCurrentReview: boolean;
+  onToggleWatched: () => void;
+  onToggleWatchlist: () => void;
+  onToggleLiked: () => void;
+  onPlayTrailer: () => void;
+  onReview: () => void;
+}
+
+export function MovieActions({
+  movieId,
+  isWatched,
+  isWatchlist,
+  isLiked,
+  loading,
+  isAuthenticated,
+  hasCurrentReview,
+  onToggleWatched,
+  onToggleWatchlist,
+  onToggleLiked,
+  onPlayTrailer,
+  onReview,
+}: MovieActionsProps) {
+  return (
+    <div className="flex flex-wrap gap-3 mt-6">
+      <Button onClick={onPlayTrailer} className="gap-2">
+        <Play className="h-4 w-4" /> Watch Trailer
+      </Button>
+
+      <Button
+        variant="secondary"
+        className={`gap-2 ${isWatched ? "bg-primary text-primary-foreground" : ""}`}
+        onClick={onToggleWatched}
+        disabled={!isAuthenticated || loading.watched}
+      >
+        <Eye className="h-4 w-4" />
+        {loading.watched ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatched ? "Watched" : "Mark Watched"}
+      </Button>
+
+      <Button
+        variant="secondary"
+        className={`gap-2 ${isWatchlist ? "bg-primary text-primary-foreground" : ""}`}
+        onClick={onToggleWatchlist}
+        disabled={!isAuthenticated || loading.watchlist}
+      >
+        <ListPlus className="h-4 w-4" />
+        {loading.watchlist ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatchlist ? "In Watchlist" : "Watchlist"}
+      </Button>
+
+      <Button
+        variant="secondary"
+        className={`gap-2 ${isLiked ? "bg-primary text-primary-foreground" : ""}`}
+        onClick={onToggleLiked}
+        disabled={!isAuthenticated || loading.liked}
+      >
+        <Heart className="h-4 w-4" />
+        {loading.liked ? <Loader2 className="h-4 w-4 animate-spin" /> : isLiked ? "Liked" : "Like"}
+      </Button>
+
+      <Button
+        variant="secondary"
+        className="gap-2"
+        onClick={onReview}
+        disabled={!isAuthenticated || (!isWatched && !hasCurrentReview)}
+      >
+        <Star className="h-4 w-4" /> {hasCurrentReview ? "Edit Review" : "Write Review"}
+      </Button>
+    </div>
+  );
+}
