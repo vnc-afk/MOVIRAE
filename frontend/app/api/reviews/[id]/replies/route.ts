@@ -1,134 +1,33 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { serializeReview } from "@/lib/reviews";
-import { publishNotificationEvent } from "@/lib/group-events";
-import { publishReviewEvent } from "@/lib/review-events";
+import { apiBadRequest, apiInternalError, apiNotFound, apiUnauthorized, apiSuccess } from "@/app/movie/lib/api-response";
+import { requireAuth, parseRequestJson, getOpId } from "@/app/movie/lib/api-utils";
+import { createReply } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
-async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email;
-
-  if (!email) {
-    return null;
-  }
-
-  return prisma.user.findUnique({ where: { email } });
-}
-
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const currentUser = await getCurrentUser();
-    const actorName = currentUser?.displayName?.trim();
-
-    if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const currentUser = await requireAuth(request);
     const { id } = await params;
-    const payload = await request.json().catch(() => null);
-    const opId = typeof payload?.opId === "string" ? payload.opId : request.headers.get("x-op-id") ?? undefined;
-    const comment = typeof payload?.comment === "string" ? payload.comment.trim() : "";
 
-    if (!comment) {
-      return NextResponse.json({ error: "Reply comment is required" }, { status: 400 });
+    const body = await parseRequestJson(request);
+    const opId = getOpId(request, body);
+    const comment = typeof body?.comment === "string" ? body.comment : "";
+
+    if (!comment.trim()) return apiBadRequest("Reply comment is required");
+
+    const result = await createReply(id, { comment, opId }, currentUser);
+    if ("error" in result) {
+      if (result.error === "not-found") return apiNotFound("Review");
+      if (result.error === "validation") return apiBadRequest("Reply comment is required");
+      return apiInternalError("Failed to create reply");
     }
 
-    const existing = await prisma.review.findUnique({ where: { id } });
-
-    if (!existing) {
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
-    }
-
-    await prisma.reviewReply.create({
-      data: {
-        reviewId: id,
-        userId: currentUser.id,
-        comment,
-      },
-    });
-
-    // Create notification if replying to someone else's review
-    if (existing.userId !== currentUser.id && actorName) {
-      const notification = await prisma.notification.create({
-        data: {
-          recipientId: existing.userId,
-          actorId: currentUser.id,
-          type: "review_reply",
-          movieId: existing.tmdbId,
-          reviewId: id,
-          message: `replied to your review`,
-        },
-      });
-      publishNotificationEvent(notification.id);
-    }
-
-    const review = await prisma.review.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        tmdbId: true,
-        userId: true,
-        rating: true,
-        comment: true,
-        likes: true,
-        createdAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            username: true,
-            displayName: true,
-            avatar: true,
-            image: true,
-            bio: true,
-          },
-        },
-        likesRecords: { select: { userId: true } },
-        replies: {
-          select: {
-            id: true,
-            comment: true,
-            likes: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                username: true,
-                displayName: true,
-                avatar: true,
-                image: true,
-                bio: true,
-              },
-            },
-            likesRecords: { select: { userId: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
-
-    if (!review) {
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
-    }
-
-    try {
-      const serialized = serializeReview(review, null, false);
-      publishReviewEvent(review.tmdbId, review.id, "replied", opId, serialized);
-    } catch (e) {
-      console.warn("publishReviewEvent failed:", e);
-    }
-
-    return NextResponse.json({ value: serializeReview(review, currentUser.id), opId });
+    return apiSuccess(result.value);
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return apiUnauthorized();
+    }
     console.error("/api/reviews/[id]/replies POST error:", error);
-    return NextResponse.json({ error: "Failed to post reply" }, { status: 500 });
+    return apiInternalError("Failed to post reply");
   }
 }

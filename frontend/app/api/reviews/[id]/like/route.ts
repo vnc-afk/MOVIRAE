@@ -1,214 +1,30 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { randomUUID } from "crypto";
-
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { serializeReview } from "@/lib/reviews";
-import { publishNotificationEvent } from "@/lib/group-events";
-import { publishReviewEvent } from "@/lib/review-events";
+import { apiInternalError, apiNotFound, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
+import { requireAuth, parseRequestJson, getOpId } from "@/app/movie/lib/api-utils";
+import { toggleReviewLike } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
-async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email;
-
-  if (!email) {
-    return null;
-  }
-
-  return prisma.user.findUnique({ where: { email } });
-}
-
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const currentUser = await getCurrentUser();
-    const actorName = currentUser?.displayName?.trim();
-
-    if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const currentUser = await requireAuth(request);
     const { id } = await params;
-    const body = await _request.json().catch(() => null);
-    const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
-    const existing = await prisma.review.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        tmdbId: true,
-        userId: true,
-        rating: true,
-        comment: true,
-        likes: true,
-        createdAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            username: true,
-            displayName: true,
-            avatar: true,
-            image: true,
-            bio: true,
-          },
-        },
-        likesRecords: { select: { userId: true } },
-        replies: {
-          select: {
-            id: true,
-            comment: true,
-            likes: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                username: true,
-                displayName: true,
-                avatar: true,
-                image: true,
-                bio: true,
-              },
-            },
-            likesRecords: { select: { userId: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
 
-    if (!existing) {
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
+    const body = await parseRequestJson(request);
+    const opId = getOpId(request, body);
+
+    const result = await toggleReviewLike(id, currentUser, opId);
+    if ("error" in result) {
+      if (result.error === "not-found") return apiNotFound("Review");
+      if (result.error === "unauthorized") return apiUnauthorized();
+      return apiInternalError("Failed to toggle like");
     }
 
-    const existingLike = await prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT id
-      FROM "ReviewLike"
-      WHERE "reviewId" = ${id} AND "userId" = ${currentUser.id}
-      LIMIT 1
-    `;
-
-    const likedByMe = existingLike.length === 0;
-
-    if (!likedByMe) {
-      await prisma.$transaction([
-        prisma.$executeRaw`
-          DELETE FROM "ReviewLike"
-          WHERE "reviewId" = ${id} AND "userId" = ${currentUser.id}
-        `,
-        prisma.$executeRaw`
-          UPDATE "Review"
-          SET "likes" = GREATEST("likes" - 1, 0)
-          WHERE id = ${id}
-        `,
-      ]);
-    } else {
-      await prisma.$transaction([
-        prisma.$executeRaw`
-          INSERT INTO "ReviewLike" ("id", "reviewId", "userId")
-          VALUES (${randomUUID()}, ${id}, ${currentUser.id})
-        `,
-        prisma.$executeRaw`
-          UPDATE "Review"
-          SET "likes" = "likes" + 1
-          WHERE id = ${id}
-        `,
-      ]);
-
-      // Create notification if liking someone else's review
-      if (existing.userId !== currentUser.id && actorName) {
-        // Check for duplicate notification within 5 minutes
-        const recentNotification = await prisma.notification.findFirst({
-          where: {
-            recipientId: existing.userId,
-            actorId: currentUser.id,
-            type: "review_like",
-            createdAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
-          },
-        });
-
-        if (!recentNotification) {
-          const notification = await prisma.notification.create({
-            data: {
-              recipientId: existing.userId,
-              actorId: currentUser.id,
-              type: "review_like",
-              movieId: existing.tmdbId,
-              reviewId: id,
-              message: `liked your review`,
-            },
-          });
-          publishNotificationEvent(notification.id);
-        }
-      }
-    }
-
-    const review = await prisma.review.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        tmdbId: true,
-        userId: true,
-        rating: true,
-        comment: true,
-        likes: true,
-        createdAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            username: true,
-            displayName: true,
-            avatar: true,
-            image: true,
-            bio: true,
-          },
-        },
-        likesRecords: { select: { userId: true } },
-        replies: {
-          select: {
-            id: true,
-            comment: true,
-            likes: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                username: true,
-                displayName: true,
-                avatar: true,
-                image: true,
-                bio: true,
-              },
-            },
-            likesRecords: { select: { userId: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
-
-    if (!review) {
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
-    }
-
-    try {
-      const serialized = serializeReview(review, null, false);
-      publishReviewEvent(review.tmdbId, review.id, "liked", opId, serialized);
-    } catch (e) {
-      console.warn("publishReviewEvent failed:", e);
-    }
-
-    return NextResponse.json({ value: serializeReview(review, currentUser.id, likedByMe), opId });
+    return apiSuccess(result.value);
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return apiUnauthorized();
+    }
     console.error("/api/reviews/[id]/like POST error:", error);
-    return NextResponse.json({ error: "Failed to like review" }, { status: 500 });
+    return apiInternalError("Failed to like review");
   }
 }

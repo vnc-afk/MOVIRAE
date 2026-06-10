@@ -1,132 +1,29 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { serializeReview } from "@/lib/reviews";
+import { apiInternalError, apiNotFound, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
+import { requireAuth, parseRequestJson, getOpId } from "@/app/movie/lib/api-utils";
+import { toggleReplyLike } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
-async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email;
-
-  if (!email) {
-    return null;
-  }
-
-  return prisma.user.findUnique({ where: { email } });
-}
-
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string; replyId: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string; replyId: string }> }) {
   try {
-    const currentUser = await getCurrentUser();
-
-    if (!currentUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+    const currentUser = await requireAuth(request);
     const { id, replyId } = await params;
-    const body = await _request.json().catch(() => null);
-    const opId = typeof body?.opId === "string" ? body.opId : _request.headers.get("x-op-id") ?? undefined;
-    const reply = await prisma.reviewReply.findUnique({
-      where: { id: replyId },
-      select: { id: true, reviewId: true },
-    });
 
-    if (!reply || reply.reviewId !== id) {
-      return NextResponse.json({ error: "Reply not found" }, { status: 404 });
+    const body = await parseRequestJson(request);
+    const opId = getOpId(request, body);
+
+    const result = await toggleReplyLike(id, replyId, currentUser, opId);
+    if ("error" in result) {
+      if (result.error === "not-found") return apiNotFound("Reply");
+      return apiInternalError("Failed to toggle reply like");
     }
 
-    const existingLike = await prisma.reviewReplyLike.findUnique({
-      where: {
-        reviewReplyId_userId: {
-          reviewReplyId: replyId,
-          userId: currentUser.id,
-        },
-      },
-    });
-
-    if (existingLike) {
-      await prisma.$transaction([
-        prisma.reviewReplyLike.delete({
-          where: { reviewReplyId_userId: { reviewReplyId: replyId, userId: currentUser.id } },
-        }),
-        prisma.reviewReply.update({
-          where: { id: replyId },
-          data: { likes: { decrement: 1 } },
-        }),
-      ]);
-    } else {
-      await prisma.$transaction([
-        prisma.reviewReplyLike.create({
-          data: {
-            reviewReplyId: replyId,
-            userId: currentUser.id,
-          },
-        }),
-        prisma.reviewReply.update({
-          where: { id: replyId },
-          data: { likes: { increment: 1 } },
-        }),
-      ]);
-    }
-
-    const updatedReview = await prisma.review.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        tmdbId: true,
-        userId: true,
-        rating: true,
-        comment: true,
-        likes: true,
-        createdAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            username: true,
-            displayName: true,
-            avatar: true,
-            image: true,
-            bio: true,
-          },
-        },
-        likesRecords: { select: { userId: true } },
-        replies: {
-          select: {
-            id: true,
-            comment: true,
-            likes: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                username: true,
-                displayName: true,
-                avatar: true,
-                image: true,
-                bio: true,
-              },
-            },
-            likesRecords: { select: { userId: true } },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
-
-    if (!updatedReview) {
-      return NextResponse.json({ error: "Review not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ value: serializeReview(updatedReview, currentUser.id, undefined), opId });
+    return apiSuccess(result.value);
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return apiUnauthorized();
+    }
     console.error("/api/reviews/[id]/replies/[replyId]/like POST error:", error);
-    return NextResponse.json({ error: "Failed to like reply" }, { status: 500 });
+    return apiInternalError("Failed to like reply");
   }
 }
