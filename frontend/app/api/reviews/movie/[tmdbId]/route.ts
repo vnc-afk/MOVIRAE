@@ -1,88 +1,18 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { serializeReview } from "@/lib/reviews";
+import { apiInternalError, apiSuccess } from "@/app/movie/lib/api-response";
+import { getCurrentUser } from "@/app/movie/lib/api-utils";
+import { getMovieReviews } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
-
-async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email;
-
-  if (!email) {
-    return null;
-  }
-
-  return prisma.user.findUnique({ where: { email } });
-}
 
 export async function GET(_request: Request, { params }: { params: Promise<{ tmdbId: string }> }) {
   try {
     const { tmdbId } = await params;
-    const currentUserPromise = getCurrentUser();
-    const reviewsPromise = prisma.review.findMany({
-      where: { tmdbId },
-      select: {
-        id: true,
-        tmdbId: true,
-        rating: true,
-        comment: true,
-        likes: true,
-        createdAt: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            username: true,
-            displayName: true,
-            avatar: true,
-            image: true,
-            bio: true,
-          },
-        },
-        likesRecords: {
-          select: {
-            userId: true,
-          },
-        },
-        replies: {
-          select: {
-            id: true,
-            comment: true,
-            likes: true,
-            createdAt: true,
-            user: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                username: true,
-                displayName: true,
-                avatar: true,
-                image: true,
-                bio: true,
-              },
-            },
-            likesRecords: {
-              select: {
-                userId: true,
-              },
-            },
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const currentUser = await getCurrentUser();
 
-    const [currentUser, reviews] = await Promise.all([currentUserPromise, reviewsPromise]);
-
-    return NextResponse.json({ value: reviews.map((review) => serializeReview(review, currentUser?.id)) });
+    const value = await getMovieReviews(tmdbId, currentUser);
+    return apiSuccess(value);
   } catch (error) {
     console.error("/api/reviews/movie/[tmdbId] GET error:", error);
-    return NextResponse.json({ error: "Failed to load reviews" }, { status: 500 });
+    return apiInternalError("Failed to load reviews");
   }
 }
