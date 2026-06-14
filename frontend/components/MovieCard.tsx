@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { scheduleMovieDetailPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { useSession } from "next-auth/react";
@@ -14,12 +14,18 @@ interface MovieCardProps {
   movie: Movie;
   index?: number;
   priority?: boolean;
+  disableEntranceAnimation?: boolean;
 }
 
-export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps) {
+export const MovieCard = memo(function MovieCard({
+  movie,
+  index = 0,
+  priority = false,
+  disableEntranceAnimation = false,
+}: MovieCardProps) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const prefetchTokenRef = useRef(`movie-card:${movie.id}:${Math.random().toString(36).slice(2)}`);
+  const prefetchTokenRef = useRef(`movie-card:${movie.id}`);
   const [loading, setLoading] = useState({ watched: false, watchlist: false });
   const posterSrc = movie.poster.trim();
   const shouldPrioritizePoster = priority;
@@ -36,6 +42,8 @@ export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps
     },
     enabled: Boolean(session?.user?.email),
     staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const watchedQuery = useQuery<string[]>({
@@ -47,6 +55,8 @@ export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps
     },
     enabled: Boolean(session?.user?.email),
     staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const isWatched = watchedQuery.data?.includes(movie.id) ?? false;
@@ -104,13 +114,17 @@ export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: Math.min(index, 6) * 0.03 }}
+      initial={disableEntranceAnimation ? false : { opacity: 0, y: 20 }}
+      animate={disableEntranceAnimation ? undefined : { opacity: 1, y: 0 }}
+      transition={
+        disableEntranceAnimation
+          ? undefined
+          : { duration: 0.35, delay: Math.min(index, 6) * 0.03 }
+      }
     >
       <Link
         href={`/movie/${movie.id}`}
-        className="group block"
+        className="group block min-w-0"
         onMouseEnter={() => {
           scheduleMovieDetailPrefetch(queryClient, movie.id, prefetchTokenRef.current, 150);
         }}
@@ -118,7 +132,7 @@ export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps
           cancelScheduledPrefetch(prefetchTokenRef.current);
         }}
       >
-        <div className="relative overflow-hidden rounded-lg poster-shadow">
+        <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-secondary poster-shadow">
           {posterSrc ? (
             <img
               src={posterSrc}
@@ -128,10 +142,11 @@ export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps
               decoding="async"
               width={640}
               height={960}
-              className="w-full aspect-[2/3] object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(min-width: 1024px) 16vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
-            <div className="flex aspect-[2/3] w-full items-center justify-center bg-secondary text-center text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+            <div className="flex h-full w-full items-center justify-center text-center text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
               No Poster
             </div>
           )}
@@ -180,4 +195,6 @@ export function MovieCard({ movie, index = 0, priority = false }: MovieCardProps
       </Link>
     </motion.div>
   );
-}
+});
+
+MovieCard.displayName = "MovieCard";
