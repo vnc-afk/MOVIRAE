@@ -3,6 +3,7 @@
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -19,6 +20,9 @@ export function TrailerModal({ open, onOpenChange, title }: TrailerModalProps) {
       <DialogContent className="sm:max-w-2xl p-0 overflow-hidden bg-card">
         <DialogHeader className="p-4 pb-0">
           <DialogTitle className="font-display">{title} — Trailer</DialogTitle>
+          <DialogDescription className="sr-only">
+            Watch the trailer for {title}.
+          </DialogDescription>
         </DialogHeader>
         <div className="aspect-video bg-foreground/5 flex items-center justify-center m-4 mt-2 rounded-lg">
           <p className="text-muted-foreground text-sm">
