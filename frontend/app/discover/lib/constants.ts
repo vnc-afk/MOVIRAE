@@ -4,8 +4,8 @@
 
 // API & Data Fetching
 export const API_CONFIG = {
-  TIMEOUT_MS: 8000, // Request timeout
-  RETRY_ATTEMPTS: 2, // Number of retries for failed requests
+  TIMEOUT_MS: 10000, // Request timeout (10 seconds)
+  RETRY_ATTEMPTS: 3, // Number of retries for failed requests
   RETRY_DELAY_MS: 1000, // Delay between retries
 } as const;
 

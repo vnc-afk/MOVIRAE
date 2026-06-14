@@ -95,6 +95,16 @@ export class AbortedError extends DiscoverError {
 }
 
 /**
+ * Request timeout error
+ */
+export class TimeoutError extends DiscoverError {
+  constructor(message: string = "Request timed out") {
+    super(message, "TIMEOUT", undefined, { timeout: true });
+    this.name = "TimeoutError";
+  }
+}
+
+/**
  * Type guard to check if error is a DiscoverError
  */
 export function isDiscoverError(error: unknown): error is DiscoverError {
@@ -112,11 +122,25 @@ export function isAbortError(error: unknown): error is DOMException {
 }
 
 /**
+ * Type guard for timeout errors
+ */
+export function isTimeoutError(error: unknown): error is DOMException {
+  return (
+    error instanceof DOMException &&
+    (error.name === "TimeoutError" || error.message.includes("timeout") || error.code === 20)
+  );
+}
+
+/**
  * Normalize any error into a DiscoverError for consistent handling
  */
 export function normalizeError(error: unknown): DiscoverError {
   if (error instanceof DiscoverError) {
     return error;
+  }
+
+  if (isTimeoutError(error)) {
+    return new TimeoutError("Request timed out");
   }
 
   if (isAbortError(error)) {
