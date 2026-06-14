@@ -69,6 +69,7 @@ export interface MovieDetailPageState {
  * SSE event payload from server
  */
 export interface ReviewSSEPayload {
+  movieId?: string;
   opId?: string;
   action?: "created" | "updated" | "deleted" | "liked" | "replied";
   review?: Review | null;
