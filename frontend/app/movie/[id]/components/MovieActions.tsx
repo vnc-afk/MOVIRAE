@@ -12,6 +12,7 @@ interface MovieActionsProps {
   isWatched: boolean;
   isWatchlist: boolean;
   isLiked: boolean;
+  initializing: boolean;
   loading: { watched: boolean; watchlist: boolean; liked: boolean };
   isAuthenticated: boolean;
   hasCurrentReview: boolean;
@@ -27,6 +28,7 @@ export function MovieActions({
   isWatched,
   isWatchlist,
   isLiked,
+  initializing,
   loading,
   isAuthenticated,
   hasCurrentReview,
@@ -46,37 +48,37 @@ export function MovieActions({
         variant="secondary"
         className={`gap-2 ${isWatched ? "bg-primary text-primary-foreground" : ""}`}
         onClick={onToggleWatched}
-        disabled={!isAuthenticated || loading.watched}
+        disabled={!isAuthenticated || loading.watched || initializing}
       >
         <Eye className="h-4 w-4" />
-        {loading.watched ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatched ? "Watched" : "Mark Watched"}
+        {loading.watched || initializing ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatched ? "Watched" : "Mark Watched"}
       </Button>
 
       <Button
         variant="secondary"
         className={`gap-2 ${isWatchlist ? "bg-primary text-primary-foreground" : ""}`}
         onClick={onToggleWatchlist}
-        disabled={!isAuthenticated || loading.watchlist}
+        disabled={!isAuthenticated || loading.watchlist || initializing}
       >
         <ListPlus className="h-4 w-4" />
-        {loading.watchlist ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatchlist ? "In Watchlist" : "Watchlist"}
+        {loading.watchlist || initializing ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatchlist ? "In Watchlist" : "Watchlist"}
       </Button>
 
       <Button
         variant="secondary"
         className={`gap-2 ${isLiked ? "bg-primary text-primary-foreground" : ""}`}
         onClick={onToggleLiked}
-        disabled={!isAuthenticated || loading.liked}
+        disabled={!isAuthenticated || loading.liked || initializing}
       >
         <Heart className="h-4 w-4" />
-        {loading.liked ? <Loader2 className="h-4 w-4 animate-spin" /> : isLiked ? "Liked" : "Like"}
+        {loading.liked || initializing ? <Loader2 className="h-4 w-4 animate-spin" /> : isLiked ? "Liked" : "Like"}
       </Button>
 
       <Button
         variant="secondary"
         className="gap-2"
         onClick={onReview}
-        disabled={!isAuthenticated || (!isWatched && !hasCurrentReview)}
+        disabled={!isAuthenticated || (!isWatched && !hasCurrentReview) || initializing}
       >
         <Star className="h-4 w-4" /> {hasCurrentReview ? "Edit Review" : "Write Review"}
       </Button>
