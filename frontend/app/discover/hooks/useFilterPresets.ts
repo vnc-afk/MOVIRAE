@@ -36,40 +36,71 @@ export function useFilterPresets() {
     setIsLoading(true);
     setError(null);
 
+    let lastError: Error | null = null;
+
     try {
-      const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
-      const response = await fetch("/api/data/user-filter-presets", { signal });
+      // Retry logic for timeout and network errors
+      for (let attempt = 0; attempt <= API_CONFIG.RETRY_ATTEMPTS; attempt++) {
+        try {
+          const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
+          const response = await fetch("/api/data/user-filter-presets", { signal });
 
-      if (!response.ok) {
-        throw new PersistenceError(
-          `Failed to load presets: ${response.statusText}`,
-          { statusCode: response.status }
-        );
+          if (!response.ok) {
+            throw new PersistenceError(
+              `Failed to load presets: ${response.statusText}`,
+              { statusCode: response.status }
+            );
+          }
+
+          const data = await response.json();
+
+          // Validate presets array
+          if (!Array.isArray(data.value)) {
+            throw new ValidationError("Invalid presets format: expected array", {
+              received: typeof data.value,
+            });
+          }
+
+          // Validate each preset
+          const validPresets = data.value.filter((p: any) => {
+            if (!p.id || typeof p.id !== "string") {
+              console.warn("Skipping preset with invalid ID:", p);
+              return false;
+            }
+            if (!p.name || typeof p.name !== "string") {
+              console.warn("Skipping preset with invalid name:", p);
+              return false;
+            }
+            return true;
+          });
+
+          setPresets(validPresets);
+          return; // Success, exit retry loop
+        } catch (err) {
+          lastError = err as Error;
+          const error = normalizeError(err);
+
+          // Retry only on timeout or network errors
+          if (error.code === "TIMEOUT" || error.code === "NETWORK_ERROR") {
+            if (attempt < API_CONFIG.RETRY_ATTEMPTS) {
+              console.warn(`Attempt ${attempt + 1} failed, retrying...`, error);
+              // Wait before retry
+              await new Promise((resolve) =>
+                setTimeout(resolve, API_CONFIG.RETRY_DELAY_MS * (attempt + 1))
+              );
+              continue; // Try again
+            }
+          }
+
+          // Don't retry on validation or persistence errors
+          throw error;
+        }
       }
 
-      const data = await response.json();
-
-      // Validate presets array
-      if (!Array.isArray(data.value)) {
-        throw new ValidationError("Invalid presets format: expected array", {
-          received: typeof data.value,
-        });
+      // If we get here, all retries failed
+      if (lastError) {
+        throw normalizeError(lastError);
       }
-
-      // Validate each preset
-      const validPresets = data.value.filter((p: any) => {
-        if (!p.id || typeof p.id !== "string") {
-          console.warn("Skipping preset with invalid ID:", p);
-          return false;
-        }
-        if (!p.name || typeof p.name !== "string") {
-          console.warn("Skipping preset with invalid name:", p);
-          return false;
-        }
-        return true;
-      });
-
-      setPresets(validPresets);
     } catch (err) {
       const error = normalizeError(err);
       setError(error);
