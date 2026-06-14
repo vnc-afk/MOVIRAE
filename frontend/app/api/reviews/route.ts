@@ -15,7 +15,8 @@ export async function POST(request: Request) {
       return apiBadRequest(parsed.error.message);
     }
 
-    const result = await addReview(parsed.data, currentUser);
+    const opId = getOpId(request, payload);
+    const result = await addReview({ ...parsed.data, opId }, currentUser);
     if ("error" in result) {
       if (result.error === "unauthorized") return apiUnauthorized("Mark the movie as watched before reviewing it");
       if (result.error === "conflict") return apiBadRequest("You already reviewed this movie");
