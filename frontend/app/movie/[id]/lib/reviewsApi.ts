@@ -14,8 +14,8 @@ export async function fetchMovieReviews(movieId: string): Promise<Review[]> {
     const response = await fetch(`/api/reviews/movie/${movieId}`);
     const json = await response.json().catch(() => null);
     
-    if (response.ok && Array.isArray(json?.value)) {
-      return json.value;
+    if (response.ok && Array.isArray(json?.data)) {
+      return json.data;
     }
     return [];
   } catch (error) {

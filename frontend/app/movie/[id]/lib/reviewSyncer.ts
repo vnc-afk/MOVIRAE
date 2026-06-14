@@ -65,6 +65,13 @@ export class ReviewEventSyncer {
   private handleReviewUpdate(ev: MessageEvent): void {
     try {
       const payload = JSON.parse(ev.data || "{}") as ReviewSSEPayload;
+      const incomingMovieId = payload?.movieId;
+      
+      // Filter: only handle events for this movie
+      if (incomingMovieId !== this.movieId) {
+        return;
+      }
+
       const action = payload?.action;
       const serverReview = payload?.review;
       const incomingOpId = payload?.opId;
@@ -99,20 +106,29 @@ export class ReviewEventSyncer {
       }
 
       // Op-based reconciliation for creates
-      if (action === "created" && incomingOpId && serverReview) {
-        const tempReview = nextReviews.find(
-          (r) => (r as any).opId === incomingOpId || (r as any).tempId === incomingOpId
-        );
-
-        if (tempReview) {
-          nextReviews = ReviewDeduplicator.reconcileTemp(
-            nextReviews,
-            (tempReview as any).tempId || tempReview.id,
-            serverReview
+      if (action === "created" && serverReview) {
+        if (incomingOpId) {
+          // This is our optimistic review being reconciled
+          const tempReview = nextReviews.find(
+            (r) => (r as any).opId === incomingOpId || (r as any).tempId === incomingOpId
           );
+
+          if (tempReview) {
+            nextReviews = ReviewDeduplicator.reconcileTemp(
+              nextReviews,
+              (tempReview as any).tempId || tempReview.id,
+              serverReview
+            );
+          } else {
+            // New review from another user
+            nextReviews = [serverReview, ...nextReviews];
+          }
         } else {
-          // New review from other user
-          nextReviews = [serverReview, ...nextReviews];
+          // Review from another user (no opId), just add it
+          const exists = nextReviews.some((r) => r.id === serverReview.id);
+          if (!exists) {
+            nextReviews = [serverReview, ...nextReviews];
+          }
         }
 
         this.notifyListeners(nextReviews);
