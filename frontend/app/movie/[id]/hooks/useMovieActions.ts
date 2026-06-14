@@ -12,6 +12,7 @@ export interface UseMovieActionsResult {
   isWatched: boolean;
   isWatchlist: boolean;
   isLiked: boolean;
+  initializing: boolean;
   loading: {
     watched: boolean;
     watchlist: boolean;
@@ -29,6 +30,7 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
   const [isWatched, setIsWatched] = useState(false);
   const [isWatchlist, setIsWatchlist] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [loading, setLoading] = useState({ watched: false, watchlist: false, liked: false });
 
   const setInitialState = useCallback(
@@ -36,6 +38,7 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
       setIsWatchlist(watchlistIds.includes(movieId));
       setIsLiked(favoriteIds.includes(movieId));
       setIsWatched(watchedIds.includes(movieId));
+      setInitializing(false);
     },
     [movieId]
   );
@@ -98,6 +101,7 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
     isWatched,
     isWatchlist,
     isLiked,
+    initializing,
     loading,
     toggleWatched,
     toggleWatchlist,
