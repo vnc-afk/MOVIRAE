@@ -301,6 +301,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
               isWatched={movieActions.isWatched}
               isWatchlist={movieActions.isWatchlist}
               isLiked={movieActions.isLiked}
+              initializing={movieActions.initializing}
               loading={movieActions.loading}
               isAuthenticated={Boolean(session?.user?.email)}
               hasCurrentReview={Boolean(reviewsManager.currentUserReview)}
