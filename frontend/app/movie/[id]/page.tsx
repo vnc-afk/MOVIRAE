@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { useSession } from "next-auth/react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { use } from "react";
@@ -55,7 +56,28 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const watchExperience = useWatchExperience(resolvedParams.id);
   const reviewDialog = useReviewDialog();
 
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [trailerOpen, setTrailerOpen] = useState(false);
+
+  const trailerEnabledByQuery = searchParams.get("trailer") === "1";
+
+  useEffect(() => {
+    setTrailerOpen(trailerEnabledByQuery);
+  }, [trailerEnabledByQuery]);
+
+  const handleTrailerOpenChange = (open: boolean) => {
+    setTrailerOpen(open);
+
+    if (!open) {
+      const searchParamsCopy = new URLSearchParams(searchParams.toString());
+      searchParamsCopy.delete("trailer");
+      const searchString = searchParamsCopy.toString();
+      router.replace(
+        `/movie/${resolvedParams.id}${searchString ? `?${searchString}` : ""}`
+      );
+    }
+  };
 
   // Initialize user movie state
   useEffect(() => {
@@ -347,7 +369,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       </div>
 
       {/* Modals */}
-      <TrailerModal open={trailerOpen} onOpenChange={setTrailerOpen} title={movie.title} />
+      <TrailerModal open={trailerOpen} onOpenChange={handleTrailerOpenChange} title={movie.title} movieId={movie.id} />
 
       <ReviewDialog
         isOpen={reviewDialog.isOpen}
