@@ -3,9 +3,11 @@ export const queryKeys = {
     detail: (id: string) => ["movie", "detail", id] as const,
     credits: (id: string) => ["movie", "credits", id] as const,
     streaming: (id: string) => ["movie", "streaming", id] as const,
+    videos: (id: string) => ["movie", "videos", id] as const,
     recommendations: (id: string) => ["movie", "recommendations", id] as const,
     list: (params?: Record<string, unknown>) => ["movies", "list", JSON.stringify(params ?? {})] as const,
   },
+
   group: {
     list: () => ["group", "list"] as const,
     detail: (id: string) => ["group", "detail", id] as const,
