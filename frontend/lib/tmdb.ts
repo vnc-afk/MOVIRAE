@@ -386,3 +386,53 @@ export async function getMoviesByGenre(
     return [];
   }
 }
+
+/**
+ * Get videos for a movie (trailers, teasers, clips)
+ */
+export async function getMovieVideos(movieId: string, options?: TMDBRequestOptions): Promise<
+  Array<{
+    id: string;
+    key: string;
+    name: string;
+    site: string;
+    type: string;
+    official?: boolean;
+    published_at?: string;
+  }>
+> {
+  if (!TMDB_API_KEY) {
+    console.error("TMDB_API_KEY is not set");
+    return [];
+  }
+
+  try {
+    const data = await fetchTmdbJson<{ results?: Array<any> }>(
+      `${TMDB_BASE_URL}/movie/${movieId}/videos?api_key=${TMDB_API_KEY}`,
+      options?.signal
+    );
+
+    if (!data || !Array.isArray(data.results)) return [];
+
+    const results = data.results.map((v: any) => ({
+      id: String(v.id),
+      key: v.key,
+      name: v.name,
+      site: v.site,
+      type: v.type,
+      official: v.official,
+      published_at: v.published_at,
+    }));
+
+    // prefer trailers from YouTube, and prefer official trailers first
+    results.sort((a, b) => {
+      const score = (r: any) => (r.site === "YouTube" ? 100 : 0) + (r.type === "Trailer" ? 10 : 0) + (r.official ? 1 : 0);
+      return score(b) - score(a);
+    });
+
+    return results;
+  } catch (error) {
+    reportTmdbError("Failed to fetch movie videos:", error, options);
+    return [];
+  }
+}
