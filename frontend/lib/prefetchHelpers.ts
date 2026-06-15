@@ -182,6 +182,23 @@ export function scheduleMovieDetailPrefetch(client: QueryClient, movieId: string
   });
 }
 
+export function scheduleMovieTrailerPrefetch(client: QueryClient, movieId: string, token: string, delayMs = 150) {
+  schedulePrefetchTask({
+    token,
+    client,
+    queryKey: queryKeys.movie.videos(movieId),
+    queryFn: async () => {
+      const response = await fetch(`/api/tmdb/videos/${movieId}`);
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
+    delayMs,
+  });
+}
+
 export function scheduleDiscoverSeedsPrefetch(client: QueryClient, token: string, delayMs = 150, params?: string) {
   schedulePrefetchTask({
     token,
