@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { memo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { scheduleMovieDetailPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
+import { scheduleMovieDetailPrefetch, scheduleMovieTrailerPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Eye, Plus, Check } from "lucide-react";
+import { Eye, Plus, Check, Play } from "lucide-react";
 import { StarRating } from "./StarRating";
 import type { Movie } from "@/lib/types";
 
@@ -25,7 +26,9 @@ export const MovieCard = memo(function MovieCard({
 }: MovieCardProps) {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const prefetchTokenRef = useRef(`movie-card:${movie.id}`);
+  const videoPrefetchTokenRef = useRef(`movie-card-video:${movie.id}`);
   const [loading, setLoading] = useState({ watched: false, watchlist: false });
   const posterSrc = movie.poster.trim();
   const shouldPrioritizePoster = priority;
@@ -127,9 +130,11 @@ export const MovieCard = memo(function MovieCard({
         className="group block min-w-0"
         onMouseEnter={() => {
           scheduleMovieDetailPrefetch(queryClient, movie.id, prefetchTokenRef.current, 150);
+          scheduleMovieTrailerPrefetch(queryClient, movie.id, videoPrefetchTokenRef.current, 150);
         }}
         onMouseLeave={() => {
           cancelScheduledPrefetch(prefetchTokenRef.current);
+          cancelScheduledPrefetch(videoPrefetchTokenRef.current);
         }}
       >
         <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-secondary poster-shadow">
@@ -150,6 +155,18 @@ export const MovieCard = memo(function MovieCard({
               No Poster
             </div>
           )}
+          <button
+            type="button"
+            aria-label={`Watch ${movie.title} trailer`}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              router.push(`/movie/${movie.id}?trailer=1`);
+            }}
+            className="absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100 hover:bg-black/80 focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <Play className="h-5 w-5" />
+          </button>
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
             <div className="flex gap-2 mb-3">
