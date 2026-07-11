@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import {
   getCurrentUser,
   requireAuth,
@@ -11,7 +10,8 @@ import {
   apiInternalError,
 } from "@/app/groups/lib/api-response";
 import { createDiscussionSchema } from "@/app/groups/lib/api-schemas";
-import { fetchGroupDetail } from "@/lib/group-discussions";
+import { fetchGroupDiscussions } from "@/lib/group-discussions";
+import { prisma } from "@/lib/prisma";
 import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
@@ -25,13 +25,16 @@ export async function GET(
 
   try {
     const currentUser = await getCurrentUser();
-    const group = await fetchGroupDetail(groupId, currentUser);
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      select: { id: true },
+    });
 
     if (!group) {
       return apiNotFound("Group");
     }
 
-    return NextResponse.json({ value: group.discussions });
+    return NextResponse.json({ value: await fetchGroupDiscussions(groupId, currentUser) });
   } catch (err) {
     console.error("/api/groups/[groupId]/discussions GET error:", err);
     return apiInternalError();
