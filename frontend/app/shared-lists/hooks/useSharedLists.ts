@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
 import { searchMovies } from "@/lib/tmdb";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
-import type { Movie, SharedList } from "@/lib/types";
+import type { Group, Movie, SharedList } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
@@ -28,13 +28,9 @@ export function useSharedListsSnapshot() {
   const query = usePrefetchAwareQuery<SharedListsSnapshot>({
     queryKey: queryKeys.sharedLists.all(),
     queryFn: async () => {
-      const [listsResponse, groupsResponse] = await Promise.all([
-        fetch("/api/shared-lists", { cache: "no-store" }),
-        fetch("/api/groups", { cache: "no-store" }),
-      ]);
+      const listsResponse = await fetch("/api/shared-lists", { cache: "no-store" });
 
       const listsPayload = (await parseResponsePayload(listsResponse)) as SharedListsResponse | null;
-      const groupsPayload = await groupsResponse.json().catch(() => ({}));
 
       if (!listsResponse.ok) {
         throw new Error(listsPayload?.error || "Failed to load shared lists.");
@@ -45,7 +41,7 @@ export function useSharedListsSnapshot() {
 
       return {
         lists: nextLists,
-        groups: Array.isArray(groupsPayload.value) ? groupsPayload.value : [],
+        groups: [],
         currentUser,
       };
     },
@@ -109,14 +105,35 @@ export function useLoadSharedLists() {
  */
 export function useLoadGroups() {
   const queryClient = useQueryClient();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  return async () => {
-    const groupsResponse = await fetch("/api/groups", { cache: "no-store" }).then((response) => response.json());
-    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
-      if (!current) return current;
-      return { ...current, groups: Array.isArray(groupsResponse.value) ? groupsResponse.value : [] };
-    });
-  };
+  const loadGroups = useCallback(async () => {
+    if (groups.length > 0 || isLoading) {
+      return groups;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/groups", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
+
+      const nextGroups = Array.isArray(payload.value) ? payload.value : [];
+      setGroups(nextGroups);
+
+      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, groups: nextGroups };
+      });
+
+      return nextGroups;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [groups, isLoading, queryClient]);
+
+  return { groups, loadGroups, isLoading };
 }
 
 /**
