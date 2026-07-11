@@ -101,6 +101,7 @@ export function useGroupDiscussions(groupId: string, currentUser: UserProfile | 
       const response = await fetchJsonValue<any>(`/api/groups/${groupId}/discussions`);
       const items: Discussion[] = Array.isArray(response?.value) ? response.value : [];
       setDiscussions(items);
+      queryClient.setQueryData(queryKeys.group.discussions(groupId), items);
     } catch (err) {
       console.error("Failed to load discussions:", err);
     }
