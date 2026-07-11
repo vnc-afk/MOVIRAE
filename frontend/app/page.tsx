@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { MovieCard } from "@/components/MovieCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
-import { SearchInput } from "@/components/SearchInput";
 import { getTrendingMovies } from "@/lib/tmdb";
 import { queryKeys } from "@/lib/queryKeys";
 import type { ActivityItem, Movie } from "@/lib/types";
@@ -68,7 +67,7 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="w-full max-w-md md:hidden"
           >
-            <SearchInput />
+         
           </motion.div>
         </div>
       </section>

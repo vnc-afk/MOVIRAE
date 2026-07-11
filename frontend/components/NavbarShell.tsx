@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
 import { useMemo } from "react";
-import { SearchInput } from "./SearchInput";
 import { ThemeToggle } from "./ThemeToggle";
 import logo from "@/assets/logo.svg";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -49,10 +48,6 @@ export function NavbarShell() {
                 {label}
               </Link>
             ))}
-          </div>
-
-          <div className="hidden md:block flex-1 max-w-md mx-4">
-            <SearchInput />
           </div>
 
           <div className="flex items-center gap-2">
