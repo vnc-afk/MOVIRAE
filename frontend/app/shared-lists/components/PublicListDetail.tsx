@@ -50,7 +50,7 @@ export function PublicListDetail({
     group: { icon: Film, label: "Group", color: "text-blue-500" },
   }[list.visibility] ?? { icon: Film, label: "Public", color: "text-green-500" };
   const VisibilityIcon = config.icon;
-  const group = list.groupId ? groups.find((item) => item.id === list.groupId) : null;
+  const groupName = list.groupName ?? (list.groupId ? groups.find((item) => item.id === list.groupId)?.name ?? null : null);
   const commentItems = list.commentItems ?? [];
 
   return (
@@ -60,7 +60,7 @@ export function PublicListDetail({
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <VisibilityIcon className={`h-3.5 w-3.5 ${config.color}`} />
             {config.label}
-            {group && <Badge variant="outline">{group.name}</Badge>}
+            {groupName && <Badge variant="outline">{groupName}</Badge>}
           </div>
           <h2 className="mt-2 text-2xl font-semibold text-foreground">{list.name}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{list.description}</p>
