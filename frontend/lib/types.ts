@@ -143,6 +143,7 @@ export interface SharedList {
   commentItems?: SharedListComment[];
   createdAt: string;
   groupId?: string;
+  groupName?: string;
 }
 
 export interface SharedListComment {
