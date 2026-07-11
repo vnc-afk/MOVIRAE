@@ -66,10 +66,10 @@ export default function GroupDetailPage() {
     discussions: sortedDiscussions,
     sortType,
     setSortType,
-    loadDiscussions,
     addDiscussion,
     likeDiscussion,
     addReply,
+    setDiscussions,
   } = useGroupDiscussions(id, currentUser);
 
   // Load events
@@ -102,12 +102,12 @@ export default function GroupDetailPage() {
     load();
   }, [load]);
 
-  // Load discussions when group is ready
+  // Seed discussions from the group detail payload so the tab renders immediately.
   useEffect(() => {
     if (loadState === "ready" && group) {
-      loadDiscussions();
+      setDiscussions(group.discussions ?? []);
     }
-  }, [loadState, group, loadDiscussions]);
+  }, [loadState, group, setDiscussions]);
 
   // Load events when group is ready
   useEffect(() => {
