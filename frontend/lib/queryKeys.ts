@@ -12,6 +12,7 @@ export const queryKeys = {
     list: () => ["group", "list"] as const,
     detail: (id: string) => ["group", "detail", id] as const,
     events: (id: string) => ["group", "events", id] as const,
+    discussions: (id: string) => ["group", "discussions", id] as const,
   },
   sharedLists: {
     all: () => ["shared-lists", "all"] as const,
