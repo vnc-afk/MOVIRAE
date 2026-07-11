@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams, usePathname, useRouter } from "next/navigation";
 import { SharedListsView } from "./components";
 import {
   useSharedListsSnapshot,
+  useLoadGroups,
   useSharedListsEvents,
   useCreateList,
   useToggleLike,
@@ -24,8 +25,10 @@ export default function SharedListsPage() {
   const pathname = usePathname();
 
   // Load data
-  const { snapshot } = useSharedListsSnapshot();
-  const { lists, groups, currentUser } = snapshot;
+  const { snapshot: baseSnapshot } = useSharedListsSnapshot();
+  const { groups, loadGroups } = useLoadGroups();
+  const snapshot = useMemo(() => ({ ...baseSnapshot, groups }), [baseSnapshot, groups]);
+  const { lists, currentUser } = snapshot;
 
   // UI state management
   const {
@@ -76,6 +79,12 @@ export default function SharedListsPage() {
     groupId: "",
   });
   const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    if (createOpen || formState.visibility === "group") {
+      void loadGroups();
+    }
+  }, [createOpen, formState.visibility, loadGroups]);
 
   const handleCreateList = async () => {
     try {
