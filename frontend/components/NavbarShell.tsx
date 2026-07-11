@@ -89,7 +89,7 @@ export function NavbarShell() {
               ) : null}
             </Link>
             <ThemeToggle />
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
                 <User className="h-4 w-4" />
               </DropdownMenuTrigger>
