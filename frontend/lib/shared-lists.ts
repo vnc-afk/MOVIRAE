@@ -41,6 +41,7 @@ type SharedListRow = {
   id: string;
   ownerId: string;
   owner: any;
+  group?: { id: string; name: string } | null;
   collaborators: Array<{ user: any }>;
   movies: Array<{ tmdbId: string; metadata: Movie | null }>;
   likesRecords: SharedListLikeRow[];
@@ -112,6 +113,7 @@ function serializeSharedList(
   list: {
     id: string;
     owner: any;
+    group?: { id: string; name: string } | null;
     collaborators: Array<{ user: any }>;
     movies: Array<{ tmdbId: string; metadata: Movie | null }>;
     likesRecords: SharedListLikeRow[];
@@ -145,6 +147,7 @@ function serializeSharedList(
     commentItems,
     createdAt: list.createdAt.toISOString(),
     groupId: list.groupId ?? undefined,
+    groupName: list.group?.name ?? undefined,
   };
 }
 
@@ -196,6 +199,7 @@ export async function getSharedListForView(listId: string, currentUser: CurrentU
     },
     include: {
       owner: true,
+      group: { select: { id: true, name: true } },
       collaborators: { include: { user: true } },
       movies: true,
       likesRecords: true,
@@ -220,6 +224,7 @@ async function getSharedListForEdit(listId: string, currentUser: CurrentUser | n
     },
     include: {
       owner: true,
+      group: { select: { id: true, name: true } },
       collaborators: { include: { user: true } },
       movies: true,
       likesRecords: true,
@@ -253,6 +258,7 @@ export async function fetchSharedLists(currentUser: CurrentUser | null) {
     where,
     include: {
       owner: true,
+      group: { select: { id: true, name: true } },
       collaborators: { include: { user: true } },
       movies: true,
       likesRecords: true,
