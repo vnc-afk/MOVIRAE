@@ -95,7 +95,7 @@ function normalizeReplyItems(value: unknown) {
     }));
 }
 
-function serializeDiscussion(discussion: any, currentUserId?: string | null): DiscussionRecord {
+export function serializeDiscussion(discussion: any, currentUserId?: string | null): DiscussionRecord {
   const likedBy = normalizeLikedBy(discussion.likedBy);
   return {
     id: discussion.id,
@@ -110,6 +110,39 @@ function serializeDiscussion(discussion: any, currentUserId?: string | null): Di
     pinned: discussion.pinned,
     movieId: discussion.movieId ?? undefined,
   };
+}
+
+export async function fetchGroupDiscussions(groupId: string, currentUser: CurrentUser | null) {
+  const discussions = await prisma.groupDiscussion.findMany({
+    where: { groupId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      author: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          image: true,
+          bio: true,
+        },
+      },
+      title: true,
+      body: true,
+      createdAt: true,
+      likes: true,
+      replies: true,
+      likedBy: true,
+      replyItems: true,
+      pinned: true,
+      movieId: true,
+    },
+  });
+
+  return discussions.map((discussion) => serializeDiscussion(discussion, currentUser?.id));
 }
 
 async function normalizeGroupMovie(movie: any): Promise<Movie> {
