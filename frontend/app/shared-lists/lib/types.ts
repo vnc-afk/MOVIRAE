@@ -1,31 +1,28 @@
 import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
 
-/**
- * Snapshot of shared lists data loaded from server
- */
+/*
+  Shared types used by the shared-lists UI layer.
+  - Keep these lightweight and focused on the client-side snapshot + small pieces of UI state.
+  - `SharedListsSnapshot` represents the shape stored in the react-query cache.
+*/
 export type SharedListsSnapshot = {
   lists: SharedList[];
   groups: Group[];
   currentUser: UserProfile | null;
+  page: number;
+  hasMore: boolean;
 };
 
-/**
- * API response for shared lists
- */
 export type SharedListsResponse = {
   value?: SharedList[];
   currentUser?: Pick<UserProfile, "id" | "email"> | null;
   error?: string;
+  hasMore?: boolean;
+  nextPage?: number | null;
 };
 
-/**
- * A single comment or reply in a shared list
- */
 export type SharedListComment = NonNullable<SharedList["commentItems"]>[number];
 
-/**
- * Movie search result with metadata
- */
 export type MovieSearchState = {
   query: string;
   results: Movie[];
@@ -33,18 +30,12 @@ export type MovieSearchState = {
   error: string | null;
 };
 
-/**
- * UI state for dialog management
- */
 export type ListDialogState = {
   createOpen: boolean;
   selectedListId: string | null;
   replyForId: string | null;
 };
 
-/**
- * Form input state for creating new list
- */
 export type NewListFormState = {
   name: string;
   description: string;
@@ -52,10 +43,12 @@ export type NewListFormState = {
   groupId: string;
 };
 
-/**
- * In-flight operation tracking
- */
 export type MovieOperationState = {
   addingToListId: string | null;
   removingFromListId: string | null;
 };
+
+/* Notes:
+ - `ListDialogState` and `NewListFormState` model ephemeral UI forms and dialogs.
+ - Keep these types in sync with the components that consume them.
+*/
