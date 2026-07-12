@@ -3,12 +3,13 @@ import { Prisma } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getMovieDetails } from "@/lib/tmdb";
 import type { Movie, SharedList, SharedListComment, UserProfile } from "@/lib/types";
 import { buildUserProfile } from "@/lib/user-profiles";
 
+// Current authenticated user payload shape returned by Prisma.
 type CurrentUser = Awaited<ReturnType<typeof prisma.user.findUnique>>;
 
+// Fallback profile used when a user row is missing or not buildable.
 const fallbackProfile: UserProfile = {
   id: "unknown",
   username: "unknown",
@@ -37,24 +38,8 @@ type SharedListLikeRow = {
   userId: string;
 };
 
-type SharedListRow = {
-  id: string;
-  ownerId: string;
-  owner: any;
-  group?: { id: string; name: string } | null;
-  collaborators: Array<{ user: any }>;
-  movies: Array<{ tmdbId: string; metadata: Movie | null }>;
-  likesRecords: SharedListLikeRow[];
-  commentRecords: SharedListCommentRow[];
-  name: string;
-  description: string;
-  visibility: "public" | "private" | "group";
-  likes: number;
-  comments: number;
-  createdAt: Date;
-  groupId: string | null;
-};
-
+// Converts a flat list of comment rows into a nested comment tree.
+// This is used to derive `commentItems` for the shared list detail response.
 function normalizeCommentTree(rows: SharedListCommentRow[]) {
   const commentMap = new Map<string, SharedListComment>();
   const rootComments: SharedListComment[] = [];
@@ -105,11 +90,13 @@ function normalizeCommentTree(rows: SharedListCommentRow[]) {
     }
   };
 
+  // Ensure top-level comments and nested replies are ordered by creation time.
   sortTree(rootComments);
   return rootComments;
 }
 
-function serializeSharedList(
+// Convert a detailed shared list DB result into the frontend `SharedList` shape.
+function serializeSharedListDetail(
   list: {
     id: string;
     owner: any;
@@ -151,7 +138,49 @@ function serializeSharedList(
   };
 }
 
-function buildSharedListViewFilter(currentUser: CurrentUser | null): Prisma.SharedListWhereInput {
+// Convert a lighter shared list summary for list grids and pagination.
+function serializeSharedListSummary(
+  list: {
+    id: string;
+    owner: any;
+    group?: { id: string; name: string } | null;
+    collaborators: Array<{ user: any }>;
+    movies: Array<{ tmdbId: string; metadata: Movie | null }>;
+    likesRecords: SharedListLikeRow[];
+    name: string;
+    description: string;
+    visibility: "public" | "private" | "group";
+    likes: number;
+    comments: number;
+    createdAt: Date;
+    groupId: string | null;
+  },
+  currentUser: CurrentUser | null
+): SharedList {
+  return {
+    id: list.id,
+    name: list.name,
+    description: list.description,
+    visibility: list.visibility,
+    owner: buildUserProfile(list.owner) ?? fallbackProfile,
+    collaborators: list.collaborators
+      .map((collaborator) => buildUserProfile(collaborator.user))
+      .filter(Boolean) as UserProfile[],
+    movies: list.movies.map((movie) => movie.metadata ?? ({ id: movie.tmdbId } as Movie)),
+    likes: list.likesRecords.length,
+    likedByMe: currentUser ? list.likesRecords.some((record) => record.userId === currentUser.id) : false,
+    comments: list.comments,
+    commentItems: undefined,
+    createdAt: list.createdAt.toISOString(),
+    groupId: list.groupId ?? undefined,
+    groupName: list.group?.name ?? undefined,
+  };
+}
+
+export function buildSharedListViewFilter(currentUser: CurrentUser | null): Prisma.SharedListWhereInput {
+  // Restrict visible shared lists based on the current user.
+  // - anonymous users see only public lists.
+  // - authenticated users see public lists, their own lists, and group lists for groups they belong to.
   if (!currentUser) {
     return { visibility: "public" };
   }
@@ -163,114 +192,114 @@ function buildSharedListViewFilter(currentUser: CurrentUser | null): Prisma.Shar
       {
         visibility: "group",
         group: {
-          members: {
-            some: {
-              userId: currentUser.id,
-            },
-          },
+          members: { some: { userId: currentUser.id } },
         },
       },
     ],
   };
 }
 
+// Prisma include shapes used by the shared list fetch helpers.
+// The detail include loads full comment records and the nested user rows needed for threading.
+const sharedListDetailInclude = {
+  owner: true,
+  group: { select: { id: true, name: true } },
+  collaborators: { include: { user: true } },
+  movies: true,
+  likesRecords: true,
+  commentRecords: {
+    include: { user: true },
+    orderBy: { createdAt: "asc" as const },
+  },
+};
+
+// Summary include is lighter and used for list grid pagination.
+const sharedListSummaryInclude = {
+  owner: true,
+  group: { select: { id: true, name: true } },
+  collaborators: { include: { user: true } },
+  movies: true,
+  likesRecords: true,
+};
+
 export async function getSharedListForView(listId: string, currentUser: CurrentUser | null) {
+  // Retrieve a fully detailed shared list if the current user has permission to view it.
   return prisma.sharedList.findFirst({
     where: {
       id: listId,
-      ...(currentUser
-        ? {
-            OR: [
-              { visibility: "public" },
-              { ownerId: currentUser.id },
-              {
-                visibility: "group",
-                group: {
-                  members: {
-                    some: {
-                      userId: currentUser.id,
-                    },
-                  },
-                },
-              },
-            ],
-          }
-        : { visibility: "public" }),
+      ...buildSharedListViewFilter(currentUser),
     },
-    include: {
-      owner: true,
-      group: { select: { id: true, name: true } },
-      collaborators: { include: { user: true } },
-      movies: true,
-      likesRecords: true,
-      commentRecords: {
-        include: { user: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    include: sharedListDetailInclude,
   });
 }
 
-async function getSharedListForEdit(listId: string, currentUser: CurrentUser | null) {
-  if (!currentUser) return null;
-
+export async function getSharedListAccessInfo(listId: string, currentUser: CurrentUser | null) {
+  // Used by permission checks when only the list id and owner id are needed.
   return prisma.sharedList.findFirst({
     where: {
       id: listId,
-      OR: [
-        { ownerId: currentUser.id },
-        { collaborators: { some: { userId: currentUser.id } } },
-      ],
+      ...buildSharedListViewFilter(currentUser),
     },
-    include: {
-      owner: true,
-      group: { select: { id: true, name: true } },
-      collaborators: { include: { user: true } },
-      movies: true,
-      likesRecords: true,
-      commentRecords: {
-        include: { user: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    select: { id: true, ownerId: true },
   });
-}
-
-function isSharedListEditor(
-  list: { ownerId: string; collaborators: Array<{ userId: string }> },
-  currentUser: CurrentUser | null
-) {
-  if (!currentUser) return false;
-  if (list.ownerId === currentUser.id) return true;
-  return list.collaborators.some((collaborator) => collaborator.userId === currentUser.id);
 }
 
 export async function getCurrentUser() {
+  // Resolve the current user from the NextAuth session.
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
 
   return prisma.user.findUnique({ where: { email: session.user.email } });
 }
 
-export async function fetchSharedLists(currentUser: CurrentUser | null) {
+// Default pagination size for shared list fetches.
+const DEFAULT_PAGE_SIZE = 12;
+
+export type FetchSharedListsResult = {
+  lists: SharedList[];
+  hasMore: boolean;
+  nextPage: number | null;
+};
+
+export async function fetchSharedLists(
+  currentUser: CurrentUser | null,
+  options?: { page?: number; pageSize?: number }
+): Promise<FetchSharedListsResult> {
+  // Normalize pagination options and cap the page size to avoid overly large responses.
+  const page = Math.max(1, options?.page ?? 1);
+  const pageSize = Math.min(50, Math.max(1, options?.pageSize ?? DEFAULT_PAGE_SIZE));
+
   const where = buildSharedListViewFilter(currentUser);
-  const lists = await prisma.sharedList.findMany({
+  const rows = await prisma.sharedList.findMany({
     where,
-    include: {
-      owner: true,
-      group: { select: { id: true, name: true } },
-      collaborators: { include: { user: true } },
-      movies: true,
-      likesRecords: true,
-      commentRecords: {
-        include: { user: true },
-        orderBy: { createdAt: "asc" },
-      },
-    },
+    include: sharedListSummaryInclude,
     orderBy: { createdAt: "desc" },
+    skip: (page - 1) * pageSize,
+    take: pageSize + 1,
   });
 
-  return lists.map((list) => serializeSharedList(list as any, currentUser));
+  // Load one extra row to determine whether there is a next page.
+  const hasMore = rows.length > pageSize;
+  const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
+
+  return {
+    lists: pageRows.map((list) => serializeSharedListSummary(list as any, currentUser)),
+    hasMore,
+    nextPage: hasMore ? page + 1 : null,
+  };
+}
+
+export async function getSharedListDetail(listId: string, currentUser: CurrentUser | null) {
+  const row = await prisma.sharedList.findFirst({
+    where: {
+      id: listId,
+      ...buildSharedListViewFilter(currentUser),
+    },
+    include: sharedListDetailInclude,
+  });
+
+  if (!row) return null;
+  return serializeSharedListDetail(row as any, currentUser);
 }
 
 export async function createSharedList(
@@ -278,6 +307,8 @@ export async function createSharedList(
   currentUser: CurrentUser | null
 ) {
   if (!currentUser) return { error: "unauthorized" as const };
+
+  // Persist a new shared list and return refreshed paginated results for the client.
 
   await prisma.sharedList.create({
     data: {
@@ -288,127 +319,6 @@ export async function createSharedList(
       groupId: input.groupId,
     },
   });
-
-  return { value: await fetchSharedLists(currentUser) } as const;
-}
-
-export async function deleteSharedList(listId: string, currentUser: CurrentUser | null) {
-  if (!currentUser) return { error: "unauthorized" as const };
-
-  const list = await prisma.sharedList.findUnique({ where: { id: listId } });
-  if (!list) return { error: "not-found" as const };
-  if (list.ownerId !== currentUser.id) return { error: "unauthorized" as const };
-
-  await prisma.sharedList.delete({ where: { id: listId } });
-  return { value: await fetchSharedLists(currentUser) } as const;
-}
-
-export async function toggleSharedListLike(listId: string, currentUser: CurrentUser | null) {
-  if (!currentUser) return { error: "unauthorized" as const };
-
-  const list = await getSharedListForView(listId, currentUser);
-  if (!list) return { error: "not-found" as const };
-
-  const existingLike = await prisma.sharedListLike.findUnique({
-    where: { sharedListId_userId: { sharedListId: listId, userId: currentUser.id } },
-  });
-
-  await prisma.$transaction(async (tx) => {
-    if (existingLike) {
-      await tx.sharedListLike.delete({
-        where: { sharedListId_userId: { sharedListId: listId, userId: currentUser.id } },
-      });
-      await tx.sharedList.update({ where: { id: listId }, data: { likes: { decrement: 1 } } });
-      return;
-    }
-
-    await tx.sharedListLike.create({
-      data: { sharedListId: listId, userId: currentUser.id },
-    });
-    await tx.sharedList.update({ where: { id: listId }, data: { likes: { increment: 1 } } });
-  });
-
-  return { value: await fetchSharedLists(currentUser) } as const;
-}
-
-export async function addSharedListComment(
-  listId: string,
-  body: string,
-  currentUser: CurrentUser | null,
-  parentId?: string
-) {
-  if (!currentUser) return { error: "unauthorized" as const };
-
-  const list = await getSharedListForView(listId, currentUser);
-  if (!list) return { error: "not-found" as const };
-
-  if (parentId) {
-    const parent = await prisma.sharedListComment.findFirst({ where: { id: parentId, sharedListId: listId } });
-    if (!parent) return { error: "parent-not-found" as const };
-  }
-
-  await prisma.sharedListComment.create({
-    data: {
-      sharedListId: listId,
-      userId: currentUser.id,
-      body,
-      parentId: parentId || null,
-    },
-  });
-
-  await prisma.sharedList.update({ where: { id: listId }, data: { comments: { increment: 1 } } });
-
-  return { value: await fetchSharedLists(currentUser) } as const;
-}
-
-export async function addSharedListMovie(listId: string, movieId: string, currentUser: CurrentUser | null) {
-  if (!currentUser) return { error: "unauthorized" as const };
-
-  const list = await prisma.sharedList.findUnique({
-    where: { id: listId },
-    include: { collaborators: true },
-  });
-
-  if (!list) return { error: "not-found" as const };
-  if (!isSharedListEditor(list, currentUser)) return { error: "unauthorized" as const };
-
-  const movie = await getMovieDetails(movieId);
-  if (!movie) return { error: "movie-not-found" as const };
-
-  const existingCount = await prisma.sharedListMovie.count({ where: { sharedListId: listId } });
-
-  await prisma.sharedListMovie.upsert({
-    where: { sharedListId_tmdbId: { sharedListId: listId, tmdbId: movieId } },
-    create: {
-      sharedListId: listId,
-      tmdbId: movieId,
-      position: existingCount,
-      metadata: movie as unknown as Prisma.InputJsonValue,
-    },
-    update: {
-      metadata: movie as unknown as Prisma.InputJsonValue,
-    },
-  });
-
-  return { value: await fetchSharedLists(currentUser) } as const;
-}
-
-export async function removeSharedListMovie(listId: string, movieId: string, currentUser: CurrentUser | null) {
-  if (!currentUser) return { error: "unauthorized" as const };
-
-  const list = await prisma.sharedList.findUnique({
-    where: { id: listId },
-    include: { collaborators: true },
-  });
-
-  if (!list) return { error: "not-found" as const };
-  if (!isSharedListEditor(list, currentUser)) return { error: "unauthorized" as const };
-
-  const result = await prisma.sharedListMovie.deleteMany({
-    where: { sharedListId: listId, tmdbId: movieId },
-  });
-
-  if (result.count === 0) return { error: "movie-not-found" as const };
 
   return { value: await fetchSharedLists(currentUser) } as const;
 }
