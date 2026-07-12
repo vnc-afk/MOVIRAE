@@ -4,59 +4,30 @@ import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
-import { searchMovies } from "@/lib/tmdb";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
-import type { Group, Movie, SharedList } from "@/lib/types";
+import type { Group, SharedList } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
-import { SharedListsSnapshot, SharedListsResponse, MovieSearchState, NewListFormState } from "../lib/types";
-import { constructUserProfile, appendReplyToComments } from "../lib/shared-lists-utils";
+import { SharedListsSnapshot, SharedListsResponse, NewListFormState } from "../lib/types";
+import { constructUserProfile } from "../lib/shared-lists-utils";
 
+// Default empty snapshot shapes the cache when no data exists yet.
 const EMPTY_SNAPSHOT: SharedListsSnapshot = {
   lists: [],
   groups: [],
   currentUser: null,
+  page: 1,
+  hasMore: false,
 };
 
-/**
- * Load shared lists and groups data
- */
-export function useSharedListsSnapshot() {
-  const queryClient = useQueryClient();
+const SHARED_LISTS_KEY = [queryKeys.sharedLists.all()] as const;
 
-  const query = usePrefetchAwareQuery<SharedListsSnapshot>({
-    queryKey: queryKeys.sharedLists.all(),
-    queryFn: async () => {
-      const listsResponse = await fetch("/api/shared-lists", { cache: "no-store" });
-
-      const listsPayload = (await parseResponsePayload(listsResponse)) as SharedListsResponse | null;
-
-      if (!listsResponse.ok) {
-        throw new Error(listsPayload?.error || "Failed to load shared lists.");
-      }
-
-      const nextLists = Array.isArray(listsPayload?.value) ? listsPayload.value : [];
-      const currentUser = constructUserProfile(listsPayload?.currentUser, nextLists);
-
-      return {
-        lists: nextLists,
-        groups: [],
-        currentUser,
-      };
-    },
-    enabled: true,
-  });
-
-  return {
-    snapshot: query.data ?? EMPTY_SNAPSHOT,
-    isLoading: query.isLoading,
-  };
-}
-
-/**
- * Helper to parse API responses
- */
+/*
+  Helper to parse responses from the server that sometimes return an empty body.
+  - Some API routes may respond with an empty body on errors; handle that gracefully.
+  - We throw an error if the body is present but not valid JSON to surface unexpected server bugs.
+*/
 async function parseResponsePayload(response: Response) {
   const text = await response.text();
   if (!text) {
@@ -70,14 +41,44 @@ async function parseResponsePayload(response: Response) {
   }
 }
 
-/**
- * Refresh shared lists from server
- */
+export function useSharedListsSnapshot() {
+  const query = usePrefetchAwareQuery<SharedListsSnapshot>({
+    queryKey: SHARED_LISTS_KEY,
+    queryFn: async () => {
+      const listsResponse = await fetch("/api/shared-lists?page=1", { cache: "no-store" });
+      const listsPayload = (await parseResponsePayload(listsResponse)) as SharedListsResponse | null;
+
+      if (!listsResponse.ok) {
+        throw new Error(listsPayload?.error || "Failed to load shared lists.");
+      }
+
+      const nextLists = Array.isArray(listsPayload?.value) ? listsPayload.value : [];
+      const currentUser = constructUserProfile(listsPayload?.currentUser, nextLists);
+
+      return {
+        lists: nextLists,
+        groups: [],
+        currentUser,
+        page: 1,
+        hasMore: Boolean(listsPayload?.hasMore),
+      };
+    },
+    enabled: true,
+    refetchOnMount: true,
+  });
+
+  // Expose the snapshot and a loading flag to callers/components.
+  return {
+    snapshot: query.data ?? EMPTY_SNAPSHOT,
+    isLoading: query.isLoading,
+  };
+}
+
 export function useLoadSharedLists() {
   const queryClient = useQueryClient();
 
   return async () => {
-    const response = await fetch("/api/shared-lists", { cache: "no-store" });
+    const response = await fetch("/api/shared-lists?page=1", { cache: "no-store" });
     const payload = (await parseResponsePayload(response)) as SharedListsResponse | null;
 
     if (!response.ok) {
@@ -85,31 +86,38 @@ export function useLoadSharedLists() {
     }
 
     const nextLists = Array.isArray(payload?.value) ? payload.value : [];
-    const snapshot = queryClient.getQueryData<SharedListsSnapshot>([queryKeys.sharedLists.all()]);
+    const snapshot = queryClient.getQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY);
 
-    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], () => ({
+    // Update the react-query cache with newly loaded lists while preserving groups and other metadata.
+    applyEntityUpdate(queryClient, SHARED_LISTS_KEY, () => ({
       lists: nextLists,
       groups: snapshot?.groups ?? [],
       currentUser:
         payload?.currentUser?.id
           ? constructUserProfile(payload.currentUser, nextLists)
           : snapshot?.currentUser ?? null,
+      page: 1,
+      hasMore: Boolean(payload?.hasMore),
     }));
 
     return nextLists;
   };
 }
 
-/**
- * Load groups data
- */
 export function useLoadGroups() {
   const queryClient = useQueryClient();
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  /*
+    Load groups once and merge them into the shared-lists snapshot.
+    - The `hasLoaded` guard prevents duplicate requests.
+    - On success we patch the snapshot so UI components get groups synchronously.
+  */
   const loadGroups = useCallback(async () => {
-    if (groups.length > 0 || isLoading) {
+    if (hasLoaded || isLoading) {
       return groups;
     }
 
@@ -121,24 +129,70 @@ export function useLoadGroups() {
 
       const nextGroups = Array.isArray(payload.value) ? payload.value : [];
       setGroups(nextGroups);
+      setHasLoaded(true);
 
-      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      // Merge groups into the central snapshot cache so consumers don't need a separate query.
+      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return { ...current, groups: nextGroups };
       });
 
       return nextGroups;
+    } catch (error) {
+      toast.error("Could not load groups.");
+      return groups;
     } finally {
       setIsLoading(false);
     }
-  }, [groups, isLoading, queryClient]);
+  }, [hasLoaded, isLoading, groups, queryClient]);
 
   return { groups, loadGroups, isLoading };
 }
 
-/**
- * Listen for real-time shared list updates via EventSource
- */
+export function useLoadMoreSharedLists(snapshot: SharedListsSnapshot) {
+  const queryClient = useQueryClient();
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Pagination helper: fetch the next page and merge results without duplicating existing lists.
+  const loadMore = useCallback(async () => {
+    if (isLoadingMore || !snapshot.hasMore) return;
+
+    setIsLoadingMore(true);
+    try {
+      const nextPage = snapshot.page + 1;
+      const response = await fetch(`/api/shared-lists?page=${nextPage}`, { cache: "no-store" });
+      const payload = (await parseResponsePayload(response)) as SharedListsResponse | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to load more lists.");
+      }
+
+      const additionalLists = Array.isArray(payload?.value) ? payload.value : [];
+
+      // Merge new lists while preserving existing ones (avoid duplicates by ID).
+      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+        if (!current) return current;
+
+        const existingIds = new Set(current.lists.map((l) => l.id));
+        const merged = [...current.lists, ...additionalLists.filter((l: any) => !existingIds.has(l.id))];
+        return {
+          ...current,
+          lists: merged,
+          page: nextPage,
+          hasMore: Boolean(payload?.hasMore),
+        };
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load more lists.";
+      toast.error(message);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, snapshot.hasMore, snapshot.page, queryClient]);
+
+  return { loadMore, isLoadingMore };
+}
+
 export function useSharedListsEvents() {
   const queryClient = useQueryClient();
 
@@ -146,6 +200,7 @@ export function useSharedListsEvents() {
     let isActive = true;
     const eventSource = new EventSource("/api/shared-lists/events");
 
+    // Listen to server-sent events that inform of list creates/updates/deletes.
     eventSource.addEventListener("shared-list-updated", (ev) => {
       if (!isActive) return;
 
@@ -156,54 +211,53 @@ export function useSharedListsEvents() {
         const serverList = payload?.list ?? null;
         const serverListId = typeof payload?.listId === "string" ? payload.listId : undefined;
 
+        // Handle deletion notifications by filtering the list out of the cache.
         if (action === "deleted") {
           const targetListId = serverList?.id ?? serverListId;
           if (!targetListId) return;
 
-          try {
-            applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
-              if (!current) return current;
-              return { ...current, lists: current.lists.filter((list: any) => list.id !== targetListId) };
-            });
-          } catch (e) {
-            /* best-effort */
-          }
+          applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+            if (!current) return current;
+            return { ...current, lists: current.lists.filter((list: any) => list.id !== targetListId) };
+          });
           return;
         }
 
+        // When the server provides a canonical list object, update or merge it into cache.
         if (serverList) {
-          const lists = queryClient.getQueryData<SharedListsSnapshot>([queryKeys.sharedLists.all()])?.lists ?? [];
+          const lists = queryClient.getQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY)?.lists ?? [];
 
+          // If the SSE includes an `opId` for an optimistic create, attempt to reconcile the temp item.
           if (incomingOpId) {
-            const tempList = lists.find((list) => (list as any).opId === incomingOpId || (list as any).tempId === incomingOpId) as any;
+            const tempList = lists.find(
+              (list) => (list as any).opId === incomingOpId || (list as any).tempId === incomingOpId
+            ) as any;
             if (tempList) {
               const reconciled = reconcileTempItem(
                 lists,
                 { opId: incomingOpId, type: "create" as const, tempId: tempList.tempId, ts: Date.now() },
                 serverList
               );
-              try {
-                applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
-                  if (!current) return current;
-                  return { ...current, lists: reconciled as any };
-                });
-              } catch (e) {
-                /* best-effort */
-              }
+              applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+                if (!current) return current;
+                return { ...current, lists: reconciled as any };
+              });
               return;
             }
           }
 
+          // Otherwise, perform a simple replace-by-id of the incoming serverList.
           const nextLists = lists.map((list: any) => (list.id === serverList.id ? serverList : list));
-          const finalLists = action === "created" && !nextLists.some((list: any) => list.id === serverList.id) ? [serverList, ...lists] : nextLists;
-          try {
-            applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
-              if (!current) return current;
-              return { ...current, lists: finalLists as any };
-            });
-          } catch (e) {
-            /* best-effort */
-          }
+          const finalLists =
+            action === "created" && !nextLists.some((list: any) => list.id === serverList.id)
+              ? [serverList, ...lists]
+              : nextLists;
+
+          // Apply final merged lists back into the shared-lists snapshot cache.
+          applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+            if (!current) return current;
+            return { ...current, lists: finalLists as any };
+          });
           return;
         }
 
@@ -213,8 +267,8 @@ export function useSharedListsEvents() {
       }
     });
 
+    // Keep SSE connection open; basic error handler is a no-op here. Consumer may re-open later.
     eventSource.onerror = () => {
-      // Browser retries automatically
     };
 
     return () => {
@@ -224,16 +278,13 @@ export function useSharedListsEvents() {
   }, [queryClient]);
 }
 
-/**
- * Create a new shared list
- */
 export function useCreateList(snapshot: SharedListsSnapshot) {
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
   const queryClient = useQueryClient();
 
   return async (form: NewListFormState) => {
     const { name, description, visibility, groupId: newGroupId } = form;
-    const { currentUser, groups, lists } = snapshot;
+    const { currentUser, groups } = snapshot;
 
     if (!currentUser) {
       throw new Error("No active user profile available.");
@@ -247,12 +298,14 @@ export function useCreateList(snapshot: SharedListsSnapshot) {
       throw new Error("Please select a group for group visibility.");
     }
 
+    // id used by optimistic ops system to block duplicate creates while one is in flight
     const createInFlightOpId = "shared-list-create";
     if (isInFlight(createInFlightOpId)) {
       return;
     }
 
     const tempId = makeTempId("list");
+    // Build an optimistic op so the UI shows the new list immediately.
     const op = { opId: generateOpId("list"), type: "create" as const, tempId, ts: Date.now() };
 
     addInFlightOp(createInFlightOpId, {
@@ -262,6 +315,10 @@ export function useCreateList(snapshot: SharedListsSnapshot) {
       itemId: tempId,
     });
 
+
+    const matchedGroup = newGroupId ? groups.find((g: any) => g.id === newGroupId) : null;
+
+    // Construct an optimistic list entry to insert into the cache while the network request runs.
     const optimisticList = {
       id: tempId,
       tempId,
@@ -269,7 +326,8 @@ export function useCreateList(snapshot: SharedListsSnapshot) {
       name: name.trim(),
       description: description.trim(),
       visibility,
-        groups: newGroupId ? groups.find((g: any) => g.id === newGroupId) ?? null : null,
+      groupId: newGroupId || undefined,
+      groupName: matchedGroup?.name,
       owner: currentUser,
       collaborators: [],
       movies: [],
@@ -277,9 +335,10 @@ export function useCreateList(snapshot: SharedListsSnapshot) {
       comments: 0,
       likes: 0,
       likedByMe: false,
+      createdAt: new Date().toISOString(),
     } as any;
 
-    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+    applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
       if (!current) return current;
       return { ...current, lists: [optimisticList, ...current.lists] };
     });
@@ -308,13 +367,14 @@ export function useCreateList(snapshot: SharedListsSnapshot) {
         (l: any) => l.name === optimisticList.name && l.owner?.id === optimisticList.owner.id && !String(l.id).startsWith("temp-")
       );
 
+      // If the server returned a created list that matches the optimistic one, reconcile it.
       if (serverCreated) {
-        applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
           if (!current) return current;
           return { ...current, lists: reconcileTempItem(current.lists, op, serverCreated) as any };
         });
       } else {
-        applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+        applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
           if (!current) return current;
           return { ...current, lists: nextLists };
         });
@@ -322,10 +382,12 @@ export function useCreateList(snapshot: SharedListsSnapshot) {
 
       toast.success("Shared list created");
     } catch (error) {
-      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return { ...current, lists: current.lists.filter((list: SharedList) => list.id !== tempId) };
       });
+      const message = error instanceof Error ? error.message : "Could not create the list.";
+      toast.error(message);
       throw error;
     } finally {
       removeInFlightOp(createInFlightOpId);
@@ -333,9 +395,6 @@ export function useCreateList(snapshot: SharedListsSnapshot) {
   };
 }
 
-/**
- * Like/unlike a shared list
- */
 export function useToggleLike(snapshot: SharedListsSnapshot) {
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
   const queryClient = useQueryClient();
@@ -353,13 +412,14 @@ export function useToggleLike(snapshot: SharedListsSnapshot) {
       itemId: list.id,
     });
 
+    // Keep a reference to the previous lists for rollback in case of network failure.
     const previousLists = snapshot.lists;
     const originalLikes = snapshot.lists.find((item) => item.id === list.id)?.likes ?? 0;
     const currentLiked = Boolean(snapshot.lists.find((item) => item.id === list.id)?.likedByMe);
     const nextLiked = !currentLiked;
     const optimisticLikes = nextLiked ? originalLikes + 1 : Math.max(originalLikes - 1, 0);
 
-    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+    applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
       if (!current) return current;
       return {
         ...current,
@@ -369,6 +429,7 @@ export function useToggleLike(snapshot: SharedListsSnapshot) {
       };
     });
 
+    // Attach an op id to the network request so server events can reconcile optimistic changes.
     const op = { opId: generateOpId("shared-list-like"), type: "like" as const, itemId: list.id, ts: Date.now() };
 
     try {
@@ -383,7 +444,7 @@ export function useToggleLike(snapshot: SharedListsSnapshot) {
         throw new Error("Failed to update like");
       }
     } catch (error) {
-      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return { ...current, lists: previousLists };
       });
@@ -395,14 +456,12 @@ export function useToggleLike(snapshot: SharedListsSnapshot) {
   };
 }
 
-/**
- * Delete a shared list
- */
 export function useRemoveList(snapshot: SharedListsSnapshot) {
   const { isInFlight, addInFlightOp, removeInFlightOp } = useOptimisticOps();
   const queryClient = useQueryClient();
 
   return async (id: string, onDeleted?: () => void) => {
+    // Block concurrent deletes by tracking an in-flight op with a unique id.
     const deleteInFlightOpId = `shared-list-delete-${id}`;
     if (isInFlight(deleteInFlightOpId)) {
       return;
@@ -417,7 +476,7 @@ export function useRemoveList(snapshot: SharedListsSnapshot) {
       itemId: id,
     });
 
-    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+    applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
       if (!current) return current;
       return {
         ...current,
@@ -444,7 +503,7 @@ export function useRemoveList(snapshot: SharedListsSnapshot) {
       onDeleted?.();
       toast.success("List removed");
     } catch (error) {
-      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return { ...current, lists: previousLists };
       });

@@ -11,9 +11,6 @@ import { queryKeys } from "@/lib/queryKeys";
 import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { SharedListsSnapshot, MovieSearchState } from "../lib/types";
 
-/**
- * Search for movies and manage search state
- */
 export function useMovieSearch(selectedListId: string | null) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Movie[]>([]);
@@ -67,9 +64,6 @@ export function useMovieSearch(selectedListId: string | null) {
   return { query, setQuery, results, isLoading, error, reset };
 }
 
-/**
- * Add movie to shared list
- */
 export function useAddMovieToList(snapshot: SharedListsSnapshot) {
   const [addingToListId, setAddingToListId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -140,9 +134,6 @@ export function useAddMovieToList(snapshot: SharedListsSnapshot) {
   return { addMovieToList, addingToListId };
 }
 
-/**
- * Remove movie from shared list
- */
 export function useRemoveMovieFromList(snapshot: SharedListsSnapshot) {
   const [removingFromListId, setRemovingFromListId] = useState<string | null>(null);
   const queryClient = useQueryClient();
