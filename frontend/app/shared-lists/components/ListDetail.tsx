@@ -66,6 +66,12 @@ export function ListDetail({
   onLike,
   onDelete,
 }: ListDetailProps) {
+  // `ListDetail` is a client-rendered component that shows the full details of a shared list.
+  // Important UI concerns:
+  // - Permission checks (`canEdit`) gate movie add/remove and delete actions.
+  // - Optimistic in-flight indicators rely on `isInFlight(opId)` passed from hooks.
+  // - Replies/comments are rendered via `CommentNode` which handles nested replies.
+
   const config = {
     public: { icon: Film, label: "Public", color: "text-green-500" },
     private: { icon: Film, label: "Private", color: "text-amber-500" },
@@ -106,6 +112,7 @@ export function ListDetail({
           </div>
         </div>
 
+        {/* Header: owner, visibility, and counts */}
         <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
           <Avatar className="h-9 w-9">
             <AvatarImage src={getSafeImageSrc(list.owner.avatar)} />
@@ -122,6 +129,7 @@ export function ListDetail({
           </div>
         </div>
 
+        {/* Movies section: list of movie posters and controls to add/remove for editors */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <Film className="h-4 w-4" /> Movies
@@ -182,6 +190,7 @@ export function ListDetail({
           </div>
         </div>
 
+        {/* Comments section: textarea + existing comments rendered via CommentNode */}
         <div className="space-y-3 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <MessageSquareReply className="h-4 w-4" /> Comments
@@ -229,6 +238,7 @@ export function ListDetail({
         </div>
       </div>
 
+      {/* Right column: add movie UI (only visible to editors) */}
       <div className="space-y-4 rounded-xl border border-border bg-card p-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">

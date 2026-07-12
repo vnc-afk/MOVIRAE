@@ -113,6 +113,8 @@ export function SharedListsView({
   addMovie,
   removeMovie,
 }: SharedListsViewProps) {
+  // Shared lists view: handles filtering tabs, create dialog, and the list grid.
+  // State here is intentionally local and passed down to child components for clarity.
   const [tab, setTab] = useState("all");
   const mine = lists.filter((list) => list.owner.id === currentUser?.id);
   const collaborating = lists.filter((list) => list.collaborators.some((c) => c.id === currentUser?.id));
@@ -140,6 +142,7 @@ export function SharedListsView({
             </div>
             <p className="text-sm text-muted-foreground">Co-create watchlists with friends, groups, or the community.</p>
           </div>
+          {/* Create list dialog: opens a modal form to create new shared lists. */}
           <Dialog open={openCreate} onOpenChange={setOpenCreate}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -189,6 +192,7 @@ export function SharedListsView({
           </Dialog>
         </motion.div>
 
+        {/* Tabs control which subset of lists is shown: all / mine / collaborating / group */}
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="bg-secondary">
             <TabsTrigger value="all" className="gap-1.5 text-xs"><Globe className="h-3 w-3" /> All</TabsTrigger>
@@ -207,6 +211,7 @@ export function SharedListsView({
                       const isCollaborator = currentUser ? list.collaborators.some((c) => c.id === currentUser.id) : false;
                       const canEdit = isOwner || isCollaborator;
 
+                      // Choose the editable card for lists the user can modify, otherwise show the public view.
                       return canEdit ? (
                         <ListCard
                           key={list.id}

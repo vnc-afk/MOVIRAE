@@ -23,6 +23,9 @@ type ListCardProps = {
 };
 
 export function ListCard({ list, index, currentUser, isInFlight, onLike, onDelete, onOpen, addingMovieToListId, removingMovieFromListId }: ListCardProps) {
+  // Small card used in list grids. Shows a compact preview of the list with
+  // basic actions (like, view, open details) and quick indicators for in-flight ops.
+  // Permission checks determine whether the menu with delete/invite actions is visible.
   const vis = {
     public: { icon: Film, label: "Public", color: "text-green-500" },
     private: { icon: Film, label: "Private", color: "text-amber-500" },
@@ -44,6 +47,7 @@ export function ListCard({ list, index, currentUser, isInFlight, onLike, onDelet
       transition={{ delay: index * 0.08 }}
       className="rounded-xl bg-card p-5 card-shadow hover:card-shadow-hover transition-all duration-300 group"
     >
+      {/* Top row: title, visibility badge, and optional actions menu for editors */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -74,6 +78,7 @@ export function ListCard({ list, index, currentUser, isInFlight, onLike, onDelet
         ) : null}
       </div>
 
+      {/* Movie poster thumbnails preview. Shows a condensed stack and a +N indicator when truncated. */}
       <div className="flex gap-2 mt-4 overflow-hidden relative">
         {(adding || removing) && (
           <div className="absolute -top-2 right-3 z-20">
@@ -98,6 +103,7 @@ export function ListCard({ list, index, currentUser, isInFlight, onLike, onDelet
         )}
       </div>
 
+      {/* Owner and collaborators summary */}
       <div className="flex items-center justify-between mt-4">
         <div className="flex items-center gap-2">
           <Avatar className="h-6 w-6">
@@ -122,6 +128,7 @@ export function ListCard({ list, index, currentUser, isInFlight, onLike, onDelet
         <span className="text-[10px] text-muted-foreground">{formatRelativeDate(list.createdAt)}</span>
       </div>
 
+      {/* Footer: quick stats and actions (like/view) */}
       <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1"><Film className="h-3 w-3" /> {list.movies.length} films</span>
