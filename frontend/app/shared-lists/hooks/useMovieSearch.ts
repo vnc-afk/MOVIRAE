@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { searchMovies } from "@/lib/tmdb";
 import { generateOpId, attachOpToBody, attachOpToHeaders } from "@/lib/optimistic";
-import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Movie } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";

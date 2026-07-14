@@ -440,8 +440,27 @@ export function useToggleLike(snapshot: SharedListsSnapshot) {
         body: JSON.stringify(attachOpToBody({}, op)),
       });
 
+      const payload = await response.json().catch(() => null);
+
       if (!response.ok) {
-        throw new Error("Failed to update like");
+        throw new Error(payload?.error || "Failed to update like");
+      }
+
+      const serverList = Array.isArray(payload?.value) ? payload.value[0] : payload?.value;
+
+      if (serverList) {
+        applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+          if (!current) return current;
+
+          const nextLists = current.lists.map((item) => (item.id === serverList.id ? { ...item, ...serverList } : item));
+
+          return {
+            ...current,
+            lists: nextLists.some((item) => item.id === serverList.id) ? nextLists : [serverList, ...current.lists],
+          };
+        });
+
+        await queryClient.invalidateQueries({ queryKey: SHARED_LISTS_KEY });
       }
     } catch (error) {
       applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
