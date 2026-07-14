@@ -18,7 +18,7 @@ import {
   Radar,
 } from "recharts";
 import { Calendar, TrendingUp, Sparkles, Monitor, Users, Star } from "lucide-react";
-import type { UserStats } from "@/lib/types";
+import type { Mood, UserStats } from "@/lib/types";
 
 const COLORS = [
   "hsl(36, 90%, 50%)",
@@ -38,7 +38,7 @@ const tooltipStyle = {
   fontSize: "12px",
 };
 
-const MOODS: Array<string> = [
+const MOODS: Mood[] = [
   "Thrilling",
   "Relaxing",
   "Romantic",
