@@ -68,11 +68,10 @@ export function PublicListDetail({
 
         <div className="flex gap-2">
           {(() => {
-            const likeInFlight = isInFlight(`shared-list-like-${list.id}`);
             const isLiked = Boolean(list.likedByMe);
             return (
-              <Button variant="outline" size="sm" onClick={onLike} className={`gap-2 inline-flex items-center ${likeInFlight ? "border-primary/40 bg-primary/10 text-primary" : ""}`} disabled={likeInFlight} aria-busy={likeInFlight}>
-                {likeInFlight ? <Loader2 className="h-4 w-4 animate-spin" /> : <Heart className={`h-4 w-4 ${isLiked ? "fill-primary text-primary" : ""}`} />}
+              <Button variant="outline" size="sm" onClick={onLike} className={`gap-2 inline-flex items-center ${isLiked ? "border-primary/40 bg-primary/10 text-primary" : ""}`} disabled={isInFlight(`shared-list-like-${list.id}`)}>
+                <Heart className={`h-4 w-4 ${isLiked ? "fill-primary text-primary" : ""}`} />
                 {list.likes}
               </Button>
             );

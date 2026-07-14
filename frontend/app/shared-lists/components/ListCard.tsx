@@ -137,7 +137,6 @@ export function ListCard({ list, index, currentUser, isInFlight, onLike, onDelet
         </div>
         <div className="flex items-center gap-2">
           {(() => {
-            const likeInFlight = isInFlight(`shared-list-like-${list.id}`);
             const isLiked = Boolean(list.likedByMe);
             return (
               <Button
@@ -145,12 +144,11 @@ export function ListCard({ list, index, currentUser, isInFlight, onLike, onDelet
                 variant="ghost"
                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
                   isLiked ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"
-                } ${likeInFlight ? "border-primary/40 bg-primary/10 text-primary" : ""}`}
+                }`}
                 onClick={() => onLike(list)}
-                disabled={likeInFlight}
-                aria-busy={likeInFlight}
+                disabled={isInFlight(`shared-list-like-${list.id}`)}
               >
-                {likeInFlight ? <Loader2 className="h-3 w-3 animate-spin" /> : <Heart className={`h-3 w-3 ${isLiked ? "fill-primary text-primary" : ""}`} />} {list.likedByMe ? "Liked" : "Like"}
+                <Heart className={`h-3 w-3 ${isLiked ? "fill-primary text-primary" : ""}`} /> {list.likedByMe ? "Liked" : "Like"}
               </Button>
             );
           })()}
