@@ -13,22 +13,7 @@ import {
 import { toast } from "sonner";
 
 /**
- * Groups List Page - Orchestrator Component
- *
- * Composition:
- * - Hooks: useGroupsList, useGroupMembership, useCreateGroup
- * - Components: GroupsHeader, CreateGroupDialog, GroupsGrid, EmptyState, ErrorState
- *
- * Responsibilities:
- * - Orchestrate data loading with error handling
- * - Coordinate user interactions with feedback
- * - Manage optimistic updates with rollback
- *
- * Error Handling:
- * - Network errors: Retry with exponential backoff
- * - Validation errors: Show toast with clear message
- * - Auth errors: Prompt to sign in
- * - Server errors: Show error state with retry option
+ * Renders the groups listing experience and wires the join, create, and retry flows.
  */
 export default function GroupsPage() {
   const toastIdRef = useRef<string | number | null>(null);
@@ -54,7 +39,7 @@ export default function GroupsPage() {
     }
   );
 
-  // Load groups on mount
+  // Refresh the list once the initial loading state settles so the UI stays in sync.
   useEffect(() => {
     if (isLoading) {
       refetch();
@@ -187,8 +172,7 @@ export default function GroupsPage() {
 }
 
 /**
- * Loading skeleton component
- * Shows dynamic number of skeletons based on expected group count
+ * Renders a temporary loading skeleton that matches the expected number of groups.
  */
 function GroupsLoadingSkeleton({ count }: { count: number }) {
   return (
