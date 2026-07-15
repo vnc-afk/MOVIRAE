@@ -6,6 +6,14 @@ import { getOpId, parseRequestJson, requireAuth } from "@/app/shared-lists/lib/a
 
 export const runtime = "nodejs";
 
+/*
+  POST /api/shared-lists/[listId]/movies
+  - Adds a movie (by TMDb id) to the shared list. Requires write permission (owner/collaborator).
+  - Returns mapped error codes/messages for the client to surface.
+
+  DELETE /api/shared-lists/[listId]/movies
+  - Removes a movie from the list. Also requires write permission.
+*/
 const movieErrorStatus: Record<string, number> = {
   unauthorized: 401,
   "movie-not-found": 404,
@@ -32,12 +40,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
   const result = await addSharedListMovie(listId, movieId, currentUser);
 
   if ("error" in result) {
+    // Map service errors to client-friendly messages and HTTP codes.
     return NextResponse.json(
       { error: movieErrorMessage[result.error] ?? "Unable to add movie." },
       { status: movieErrorStatus[result.error] ?? 400 }
     );
   }
 
+  // Notify SSE subscribers that the list changed.
   publishSharedListEvent(listId, "updated", opId, result.value);
   return NextResponse.json({ value: [result.value], opId });
 }

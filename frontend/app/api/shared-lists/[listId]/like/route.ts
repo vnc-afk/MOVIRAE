@@ -2,22 +2,29 @@ import { NextResponse } from "next/server";
 
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
 import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
-import { getSharedListForView, toggleSharedListLike } from "@/app/shared-lists/lib/shared-lists-service";
+import { getSharedListAccessInfo, toggleSharedListLike } from "@/app/shared-lists/lib/shared-lists-service";
 import { publishNotificationEvent } from "@/lib/group-events";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-export async function POST(_request: Request, { params }: { params: Promise<{ listId: string }> }) {
+/*
+  POST /api/shared-lists/[listId]/like
+  - Toggles the authenticated user's like on the list.
+  - Creates at-most-one recent notification per actor to avoid flooding owners with repeated likes.
+  - Publishes an "updated" event so SSE subscribers can refresh the list summary.
+*/
+export async function POST(request: Request, { params }: { params: Promise<{ listId: string }> }) {
   try {
     const { listId } = await params;
-    const currentUser = await requireAuth(_request);
+    const currentUser = await requireAuth(request);
     const actorName = currentUser.displayName?.trim();
-    const body = await parseRequestJson(_request);
-    const opId = getOpId(_request, body);
+    const body = await parseRequestJson(request);
+    const opId = getOpId(request, body);
 
-    const list = await getSharedListForView(listId, currentUser);
-    if (!list) {
+    // Ensure the list exists and is visible to the current user before toggling like.
+    const access = await getSharedListAccessInfo(listId, currentUser);
+    if (!access) {
       return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
     }
 
@@ -26,10 +33,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ li
       return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
     }
 
-    if (result.isNewLike && list.owner.id !== currentUser.id && actorName) {
+    // If this is a new like, alert the owner unless they are the actor and avoid duplicate notifications.
+    if (result.isNewLike && access.ownerId !== currentUser.id && actorName) {
       const recentNotification = await prisma.notification.findFirst({
         where: {
-          recipientId: list.owner.id,
+          recipientId: access.ownerId,
           actorId: currentUser.id,
           type: "shared_list_like",
           createdAt: { gte: new Date(Date.now() - 5 * 60 * 1000) },
@@ -39,7 +47,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ li
       if (!recentNotification) {
         const notification = await prisma.notification.create({
           data: {
-            recipientId: list.owner.id,
+            recipientId: access.ownerId,
             actorId: currentUser.id,
             type: "shared_list_like",
             sharedListId: listId,
@@ -50,6 +58,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ li
       }
     }
 
+    // Notify SSE subscribers of the updated list. `opId` helps reconcile optimistic UI.
     publishSharedListEvent(listId, "updated", opId, result.value);
     return NextResponse.json({ value: [result.value], opId });
   } catch (error) {

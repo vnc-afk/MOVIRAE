@@ -1,14 +1,27 @@
 import { NextResponse } from "next/server";
 
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
-import { addSharedListComment, getSharedListForView } from "@/app/shared-lists/lib/shared-lists-service";
+import { addSharedListComment, getSharedListAccessInfo } from "@/app/shared-lists/lib/shared-lists-service";
 import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
+import { getSharedListDetail } from "@/app/shared-lists/lib/shared-lists-service";
+import { getCurrentUser } from "@/app/shared-lists/lib/api-utils";
 import { publishNotificationEvent } from "@/lib/group-events";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 
+/*
+  POST /api/shared-lists/[listId]/comments
+  - Authenticated endpoint for posting a top-level comment or a reply.
+  - Validates the body and ensures the target list exists and is visible to the user.
+  - Creates a notification for the list owner (unless the owner is the actor) and
+    publishes an "updated" shared-list event for SSE subscribers.
+
+  GET /api/shared-lists/[listId]/comments
+  - Returns the full shared-list detail including nested comments. Visibility is
+    resolved using the current user's permissions.
+*/
 export async function POST(request: Request, { params }: { params: Promise<{ listId: string }> }) {
   try {
     const { listId } = await params;
@@ -22,8 +35,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
       return NextResponse.json({ error: "Comment body is required." }, { status: 400 });
     }
 
-    const list = await getSharedListForView(listId, currentUser);
-    if (!list) {
+    // Ensure the list exists and the current user can view it before attempting to write.
+    const access = await getSharedListAccessInfo(listId, currentUser);
+    if (!access) {
       return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
     }
 
@@ -38,10 +52,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
 
       const updatedList = result.value;
 
-      if (list.owner.id !== currentUser.id && currentUser.displayName?.trim()) {
+      // Send a notification to the owner if someone else commented (and the actor has a display name).
+      if (access.ownerId !== currentUser.id && currentUser.displayName?.trim()) {
         const notification = await prisma.notification.create({
           data: {
-            recipientId: list.owner.id,
+            recipientId: access.ownerId,
             actorId: currentUser.id,
             type: "shared_list_comment",
             sharedListId: listId,
@@ -51,10 +66,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
         publishNotificationEvent(notification.id);
       }
 
+      // Notify SSE subscribers that the list has been updated (includes opId for reconciliation).
       publishSharedListEvent(listId, "updated", opId, updatedList);
       return NextResponse.json({ value: [updatedList], opId });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        // Map Prisma's "record not found" to a 404 for the client.
         return NextResponse.json({ error: "Comment thread not found." }, { status: 404 });
       }
       throw error;
@@ -66,5 +83,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
 
     console.error("Failed to post shared list comment:", error);
     return NextResponse.json({ error: "Failed to post comment." }, { status: 500 });
+  }
+}
+
+export async function GET(_request: Request, { params }: { params: Promise<{ listId: string }> }) {
+  try {
+    const { listId } = await params;
+    const currentUser = await getCurrentUser();
+
+    // Use the shared-list detail serializer which returns nested comments.
+    const detail = await getSharedListDetail(listId, currentUser);
+    if (!detail) {
+      return NextResponse.json({ error: "Shared list not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({ value: [detail] });
+  } catch (error) {
+    console.error("Failed to load shared list comments:", error);
+    return NextResponse.json({ error: "Failed to load comments." }, { status: 500 });
   }
 }
