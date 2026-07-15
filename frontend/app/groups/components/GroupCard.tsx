@@ -5,6 +5,9 @@ import { Users, MessageCircle, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { GroupRecord } from "../lib/types";
 
+/**
+ * Props for the group card component.
+ */
 interface GroupCardProps {
   group: GroupRecord;
   index: number;
@@ -14,26 +17,7 @@ interface GroupCardProps {
 }
 
 /**
- * GroupCard - Displays single group in grid
- *
- * Optimizations:
- * - Wrapped with React.memo to prevent unnecessary re-renders
- * - Custom comparison function only re-renders on meaningful changes
- * - useCallback for event handlers
- *
- * Responsibilities:
- * - Render group information
- * - Show member avatars
- * - Display shared movies
- * - Handle join/leave action
- * - Accessibility: proper ARIA labels and semantic HTML
- *
- * Props:
- * - group: Group data
- * - index: Animation delay index
- * - onJoinLeave: Callback when user clicks join/leave
- * - isMember: Whether current user is member
- * - isToggling: Whether membership update is in progress
+ * Displays a single group summary with membership actions and preview details.
  */
 const GroupCardComponent = ({
   group,
@@ -204,14 +188,6 @@ const GroupCardComponent = ({
   );
 };
 
-/**
- * Memoized component with custom comparison
- * Only re-renders if:
- * - group.id changes
- * - isMember changes
- * - group.memberCount changes
- * - isToggling changes
- */
 export const GroupCard = memo(
   GroupCardComponent,
   (prevProps, nextProps) => {

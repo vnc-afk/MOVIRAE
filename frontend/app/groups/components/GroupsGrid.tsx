@@ -2,6 +2,9 @@ import { memo } from "react";
 import { GroupCard } from "./GroupCard";
 import type { GroupRecord } from "../lib/types";
 
+/**
+ * Props for the groups grid container.
+ */
 interface GroupsGridProps {
   groups: GroupRecord[];
   onJoinLeave: (groupId: string) => void;
@@ -10,23 +13,7 @@ interface GroupsGridProps {
 }
 
 /**
- * GroupsGrid - Renders grid of group cards
- *
- * Optimizations:
- * - Wrapped with memo to prevent re-renders when props haven't changed
- * - Passes isToggling state to individual cards
- *
- * Responsibilities:
- * - Display groups in responsive grid
- * - Pass props to each group card
- * - Handle join/leave actions
- * - Provide accessibility context
- *
- * Props:
- * - groups: Array of group records
- * - onJoinLeave: Callback for join/leave actions
- * - currentUserId: Current user ID to check membership
- * - isToggling: Whether any membership update is in progress
+ * Renders the list of group cards in a responsive grid.
  */
 const GroupsGridComponent = ({
   groups,
@@ -55,10 +42,6 @@ const GroupsGridComponent = ({
   );
 };
 
-/**
- * Memoized component
- * Re-renders only when groups array or callbacks change
- */
 export const GroupsGrid = memo(GroupsGridComponent);
 
 GroupsGrid.displayName = "GroupsGrid";

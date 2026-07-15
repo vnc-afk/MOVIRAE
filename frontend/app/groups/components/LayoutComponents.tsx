@@ -1,8 +1,7 @@
 import React from "react";
 
 /**
- * Container for groups page
- * Provides proper padding and layout context
+ * Wraps the groups experience in the shared page layout spacing.
  */
 export function GroupsContainer({ children }: { children: React.ReactNode }) {
   return (
@@ -15,8 +14,7 @@ export function GroupsContainer({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Header section with title and description
- * Semantically groups heading and introductory content
+ * Renders the shared header area for the groups pages.
  */
 export function GroupsHeader({ children }: { children: React.ReactNode }) {
   return (
@@ -26,9 +24,9 @@ export function GroupsHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
+
 /**
- * Empty state when no groups exist
- * Shows helpful message and encourages action
+ * Displays the empty state when no groups are available yet.
  */
 export function EmptyState() {
   return (

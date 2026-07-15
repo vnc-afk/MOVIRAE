@@ -16,6 +16,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
+/**
+ * Props for the create-group dialog.
+ */
 interface CreateGroupDialogProps {
   onCreate: (name: string, description: string) => Promise<void>;
   isLoading?: boolean;
@@ -23,19 +26,7 @@ interface CreateGroupDialogProps {
 }
 
 /**
- * CreateGroupDialog - Modal for creating new group
- *
- * Responsibilities:
- * - Manage dialog open state with focus management
- * - Collect and validate group name and description
- * - Call onCreate callback with error handling
- * - Show feedback to user
- * - Accessibility: proper ARIA labels, focus traps, keyboard navigation
- *
- * Props:
- * - onCreate: Async callback when group is created
- * - isLoading: Whether creation is in progress
- * - disabled: Whether to disable the button
+ * Renders a dialog for creating a new movie group with client-side validation.
  */
 export function CreateGroupDialog({
   onCreate,

@@ -2,6 +2,9 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { GroupsError } from "../hooks";
 
+/**
+ * Props for the groups error state component.
+ */
 interface ErrorStateProps {
   error: GroupsError;
   onRetry: () => void;
@@ -9,17 +12,7 @@ interface ErrorStateProps {
 }
 
 /**
- * ErrorState - Displays error message with retry option
- *
- * Responsibilities:
- * - Show user-friendly error message based on error type
- * - Provide retry button
- * - Guide user on next steps
- *
- * Props:
- * - error: The error object with type and message
- * - onRetry: Callback to retry loading
- * - isRetrying: Whether a retry is in progress
+ * Renders a user-friendly error view for groups fetch and mutation failures.
  */
 export function ErrorState({
   error,
