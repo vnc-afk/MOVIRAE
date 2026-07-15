@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
+import type { UserProfile } from "@/lib/types";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   useRealTimeUpdates,
   useGroupWatchlist,
 } from "./hooks";
+import { useGroupMembership } from "../hooks";
 import {
   GroupDetailHeader,
   DiscussionsList,
@@ -22,27 +24,9 @@ import {
   MembersTab,
 } from "./components";
 import { isGroupAdmin } from "../lib/groupUtils";
-import type { LoadState } from "../lib/types";
 
 /**
- * Group Detail Page - Orchestrator Component
- *
- * Composition:
- * - Hooks: useGroupDetail, useGroupDiscussions, useGroupEvents, useGroupWatchlist, useRealTimeUpdates
- * - Components: GroupDetailHeader, DiscussionsList, EventsList, WatchlistTab, MembersTab
- * - Tabs: discussions, watchlist, members, events
- *
- * Responsibilities:
- * - Orchestrate all data loading
- * - Coordinate user interactions across tabs
- * - Manage tab navigation with URL sync
- * - Handle real-time updates via EventSource
- *
- * Performance:
- * - Minimal re-renders via isolated hooks
- * - Optimistic updates for all operations
- * - EventSource for real-time collaboration
- * - Cached API responses via queryClient
+ * Renders the group detail experience with discussion, watchlist, member, and event tabs.
  */
 export default function GroupDetailPage() {
   const params = useParams<{ id: string }>();
@@ -58,6 +42,13 @@ export default function GroupDetailPage() {
       : "discussions";
   });
 
+    const { toggleJoin, isToggling } = useGroupMembership(
+    (err) => toast.error(err.message),
+    (action) => {
+      toast.success(action === "joined" ? `Welcome to ${group?.name}!` : `Left ${group?.name}`);
+    }
+  );
+  
   // Load group detail data
   const { group, currentUser, loadState, load, setGroup } = useGroupDetail(id);
 
@@ -94,10 +85,12 @@ export default function GroupDetailPage() {
     },
   });
 
-  // Track joined state
+  // Track joined state and keep member follow status shared across the page.
   const [isJoined, setIsJoined] = useState(false);
+  const [members, setMembers] = useState<UserProfile[]>([]);
 
-  // Initialize data load on mount
+
+  // Load the group payload once the page mounts so the detail view is populated immediately.
   useEffect(() => {
     load();
   }, [load]);
@@ -123,10 +116,11 @@ export default function GroupDetailPage() {
     }
   }, [loadState, group, loadWatchlist]);
 
-  // Update joined state when group changes
+  // Update joined state and member follow state when group changes
   useEffect(() => {
     if (group) {
       setIsJoined(group.joined || false);
+      setMembers(group.members || []);
     }
   }, [group]);
 
@@ -153,30 +147,31 @@ export default function GroupDetailPage() {
     [id, router]
   );
 
-  // Handle join/leave
-  const handleJoinLeave = useCallback(async () => {
+  // Toggle the join state locally while the membership mutation completes.
+   const handleJoinLeave = useCallback(async () => {
     if (!currentUser) {
       toast.error("Sign in to join a group.");
       return;
     }
-
     if (!group) return;
 
-    const nextJoined = !isJoined;
-    setIsJoined(nextJoined);
-
     try {
-      // TODO: Call API to persist join/leave
-      toast.success(
-        nextJoined
-          ? `Welcome to ${group.name}!`
-          : `Left ${group.name}`
-      );
-    } catch (err) {
-      setIsJoined(!nextJoined);
-      toast.error("Failed to update membership");
+      await toggleJoin(group.id);
+      setIsJoined((prev) => !prev);
+    } catch {
+      // error toast already shown via the onError callback above
     }
-  }, [group, currentUser, isJoined]);
+  }, [group, currentUser, toggleJoin]);
+
+
+  // Sync follow-state updates from the members list to the rest of the page.
+  const handleFollowingChange = useCallback((memberId: string, isFollowing: boolean) => {
+    setMembers((currentMembers) =>
+      currentMembers.map((member) =>
+        member.id === memberId ? { ...member, isFollowing } : member
+      )
+    );
+  }, []);
 
   // Check if user is admin
   const isAdmin = currentUser && group ? isGroupAdmin(currentUser, group) : false;
@@ -266,9 +261,10 @@ export default function GroupDetailPage() {
           {/* Members Tab */}
           <TabsContent value="members" className="space-y-6">
             <MembersTab
-              members={group.members || []}
+              members={members}
               creatorId={group.creatorId}
               currentUserId={currentUser?.id}
+              onFollowingChange={handleFollowingChange}
             />
           </TabsContent>
 
