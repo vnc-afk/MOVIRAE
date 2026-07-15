@@ -18,6 +18,9 @@ import { toast } from "sonner";
 import { MoviePrefetchLink } from "@/components/MoviePrefetchLink";
 import type { Movie } from "@/lib/types";
 
+/**
+ * Props for the shared watchlist tab.
+ */
 interface WatchlistTabProps {
   movies: Movie[];
   onAddMovie: (movieId: string) => Promise<void>;
@@ -27,20 +30,7 @@ interface WatchlistTabProps {
 }
 
 /**
- * WatchlistTab - Displays and manages shared watchlist
- *
- * Responsibilities:
- * - Show shared movies
- * - Add movies to watchlist (if allowed)
- * - Remove movies from watchlist (if allowed)
- * - Handle movie search/selection
- *
- * Props:
- * - movies: List of movies in watchlist
- * - onAddMovie: Add movie callback
- * - onRemoveMovie: Remove movie callback
- * - canEdit: Whether user can edit
- * - isLoading: Whether loading
+ * Renders the shared watchlist with movie search and add/remove actions.
  */
 export function WatchlistTab({
   movies,

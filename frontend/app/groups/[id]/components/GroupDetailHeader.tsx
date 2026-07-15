@@ -7,6 +7,9 @@ import { UserPlus, UserMinus } from "lucide-react";
 import type { GroupDetailRecord } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
 
+/**
+ * Props for the group detail header.
+ */
 interface GroupDetailHeaderProps {
   group: GroupDetailRecord;
   isJoined: boolean;
@@ -16,20 +19,7 @@ interface GroupDetailHeaderProps {
 }
 
 /**
- * GroupDetailHeader - Header section with group info and join button
- *
- * Responsibilities:
- * - Display group avatar and basic info
- * - Show member, movie, and discussion counts
- * - Render join/leave button
- * - Provide back link
- *
- * Props:
- * - group: Group data
- * - isJoined: Whether current user is joined
- * - onJoinLeave: Callback for join/leave action
- * - currentUser: Current user info
- * - discussionCount: Number of discussions
+ * Displays the group's hero content and primary membership action.
  */
 export function GroupDetailHeader({
   group,

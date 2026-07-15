@@ -44,6 +44,7 @@ export function EventCard({
   isLoading = false,
 }: EventCardProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingRsvpStatus, setPendingRsvpStatus] = useState<"yes" | "no" | "maybe" | null>(null);
 
   const userRsvp = event.attendees?.find(
     (attendee) => attendee.user?.id === currentUser?.id
@@ -57,6 +58,7 @@ export function EventCard({
 
   const handleRsvp = useCallback(
     async (status: "yes" | "no" | "maybe") => {
+      setPendingRsvpStatus(status);
       setIsSubmitting(true);
       try {
         await onRsvp(event.id, status);
@@ -64,6 +66,7 @@ export function EventCard({
         console.error("Failed to RSVP:", err);
       } finally {
         setIsSubmitting(false);
+        setPendingRsvpStatus(null);
       }
     },
     [event.id, onRsvp]
@@ -166,7 +169,7 @@ export function EventCard({
             disabled={isSubmitting || isLoading}
             className="flex-1"
           >
-            {isSubmitting && userRsvp !== "yes" ? (
+            {pendingRsvpStatus === "yes" ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               "Going"
@@ -179,7 +182,11 @@ export function EventCard({
             disabled={isSubmitting || isLoading}
             className="flex-1"
           >
-            Maybe
+            {pendingRsvpStatus === "maybe" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              "Maybe"
+            )}
           </Button>
           <Button
             size="sm"
@@ -188,7 +195,11 @@ export function EventCard({
             disabled={isSubmitting || isLoading}
             className="flex-1"
           >
-            Can't go
+            {pendingRsvpStatus === "no" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              "Can't go"
+            )}
           </Button>
         </div>
       )}

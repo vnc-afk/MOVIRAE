@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import type { UserProfile } from "@/lib/types";
 
+/**
+ * Props for the discussion composer.
+ */
 interface AddDiscussionFormProps {
   onSubmit: (title: string, body: string, movieId?: string) => Promise<void>;
   currentUser: UserProfile;
@@ -15,18 +18,7 @@ interface AddDiscussionFormProps {
 }
 
 /**
- * AddDiscussionForm - Form to add new discussion
- *
- * Responsibilities:
- * - Collect discussion title and body
- * - Handle form submission
- * - Manage loading state
- * - Validate input
- *
- * Props:
- * - onSubmit: Submit callback
- * - currentUser: Current user
- * - isLoading: Whether loading
+ * Lets the current user create a discussion post for the group.
  */
 export function AddDiscussionForm({
   onSubmit,
@@ -38,6 +30,7 @@ export function AddDiscussionForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = useCallback(async () => {
+    // Require both a title and body before sending a new discussion.
     if (!title.trim() || !body.trim()) {
       toast.error("Title and message are required");
       return;

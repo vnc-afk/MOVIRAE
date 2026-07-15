@@ -17,23 +17,6 @@ interface DiscussionItemProps {
   isLoading?: boolean;
 }
 
-/**
- * DiscussionItem - Single discussion with replies
- *
- * Responsibilities:
- * - Display discussion title, body, author
- * - Show likes count
- * - Allow liking discussion
- * - Show reply form
- * - Display replies
- *
- * Props:
- * - discussion: Discussion data
- * - currentUser: Current user
- * - onLike: Like callback
- * - onReply: Reply callback
- * - isLoading: Whether action is loading
- */
 export function DiscussionItem({
   discussion,
   currentUser,
@@ -100,10 +83,9 @@ export function DiscussionItem({
         </div>
       </div>
 
-      {/* Body */}
+      
       <p className="text-sm text-foreground mt-3 ml-11">{discussion.body}</p>
 
-      {/* Actions */}
       <div className="flex items-center gap-3 mt-4 ml-11">
         <Button
           size="sm"
@@ -130,7 +112,6 @@ export function DiscussionItem({
         </Button>
       </div>
 
-      {/* Reply Form */}
       {showReplyForm && (
         <div className="mt-4 ml-11 space-y-3">
           <Textarea
@@ -170,7 +151,6 @@ export function DiscussionItem({
         </div>
       )}
 
-      {/* Replies */}
       {(discussion.replyItems?.length ?? 0) > 0 && (
         <AnimatePresence>
           <div className="mt-4 ml-11 space-y-3 border-t border-border pt-3">

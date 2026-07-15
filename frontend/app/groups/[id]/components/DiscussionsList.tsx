@@ -6,6 +6,9 @@ import { AddDiscussionForm } from "./AddDiscussionForm";
 import type { Discussion, DiscussionSortType } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
 
+/**
+ * Props for the discussions tab content.
+ */
 interface DiscussionsListProps {
   discussions: Discussion[];
   sortType: DiscussionSortType;
@@ -19,24 +22,7 @@ interface DiscussionsListProps {
 }
 
 /**
- * DiscussionsList - Manages discussions tab with sorting and form
- *
- * Responsibilities:
- * - Display sort buttons
- * - Show add discussion form
- * - Render sorted discussions
- * - Handle discussion interactions
- *
- * Props:
- * - discussions: List of discussions
- * - sortType: Current sort type
- * - onSortChange: Sort change callback
- * - onAddDiscussion: Add discussion callback
- * - onLikeDiscussion: Like discussion callback
- * - onAddReply: Add reply callback
- * - currentUser: Current user
- * - groupId: Group ID
- * - isLoading: Whether loading
+ * Renders the discussion feed with sorting, posting, and reply controls.
  */
 export function DiscussionsList({
   discussions,
@@ -85,7 +71,6 @@ export function DiscussionsList({
         </div>
       </div>
 
-      {/* Add discussion form */}
       {currentUser && (
         <AddDiscussionForm
           onSubmit={onAddDiscussion}
@@ -94,7 +79,6 @@ export function DiscussionsList({
         />
       )}
 
-      {/* Discussions list */}
       {discussions.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           No discussions yet. Start one to get the conversation going!

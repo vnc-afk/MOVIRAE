@@ -1,32 +1,30 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { FollowButton } from "@/components/FollowButton";
 import type { UserProfile } from "@/lib/types";
 
 interface MembersTabProps {
   members: UserProfile[];
   creatorId?: string;
   currentUserId?: string;
+  onFollowingChange?: (memberId: string, isFollowing: boolean) => void;
 }
 
-/**
- * MembersTab - Displays group members
- *
- * Responsibilities:
- * - Show list of group members
- * - Highlight group creator
- * - Display member profiles
- *
- * Props:
- * - members: List of group members
- * - creatorId: ID of group creator
- * - currentUserId: Current user ID
- */
 export function MembersTab({
   members,
   creatorId,
   currentUserId,
+  onFollowingChange,
 }: MembersTabProps) {
+  // Hide the follow action for the signed-in user and bubble state changes upward.
+  const isCurrentUser = (member: UserProfile) => member.id === currentUserId;
+
+  const handleFollowingChange = (memberId: string, isFollowing: boolean) => {
+    onFollowingChange?.(memberId, isFollowing);
+  };
+
   return (
     <div className="space-y-6">
       {members.length === 0 ? (
@@ -61,11 +59,22 @@ export function MembersTab({
                     </p>
                   )}
                 </div>
-                {member.id === creatorId && (
-                  <div className="text-xs font-medium px-2 py-1 rounded bg-primary/10 text-primary">
-                    Creator
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  {!isCurrentUser(member) && (
+                    <FollowButton
+                      userId={member.id}
+                      initialFollowing={Boolean(member.isFollowing)}
+                      onFollowingChange={(isFollowing) => handleFollowingChange(member.id, isFollowing)}
+                      size="sm"
+                      className="h-8 px-3"
+                    />
+                  )}
+                  {member.id === creatorId && (
+                    <div className="text-xs font-medium px-2 py-1 rounded bg-primary/10 text-primary">
+                      Creator
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}

@@ -17,6 +17,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
+/**
+ * Props for the event composer dialog.
+ */
 interface AddEventFormProps {
   onSubmit: (
     title: string,
@@ -28,17 +31,7 @@ interface AddEventFormProps {
 }
 
 /**
- * AddEventForm - Dialog form to create new event
- *
- * Responsibilities:
- * - Collect event details (title, date, time, location, description)
- * - Validate input
- * - Handle form submission
- * - Manage dialog state
- *
- * Props:
- * - onSubmit: Submit callback
- * - isLoading: Whether loading
+ * Lets admins create a new group event with a date, time, and optional description.
  */
 export function AddEventForm({
   onSubmit,
@@ -52,6 +45,7 @@ export function AddEventForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = useCallback(async () => {
+    // The event needs a title, date, and time before the submission can proceed.
     if (!title.trim() || !startDate || !startTime) {
       toast.error("Title, date, and time are required");
       return;

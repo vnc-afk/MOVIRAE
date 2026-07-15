@@ -6,6 +6,9 @@ import { sortEventsByDate } from "../../lib/groupUtils";
 import type { GroupEventRecord } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
 
+/**
+ * Props for the events tab content.
+ */
 interface EventsListProps {
   events: GroupEventRecord[];
   onAddEvent: (
@@ -23,23 +26,7 @@ interface EventsListProps {
 }
 
 /**
- * EventsList - Manages events with sorting and creation
- *
- * Responsibilities:
- * - Display add event form (for admins)
- * - Show events sorted by date
- * - Handle RSVP actions
- * - Handle event deletion (for admins)
- *
- * Props:
- * - events: List of events
- * - onAddEvent: Add event callback
- * - onRsvp: RSVP callback
- * - onDeleteEvent: Delete event callback
- * - currentUser: Current user
- * - isAdmin: Whether user is admin
- * - groupId: Group ID
- * - isLoading: Whether loading
+ * Renders the group's event list in chronological order.
  */
 export function EventsList({
   events,
@@ -55,12 +42,11 @@ export function EventsList({
 
   return (
     <div className="space-y-6">
-      {/* Add event form (admin only) */}
+
       {isAdmin && currentUser && (
         <AddEventForm onSubmit={onAddEvent} isLoading={isLoading} />
       )}
 
-      {/* Events list */}
       {sortedEvents.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
           {isAdmin
