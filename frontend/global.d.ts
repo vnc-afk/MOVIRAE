@@ -1,3 +1,5 @@
+import type { DefaultSession } from "next-auth";
+
 declare module "*.css";
 
 declare module "*.svg" {
@@ -8,4 +10,22 @@ declare module "*.svg" {
 		blurDataURL?: string;
 	};
 	export default content;
+}
+
+declare module "next-auth" {
+	interface Session {
+		user: {
+			id: string;
+		} & DefaultSession["user"];
+	}
+
+	interface User {
+		id: string;
+	}
+}
+
+declare module "next-auth/jwt" {
+	interface JWT {
+		id?: string;
+	}
 }
