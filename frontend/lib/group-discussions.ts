@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth/next";
+import { Prisma } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -56,57 +57,55 @@ export async function getCurrentUser() {
   return prisma.user.findUnique({
     where: { email: session.user.email },
     select: {
-      id: true,
-      email: true,
-      name: true,
-      username: true,
-      displayName: true,
-      avatar: true,
-      image: true,
-      bio: true,
+      id: true, email: true, name: true, username: true,
+      displayName: true, avatar: true, image: true, bio: true,
     },
   });
 }
 
-function normalizeLikedBy(value: unknown) {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
-}
+const userSelectForProfile = {
+  id: true, email: true, name: true, username: true,
+  displayName: true, avatar: true, image: true, bio: true,
+} as const;
 
-function normalizeReplyItems(value: unknown) {
-  if (!Array.isArray(value)) return [];
+const discussionInclude = {
+  author: { select: userSelectForProfile },
+  likesRecords: { select: { userId: true } },
+  replyRecords: {
+    orderBy: { createdAt: "asc" as const },
+    include: { author: { select: userSelectForProfile } },
+  },
+};
 
-  return value
-    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
-    .map((reply, index) => ({
-      id: typeof reply.id === "string" ? reply.id : `reply-${Date.now()}-${index}`,
-      author:
-        (
-          isProfileUser(reply.author)
-            ? buildUserProfile(reply.author)
-            : isProfileUser(reply.user)
-            ? buildUserProfile(reply.user)
-            : isProfileUser(reply.authorProfile)
-            ? buildUserProfile(reply.authorProfile)
-            : null
-        ) ?? fallbackProfile,
-      body: typeof reply.body === "string" ? reply.body : typeof reply.comment === "string" ? reply.comment : "",
-      date: typeof reply.date === "string" ? reply.date : new Date().toISOString(),
-    }));
-}
-
-export function serializeDiscussion(discussion: any, currentUserId?: string | null): DiscussionRecord {
-  const likedBy = normalizeLikedBy(discussion.likedBy);
+function serializeDiscussionRow(
+  discussion: {
+    id: string;
+    title: string;
+    body: string;
+    createdAt: Date;
+    pinned: boolean;
+    movieId: string | null;
+    author: any;
+    likesRecords: Array<{ userId: string }>;
+    replyRecords: Array<{ id: string; body: string; createdAt: Date; author: any }>;
+  },
+  currentUserId?: string | null
+): DiscussionRecord {
   return {
     id: discussion.id,
     author: (isProfileUser(discussion.author) ? buildUserProfile(discussion.author) : null) ?? fallbackProfile,
     title: discussion.title,
     body: discussion.body,
     date: discussion.createdAt.toISOString(),
-    likes: discussion.likes,
-    replies: discussion.replies,
-    likedByMe: currentUserId ? likedBy.includes(currentUserId) : false,
-    replyItems: normalizeReplyItems(discussion.replyItems),
+    likes: discussion.likesRecords.length,
+    replies: discussion.replyRecords.length,
+    likedByMe: currentUserId ? discussion.likesRecords.some((r) => r.userId === currentUserId) : false,
+    replyItems: discussion.replyRecords.map((reply) => ({
+      id: reply.id,
+      author: (isProfileUser(reply.author) ? buildUserProfile(reply.author) : null) ?? fallbackProfile,
+      body: reply.body,
+      date: reply.createdAt.toISOString(),
+    })),
     pinned: discussion.pinned,
     movieId: discussion.movieId ?? undefined,
   };
@@ -116,160 +115,117 @@ export async function fetchGroupDiscussions(groupId: string, currentUser: Curren
   const discussions = await prisma.groupDiscussion.findMany({
     where: { groupId },
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      author: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          username: true,
-          displayName: true,
-          avatar: true,
-          image: true,
-          bio: true,
-        },
-      },
-      title: true,
-      body: true,
-      createdAt: true,
-      likes: true,
-      replies: true,
-      likedBy: true,
-      replyItems: true,
-      pinned: true,
-      movieId: true,
-    },
+    include: discussionInclude,
   });
 
-  return discussions.map((discussion) => serializeDiscussion(discussion, currentUser?.id));
+  return discussions.map((discussion) => serializeDiscussionRow(discussion, currentUser?.id));
 }
 
-async function normalizeGroupMovie(movie: any): Promise<Movie> {
-  const metadata = movie.metadata && typeof movie.metadata === "object" ? (movie.metadata as Record<string, unknown>) : null;
+export async function fetchDiscussionById(discussionId: string, currentUserId?: string | null) {
+  const discussion = await prisma.groupDiscussion.findUnique({
+    where: { id: discussionId },
+    include: discussionInclude,
+  });
 
-  if (metadata) {
-    const metadataId = typeof metadata.id === "string" && metadata.id.trim() ? metadata.id : movie.tmdbId;
-    const title = typeof metadata.title === "string" ? metadata.title : "";
+  if (!discussion) return null;
+  return serializeDiscussionRow(discussion, currentUserId);
+}
 
-    if (title.trim()) {
-      return {
-        id: metadataId,
-        title,
-        year: typeof metadata.year === "number" ? metadata.year : 0,
-        rating: typeof metadata.rating === "number" ? metadata.rating : 0,
-        genre: typeof metadata.genre === "string" ? metadata.genre : "Unknown",
-        poster: typeof metadata.poster === "string" ? metadata.poster : "",
-        synopsis: typeof metadata.synopsis === "string" ? metadata.synopsis : "",
-        director: typeof metadata.director === "string" ? metadata.director : "Unknown",
-        cast: Array.isArray(metadata.cast) ? (metadata.cast as any[]) : [],
-        reviews: Array.isArray(metadata.reviews) ? (metadata.reviews as any[]) : [],
-        tags: Array.isArray(metadata.tags) ? (metadata.tags as string[]) : [],
-        streamingOn: Array.isArray(metadata.streamingOn) ? (metadata.streamingOn as string[]) : [],
-        runtime: typeof metadata.runtime === "number" ? metadata.runtime : 0,
-        language: typeof metadata.language === "string" ? metadata.language : "Unknown",
-        country: typeof metadata.country === "string" ? metadata.country : "Unknown",
-        moods: Array.isArray(metadata.moods) ? (metadata.moods as any[]) : [],
-      };
+async function normalizeGroupMovie(
+  movie: { groupId?: string; tmdbId?: string | null; metadata?: any },
+  index: number
+): Promise<Movie> {
+
+  try {
+    const metadata = movie.metadata && typeof movie.metadata === "object" ? movie.metadata : null;
+
+    if (metadata && typeof metadata.poster === "string" && metadata.poster.trim() !== "") {
+      return metadata as Movie;
     }
-  }
 
-  const tmdbDetails = await getMovieDetails(movie.tmdbId);
-  if (tmdbDetails) {
-    return tmdbDetails;
-  }
+    if (index < 3 && typeof movie.tmdbId === "string") {
+      const details = await getMovieDetails(movie.tmdbId);
+      if (details) {
+        if (movie.groupId) {
+          await prisma.groupMovie
+            .update({
+              where: { groupId_tmdbId: { groupId: movie.groupId, tmdbId: movie.tmdbId } },
+              data: { metadata: details as unknown as Prisma.InputJsonValue },
+            })
+            .catch((err) => console.error("Failed to cache movie metadata:", err));
+        }
+        return details;
+      }
+    }
 
-  return {
-    id: typeof metadata?.id === "string" && metadata.id.trim() ? metadata.id : movie.tmdbId,
-    title: typeof metadata?.title === "string" ? metadata.title : "Unknown",
-    year: typeof metadata?.year === "number" ? metadata.year : typeof metadata?.year === "string" && !Number.isNaN(Number(metadata.year)) ? Number(metadata.year) : 0,
-    rating: typeof metadata?.rating === "number" ? metadata.rating : 0,
-    genre: typeof metadata?.genre === "string" ? metadata.genre : "Unknown",
-    poster: typeof metadata?.poster === "string" ? metadata.poster : "",
-    synopsis: typeof metadata?.synopsis === "string" ? metadata.synopsis : "",
-    director: typeof metadata?.director === "string" ? metadata.director : "Unknown",
-    cast: Array.isArray(metadata?.cast) ? (metadata.cast as any[]) : [],
-    reviews: Array.isArray(metadata?.reviews) ? (metadata.reviews as any[]) : [],
-    tags: Array.isArray(metadata?.tags) ? (metadata.tags as string[]) : [],
-    streamingOn: Array.isArray(metadata?.streamingOn) ? (metadata.streamingOn as string[]) : [],
-    runtime: typeof metadata?.runtime === "number" ? metadata.runtime : typeof metadata?.runtime === "string" && !Number.isNaN(Number(metadata.runtime)) ? Number(metadata.runtime) : 0,
-    language: typeof metadata?.language === "string" ? metadata.language : "Unknown",
-    country: typeof metadata?.country === "string" ? metadata.country : "Unknown",
-    moods: Array.isArray(metadata?.moods) ? (metadata.moods as any[]) : [],
-  };
+    return {
+      id: typeof movie.tmdbId === "string" ? movie.tmdbId : typeof metadata?.id === "string" ? metadata.id : "unknown",
+      title: typeof metadata?.title === "string" ? metadata.title : "Unknown",
+      year: typeof metadata?.year === "number" ? metadata.year : 0,
+      rating: typeof metadata?.rating === "number" ? metadata.rating : 0,
+      genre: typeof metadata?.genre === "string" ? metadata.genre : "Unknown",
+      poster: typeof metadata?.poster === "string" ? metadata.poster : "",
+      synopsis: typeof metadata?.synopsis === "string" ? metadata.synopsis : "",
+      director: typeof metadata?.director === "string" ? metadata.director : "Unknown",
+      cast: Array.isArray(metadata?.cast) ? metadata.cast : [],
+      reviews: Array.isArray(metadata?.reviews) ? metadata.reviews : [],
+      tags: Array.isArray(metadata?.tags) ? metadata.tags : [],
+      streamingOn: Array.isArray(metadata?.streamingOn) ? metadata.streamingOn : [],
+      runtime: typeof metadata?.runtime === "number" ? metadata.runtime : 0,
+      language: typeof metadata?.language === "string" ? metadata.language : "Unknown",
+      country: typeof metadata?.country === "string" ? metadata.country : "Unknown",
+      moods: Array.isArray(metadata?.moods) ? metadata.moods : [],
+    };
+  } catch (err) {
+    console.error(`normalizeGroupMovie failed for tmdbId ${movie.tmdbId}:`, err);
+    return {
+      id: typeof movie.tmdbId === "string" ? movie.tmdbId : "unknown",
+      title: "Unavailable",
+      year: 0,
+      rating: 0,
+      genre: "Unknown",
+      poster: "",
+      synopsis: "",
+      director: "Unknown",
+      cast: [],
+      reviews: [],
+      tags: [],
+      streamingOn: [],
+      runtime: 0,
+      language: "Unknown",
+      country: "Unknown",
+      moods: [],
+    };
+  }
 }
 
-export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser | null) {
+export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser | null): Promise<GroupDetailRecord | null> {
   const group = await prisma.group.findUnique({
     where: { id: groupId },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      avatar: true,
-      creatorId: true,
+    include: {
       members: {
-        select: {
-          userId: true,
-          user: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              image: true,
-              bio: true,
-            },
-          },
-        },
+        include: { user: { select: userSelectForProfile } },
       },
-      movies: {
-        select: {
-          tmdbId: true,
-          metadata: true,
-        },
-      },
+      movies: true,
       discussions: {
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          author: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              username: true,
-              displayName: true,
-              avatar: true,
-              image: true,
-              bio: true,
-            },
-          },
-          title: true,
-          body: true,
-          createdAt: true,
-          likes: true,
-          replies: true,
-          likedBy: true,
-          replyItems: true,
-          pinned: true,
-          movieId: true,
-        },
+        include: discussionInclude,
       },
     },
   });
 
   if (!group) return null;
 
-  const memberIds = group.members.map((member) => member.userId);
-  const followingIds = currentUser
+  const currentUserId = currentUser?.id;
+  const memberIds = group.members
+    .map((member) => member.userId)
+    .filter((memberId): memberId is string => Boolean(memberId));
+
+  const followedMemberIds = currentUserId && memberIds.length > 0
     ? new Set(
         (
           await prisma.userFollow.findMany({
             where: {
-              followerId: currentUser.id,
+              followerId: currentUserId,
               followingId: { in: memberIds },
             },
             select: { followingId: true },
@@ -278,34 +234,30 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
       )
     : new Set<string>();
 
-  const members = group.members
-    .map((member) => {
-      const profile = buildUserProfile(member.user);
-      if (!profile) return null;
-
-      return {
-        ...profile,
-        isFollowing: followingIds.has(member.userId),
-      } as UserProfile;
-    })
-    .filter(Boolean) as UserProfile[];
-
-  const sharedList = await Promise.all(
-    group.movies.map((movie) => normalizeGroupMovie(movie))
-  );
+  const [sharedList, discussions] = await Promise.all([
+    Promise.all(group.movies.map((movie, index) => normalizeGroupMovie(movie, index))),
+    Promise.all(group.discussions.map((discussion) => serializeDiscussionRow(discussion, currentUserId))),
+  ]);
 
   return {
-    id: group.id,
-    name: group.name,
-    description: group.description || "",
+    ...group,
+    description: group.description ?? "",
     memberCount: group.members.length,
-    avatar: group.avatar || "",
-    creatorId: group.creatorId,
-    members,
+    avatar: group.avatar ?? "",
+    members: group.members
+      .map((member) => {
+        if (!member.user) return null;
+
+        return buildUserProfile(
+          member.user as any,
+          followedMemberIds.has(member.user.id)
+        );
+      })
+      .filter((member): member is NonNullable<ReturnType<typeof buildUserProfile>> => Boolean(member)),
     sharedList,
-    discussions: group.discussions.map((discussion) => serializeDiscussion(discussion, currentUser?.id)),
-    joined: currentUser ? group.members.some((member) => member.userId === currentUser.id) : false,
-  } satisfies GroupDetailRecord;
+    discussions,
+    joined: currentUserId ? group.members.some((member) => member.userId === currentUserId) : false,
+  } as GroupDetailRecord;
 }
 
 export async function createDiscussion(groupId: string, input: { title: string; body: string; movieId?: string }) {
@@ -324,8 +276,6 @@ export async function createDiscussion(groupId: string, input: { title: string; 
       movieId: input.movieId,
       likes: 0,
       replies: 0,
-      likedBy: [],
-      replyItems: [],
     },
   });
 
@@ -338,24 +288,31 @@ export async function toggleDiscussionLike(groupId: string, discussionId: string
 
   const discussion = await prisma.groupDiscussion.findFirst({
     where: { id: discussionId, groupId },
+    select: { id: true },
   });
-
   if (!discussion) return { error: "not-found" as const };
 
-  const likedBy = normalizeLikedBy(discussion.likedBy);
-  const nextLikedBy = likedBy.includes(currentUser.id)
-    ? likedBy.filter((userId) => userId !== currentUser.id)
-    : [...likedBy, currentUser.id];
-
-  await prisma.groupDiscussion.update({
-    where: { id: discussionId },
-    data: {
-      likes: nextLikedBy.length,
-      likedBy: nextLikedBy,
-    },
+  const existingLike = await prisma.groupDiscussionLike.findUnique({
+    where: { discussionId_userId: { discussionId, userId: currentUser.id } },
   });
 
-  return { value: await fetchGroupDetail(groupId, currentUser) } as const;
+  await prisma.$transaction(async (tx) => {
+    if (existingLike) {
+      await tx.groupDiscussionLike.delete({
+        where: { discussionId_userId: { discussionId, userId: currentUser.id } },
+      });
+      await tx.groupDiscussion.update({ where: { id: discussionId }, data: { likes: { decrement: 1 } } });
+    } else {
+      await tx.groupDiscussionLike.create({
+        data: { discussionId, userId: currentUser.id },
+      });
+      await tx.groupDiscussion.update({ where: { id: discussionId }, data: { likes: { increment: 1 } } });
+    }
+  });
+
+  const updated = await fetchDiscussionById(discussionId, currentUser.id);
+  if (!updated) return { error: "not-found" as const };
+  return { value: updated } as const;
 }
 
 export async function addDiscussionReply(groupId: string, discussionId: string, body: string) {
@@ -364,28 +321,21 @@ export async function addDiscussionReply(groupId: string, discussionId: string, 
 
   const discussion = await prisma.groupDiscussion.findFirst({
     where: { id: discussionId, groupId },
+    select: { id: true },
   });
-
   if (!discussion) return { error: "not-found" as const };
 
-  const replyItems = normalizeReplyItems(discussion.replyItems);
-  const nextReplyItems = [
-    ...replyItems,
-    {
-      id: `reply-${Date.now()}`,
-      author: buildUserProfile(currentUser)!,
-      body,
-      date: new Date().toISOString(),
-    },
-  ];
+  await prisma.$transaction([
+    prisma.groupDiscussionReply.create({
+      data: { discussionId, authorId: currentUser.id, body },
+    }),
+    prisma.groupDiscussion.update({
+      where: { id: discussionId },
+      data: { replies: { increment: 1 } },
+    }),
+  ]);
 
-  await prisma.groupDiscussion.update({
-    where: { id: discussionId },
-    data: {
-      replies: nextReplyItems.length,
-      replyItems: nextReplyItems as any,
-    },
-  });
-
-  return { value: await fetchGroupDetail(groupId, currentUser) } as const;
+  const updated = await fetchDiscussionById(discussionId, currentUser.id);
+  if (!updated) return { error: "not-found" as const };
+  return { value: updated } as const;
 }

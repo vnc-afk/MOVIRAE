@@ -1,4 +1,4 @@
-import type { GroupDetailRecord } from "@/lib/group-discussions";
+import type { GroupDetailRecord, DiscussionRecord } from "@/lib/group-discussions";
 import type { NotificationItem } from "@/lib/types";
 
 export type GroupEvent = {
@@ -7,6 +7,7 @@ export type GroupEvent = {
   timestamp: string;
   opId?: string;
   group?: GroupDetailRecord;
+  discussion?: DiscussionRecord;
   event?: unknown;
   eventId?: string;
   action?: "created" | "updated" | "deleted";
@@ -46,7 +47,6 @@ export function subscribeToGroupEvents(groupId: string, listener: GroupEventList
   return () => {
     const nextListeners = listenersByGroup.get(groupId);
     if (!nextListeners) return;
-
     nextListeners.delete(listener);
     if (nextListeners.size === 0) {
       listenersByGroup.delete(groupId);
@@ -56,7 +56,6 @@ export function subscribeToGroupEvents(groupId: string, listener: GroupEventList
 
 export function subscribeToNotifications(listener: NotificationEventListener) {
   notificationListeners.add(listener);
-
   return () => {
     notificationListeners.delete(listener);
   };
@@ -64,7 +63,6 @@ export function subscribeToNotifications(listener: NotificationEventListener) {
 
 export function subscribeToMessageEvents(listener: MessageEventListener) {
   messageListeners.add(listener);
-
   return () => {
     messageListeners.delete(listener);
   };
@@ -91,17 +89,10 @@ export function publishNotificationEvent(payload: Omit<NotificationEvent, "type"
 export function publishNotificationEvent(payloadOrId: string | Omit<NotificationEvent, "type" | "timestamp">) {
   if (notificationListeners.size === 0) return;
 
-  const event: NotificationEvent = typeof payloadOrId === "string"
-    ? {
-        type: "notification-created",
-        notificationId: payloadOrId,
-        timestamp: new Date().toISOString(),
-      }
-    : {
-        type: "notification-created",
-        ...payloadOrId,
-        timestamp: new Date().toISOString(),
-      };
+  const event: NotificationEvent =
+    typeof payloadOrId === "string"
+      ? { type: "notification-created", notificationId: payloadOrId, timestamp: new Date().toISOString() }
+      : { type: "notification-created", ...payloadOrId, timestamp: new Date().toISOString() };
 
   for (const listener of notificationListeners) {
     listener(event);
@@ -111,11 +102,7 @@ export function publishNotificationEvent(payloadOrId: string | Omit<Notification
 export function publishMessageEvent(event: Omit<MessageEvent, "timestamp">) {
   if (messageListeners.size === 0) return;
 
-  const payload: MessageEvent = {
-    ...event,
-    timestamp: new Date().toISOString(),
-  };
-
+  const payload: MessageEvent = { ...event, timestamp: new Date().toISOString() };
   for (const listener of messageListeners) {
     listener(payload);
   }
