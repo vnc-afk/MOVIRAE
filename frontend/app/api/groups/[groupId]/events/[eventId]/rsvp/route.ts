@@ -16,6 +16,9 @@ import { publishGroupEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
+/**
+ * Updates a user's RSVP state for a group event.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ groupId: string; eventId: string }> }
@@ -27,6 +30,7 @@ export async function POST(
     const user = await requireAuth(request);
     logCtx.userId = user.id;
 
+    // RSVP changes are only allowed for existing group members.
     const member = await prisma.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId: user.id } },
     });

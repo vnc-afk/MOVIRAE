@@ -13,6 +13,9 @@ import { publishGroupEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
+/**
+ * Deletes an event when the requester is the creator or the group owner.
+ */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ groupId: string; eventId: string }> }
@@ -33,6 +36,7 @@ export async function DELETE(
       return apiNotFound("Event");
     }
 
+    // The group owner can remove events created by others, while event creators can remove their own.
     const group = await prisma.group.findUnique({
       where: { id: groupId },
       select: { creatorId: true },

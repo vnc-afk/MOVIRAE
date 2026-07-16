@@ -60,6 +60,9 @@ export const runtime = "nodejs";
  * @throws {404} Group not found
  * @throws {500} Internal error
  */
+/**
+ * Returns the paginated event list for a group.
+ */
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ groupId: string }> }
@@ -92,7 +95,7 @@ export async function GET(
     const { page, limit, upcoming, sort, order } = queryResult.data;
     const skip = (page - 1) * limit;
 
-    // Build where clause
+    // Restrict the fetch to the requested group and optionally to upcoming dates.
     const where: Prisma.EventWhereInput = { groupId };
 
     if (upcoming) {
@@ -189,6 +192,9 @@ export async function GET(
  * @throws {404} NotFound - Group not found
  * @throws {400} BadRequest - Invalid input data
  * @throws {500} InternalError - Server error
+ */
+/**
+ * Creates a new event for a group when the requester is an admin.
  */
 export async function POST(
   request: Request,
