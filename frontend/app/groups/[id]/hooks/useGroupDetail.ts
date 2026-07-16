@@ -3,33 +3,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
-import { fetchJsonValue, makeOptimisticTempId, isGroupAdmin } from "../../lib/groupUtils";
+import { fetchJsonValue, makeOptimisticTempId,  parseApiResponse, ApiRequestError } from "../../lib/groupUtils";
 import type { GroupDetailRecord, Discussion, DiscussionReply, GroupEventRecord, LoadState } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
 
-/**
- * Hook: Load group detail data
- *
- * Responsibilities:
- * - Fetch group data from API
- * - Manage loading state and errors
- * - Cache group data
- *
- * Usage:
- *   const detail = useGroupDetail(groupId);
- *   const { group, isLoading, error } = detail;
- */
 export function useGroupDetail(groupId: string) {
   const queryClient = useQueryClient();
   const [group, setGroup] = useState<GroupDetailRecord | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoadState("loading");
     try {
       const response = await fetchJsonValue<any>(`/api/groups/${groupId}`);
+      if (!isMountedRef.current) return;
 
       if (!response || !response.value) {
         setLoadState("not-found");
@@ -43,48 +39,36 @@ export function useGroupDetail(groupId: string) {
       setCurrentUser(user);
       setLoadState("ready");
 
-      // Cache the data
-      queryClient.setQueryData(queryKeys.group.detail(groupId), {
-        value: groupData,
-        currentUser: user,
-      });
+      queryClient.setQueryData(queryKeys.group.detail(groupId), { value: groupData, currentUser: user });
     } catch (err) {
       console.error("Failed to load group detail:", err);
-      setLoadState("error");
+      if (isMountedRef.current) setLoadState("error");
     }
   }, [groupId, queryClient]);
 
-  return {
-    group,
-    currentUser,
-    loadState,
-    load,
-    setGroup,
-  };
+  return { group, currentUser, loadState, load, setGroup };
 }
 
-/**
- * Hook: Manage discussions within a group
- *
- * Responsibilities:
- * - Fetch discussions from API
- * - Add new discussions optimistically
- * - Like/unlike discussions
- * - Add replies
- * - Manage sorting
- *
- * Usage:
- *   const discussions = useGroupDiscussions(groupId);
- *   discussions.addDiscussion(title, body);
- */
 export function useGroupDiscussions(groupId: string, currentUser: UserProfile | null) {
   const queryClient = useQueryClient();
   const [discussions, setDiscussions] = useState<Discussion[]>([]);
   const [sortType, setSortType] = useState<"latest" | "popular" | "oldest">("latest");
+  const discussionsRef = useRef<Discussion[]>(discussions);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    discussionsRef.current = discussions;
+  }, [discussions]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const sortedDiscussions = useMemo(() => {
     const items = [...discussions];
-
     switch (sortType) {
       case "popular":
         return items.sort((a, b) => b.likes - a.likes);
@@ -99,6 +83,7 @@ export function useGroupDiscussions(groupId: string, currentUser: UserProfile | 
   const loadDiscussions = useCallback(async () => {
     try {
       const response = await fetchJsonValue<any>(`/api/groups/${groupId}/discussions`);
+      if (!isMountedRef.current) return;
       const items: Discussion[] = Array.isArray(response?.value) ? response.value : [];
       setDiscussions(items);
       queryClient.setQueryData(queryKeys.group.discussions(groupId), items);
@@ -107,169 +92,123 @@ export function useGroupDiscussions(groupId: string, currentUser: UserProfile | 
     }
   }, [groupId, queryClient]);
 
-  const addDiscussion = useCallback(
-    async (title: string, body: string, movieId?: string): Promise<void> => {
-      if (!currentUser) throw new Error("User must be signed in");
+const addDiscussion = useCallback(
+  async (title: string, body: string, movieId?: string): Promise<void> => {
+    if (!currentUser) throw new Error("User must be signed in");
 
-      const tempId = makeOptimisticTempId("disc");
-      const newDiscussion: Discussion = {
-        id: tempId,
-        tempId,
-        author: currentUser,
-        title,
-        body,
-        date: new Date().toISOString(),
-        likes: 0,
-        replies: 0,
-        likedByMe: false,
-        replyItems: [],
-        movieId,
-        opId: `add-${tempId}`,
-      };
+    const tempId = makeOptimisticTempId("disc");
+    const newDiscussion: Discussion = {
+      id: tempId, tempId, author: currentUser, title, body,
+      date: new Date().toISOString(), likes: 0, replies: 0, likedByMe: false,
+      replyItems: [], movieId, opId: `add-${tempId}`,
+    };
 
-      // Optimistic update
-      setDiscussions((prev) => [newDiscussion, ...prev]);
+    setDiscussions((prev) => [newDiscussion, ...prev]);
 
-      try {
-        const response = await fetch(`/api/groups/${groupId}/discussions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, body, movieId }),
-        });
+    try {
+      const response = await fetch(`/api/groups/${groupId}/discussions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body, movieId }),
+      });
+      const saved = await parseApiResponse<Discussion>(response);
 
-        if (!response.ok) throw new Error("Failed to add discussion");
+      setDiscussions((prev) => prev.map((d) => (d.tempId === tempId ? { ...saved, opId: undefined } : d)));
+    } catch (err) {
+      setDiscussions((prev) => prev.filter((d) => d.tempId !== tempId));
+      throw err;
+    }
+  },
+  [groupId, currentUser]
+);
 
-        const result = await response.json();
-        const saved = result.value as Discussion;
+const likeDiscussion = useCallback(
+  async (discussionId: string): Promise<void> => {
+    const previousDiscussions = discussionsRef.current;
 
-        // Replace temporary discussion with server version
-        setDiscussions((prev) =>
-          prev.map((d) => (d.tempId === tempId ? { ...saved, opId: undefined } : d))
-        );
-      } catch (err) {
-        // Revert on error
-        setDiscussions((prev) => prev.filter((d) => d.tempId !== tempId));
-        throw err;
-      }
-    },
-    [groupId, currentUser]
-  );
+    setDiscussions((prev) =>
+      prev.map((discussion) => {
+        if (discussion.id !== discussionId) return discussion;
+        const nextLikedByMe = !discussion.likedByMe;
+        const nextLikes = nextLikedByMe ? discussion.likes + 1 : Math.max(discussion.likes - 1, 0);
+        return { ...discussion, likes: nextLikes, likedByMe: nextLikedByMe };
+      })
+    );
 
-  const likeDiscussion = useCallback(
-    async (discussionId: string): Promise<void> => {
-      const previousDiscussions = discussions;
+    try {
+      const response = await fetch(`/api/groups/${groupId}/discussions/${discussionId}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
 
-      setDiscussions((prev) =>
-        prev.map((discussion) => {
-          if (discussion.id !== discussionId) return discussion;
-
-          const nextLikedByMe = !discussion.likedByMe;
-          const nextLikes = nextLikedByMe
-            ? discussion.likes + 1
-            : Math.max(discussion.likes - 1, 0);
-
-          return {
-            ...discussion,
-            likes: nextLikes,
-            likedByMe: nextLikedByMe,
-          };
-        })
+      const groupData = await parseApiResponse<any>(response);
+      const updatedDiscussion = groupData?.discussions?.find(
+        (discussion: Discussion) => discussion.id === discussionId
       );
 
-      try {
-        const response = await fetch(`/api/groups/${groupId}/discussions/${discussionId}/like`, {
-          method: "POST",
-        });
-
-        if (!response.ok) throw new Error("Failed to update discussion like");
-
-        const result = await response.json().catch(() => null);
-        const groupData = result?.data?.value ?? result?.value;
-        const updatedDiscussion = groupData?.discussions?.find(
-          (discussion: Discussion) => discussion.id === discussionId
+      if (updatedDiscussion) {
+        setDiscussions((prev) =>
+          prev.map((discussion) => (discussion.id === discussionId ? updatedDiscussion : discussion))
         );
-
-        if (updatedDiscussion) {
-          setDiscussions((prev) =>
-            prev.map((discussion) =>
-              discussion.id === discussionId ? updatedDiscussion : discussion
-            )
-          );
-        }
-      } catch (err) {
-        setDiscussions(previousDiscussions);
-        throw err;
       }
-    },
-    [groupId, discussions]
-  );
+    } catch (err) {
+      setDiscussions(previousDiscussions);
+      throw err;
+    }
+  },
+  [groupId]
+);
 
-  const addReply = useCallback(
-    async (discussionId: string, body: string): Promise<void> => {
-      if (!currentUser) throw new Error("User must be signed in");
+const addReply = useCallback(
+  async (discussionId: string, body: string): Promise<void> => {
+    if (!currentUser) throw new Error("User must be signed in");
 
-      const tempId = makeOptimisticTempId("reply");
-      const newReply: DiscussionReply = {
-        id: tempId,
-        tempId,
-        author: currentUser,
-        body,
-        date: new Date().toISOString(),
-        opId: `reply-${tempId}`,
-      };
+    const tempId = makeOptimisticTempId("reply");
+    const newReply: DiscussionReply = {
+      id: tempId, tempId, author: currentUser, body,
+      date: new Date().toISOString(), opId: `reply-${tempId}`,
+    };
 
-      // Optimistic update
+    setDiscussions((prev) =>
+      prev.map((d) =>
+        d.id === discussionId
+          ? { ...d, replies: d.replies + 1, replyItems: [...(d.replyItems ?? []), newReply] }
+          : d
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/groups/${groupId}/discussions/${discussionId}/replies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+
+      const saved = await parseApiResponse<Discussion>(response);
+
+      setDiscussions((prev) =>
+        prev.map((d) =>
+          d.id === discussionId ? { ...saved, opId: undefined } : d
+        )
+      );
+    } catch (err) {
       setDiscussions((prev) =>
         prev.map((d) =>
           d.id === discussionId
-            ? { ...d, replies: d.replies + 1, replyItems: [...(d.replyItems ?? []), newReply] }
+            ? {
+                ...d,
+                replies: d.replies - 1,
+                replyItems: (d.replyItems ?? []).filter((r: DiscussionReply) => r.tempId !== tempId),
+              }
             : d
         )
       );
-
-      try {
-        const response = await fetch(`/api/groups/${groupId}/discussions/${discussionId}/replies`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ body }),
-        });
-
-        if (!response.ok) throw new Error("Failed to add reply");
-
-        const result = await response.json();
-        const saved = result.value as DiscussionReply;
-
-        // Replace temporary reply
-        setDiscussions((prev) =>
-          prev.map((d) =>
-            d.id === discussionId
-              ? {
-                  ...d,
-                  replyItems: (d.replyItems ?? []).map((r: DiscussionReply) =>
-                    r.tempId === tempId ? { ...saved, opId: undefined } : r
-                  ),
-                }
-              : d
-          )
-        );
-      } catch (err) {
-        // Revert
-        setDiscussions((prev) =>
-          prev.map((d) =>
-            d.id === discussionId
-              ? {
-                  ...d,
-                  replies: d.replies - 1,
-                  replyItems: (d.replyItems ?? []).filter((r: DiscussionReply) => r.tempId !== tempId),
-                }
-              : d
-          )
-        );
-        throw err;
-      }
-    },
-    [groupId, currentUser]
-  );
+      throw err;
+    }
+  },
+  [groupId, currentUser]
+);
 
   return {
     discussions: sortedDiscussions,
@@ -283,130 +222,89 @@ export function useGroupDiscussions(groupId: string, currentUser: UserProfile | 
   };
 }
 
-/**
- * Hook: Manage group events
- *
- * Responsibilities:
- * - Fetch events from API
- * - Create new events
- * - RSVP to events
- * - Delete events (admin only)
- *
- * Usage:
- *   const events = useGroupEvents(groupId);
- *   events.addEvent(title, startDate, startTime);
- */
 export function useGroupEvents(groupId: string, currentUser: UserProfile | null) {
   const queryClient = useQueryClient();
   const [events, setEvents] = useState<GroupEventRecord[]>([]);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadEvents = useCallback(async () => {
     try {
       const response = await fetchJsonValue<any>(`/api/groups/${groupId}/events?upcoming=false`);
+      if (!isMountedRef.current) return;
       const responseItems = response?.value ?? response?.data;
       const items: GroupEventRecord[] = Array.isArray(responseItems) ? responseItems : [];
       setEvents(items);
-
       queryClient.setQueryData(queryKeys.group.events(groupId), items);
     } catch (err) {
       console.error("Failed to load events:", err);
     }
   }, [groupId, queryClient]);
+const addEvent = useCallback(
+  async (title: string, startDate: string, startTime: string, description?: string): Promise<void> => {
+    if (!currentUser) throw new Error("User must be signed in");
 
-  const addEvent = useCallback(
-    async (title: string, startDate: string, startTime: string, description?: string): Promise<void> => {
-      if (!currentUser) throw new Error("User must be signed in");
+    const tempId = makeOptimisticTempId("evt");
+    const newEvent: GroupEventRecord = {
+      id: tempId, tempId, title, description: description ?? null, startDate, startTime,
+      creator: {
+        id: currentUser.id,
+        displayName: currentUser.displayName ?? null,
+        username: currentUser.username ?? null,
+        avatar: currentUser.avatar ?? null,
+      },
+      attendees: [{ user: currentUser, rsvpStatus: "yes" }],
+      opId: `evt-${tempId}`,
+    };
 
-      const tempId = makeOptimisticTempId("evt");
-      const newEvent: GroupEventRecord = {
-        id: tempId,
-        tempId,
-        title,
-        description: description ?? null,
-        startDate,
-        startTime,
-        creator: {
-          id: currentUser.id,
-          displayName: currentUser.displayName ?? null,
-          username: currentUser.username ?? null,
-          avatar: currentUser.avatar ?? null,
-        },
-        attendees: [{ user: currentUser, rsvpStatus: "yes" }],
-        opId: `evt-${tempId}`,
-      };
+    setEvents((prev) => [...prev, newEvent]);
 
-      // Optimistic update
-      setEvents((prev) => [...prev, newEvent]);
+    try {
+      const response = await fetch(`/api/groups/${groupId}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, startDate, startTime, description }),
+      });
 
-      try {
-        const response = await fetch(`/api/groups/${groupId}/events`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, startDate, startTime, description }),
-        });
+      const saved = await parseApiResponse<GroupEventRecord>(response);
 
-        if (!response.ok) throw new Error("Failed to create event");
+      setEvents((prev) => prev.map((e) => (e.tempId === tempId ? { ...saved, opId: undefined } : e)));
+    } catch (err) {
+      setEvents((prev) => prev.filter((e) => e.tempId !== tempId));
+      throw err;
+    }
+  },
+  [groupId, currentUser]
+);
 
-        const result = await response.json();
-        const saved = (result.value ?? result.data) as GroupEventRecord;
+const rsvpEvent = useCallback(
+  async (eventId: string, status: "yes" | "no" | "maybe"): Promise<void> => {
+    try {
+      const response = await fetch(`/api/groups/${groupId}/events/${eventId}/rsvp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rsvpStatus: status }),
+      });
 
-        // Replace temporary event
-        setEvents((prev) =>
-          prev.map((e) => (e.tempId === tempId ? { ...saved, opId: undefined } : e))
-        );
-      } catch (err) {
-        // Revert
-        setEvents((prev) => prev.filter((e) => e.tempId !== tempId));
-        throw err;
-      }
-    },
-    [groupId, currentUser]
-  );
+      const updated = await parseApiResponse<GroupEventRecord>(response);
+      setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
+    } catch (err) {
+      console.error("Failed to RSVP:", err);
+      throw err;
+    }
+  },
+  [groupId]
+);
 
-  const rsvpEvent = useCallback(
-    async (eventId: string, status: "yes" | "no" | "maybe"): Promise<void> => {
-      try {
-        const response = await fetch(`/api/groups/${groupId}/events/${eventId}/rsvp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rsvpStatus: status }),
-        });
-
-        if (!response.ok) throw new Error("Failed to RSVP");
-
-        const result = await response.json();
-        const updated = (result.value ?? result.data ?? result) as GroupEventRecord;
-
-        setEvents((prev) => prev.map((e) => (e.id === eventId ? updated : e)));
-      } catch (err) {
-        console.error("Failed to RSVP:", err);
-        throw err;
-      }
-    },
-    [groupId]
-  );
-
-  return {
-    events,
-    loadEvents,
-    addEvent,
-    rsvpEvent,
-    setEvents,
-  };
+  return { events, loadEvents, addEvent, rsvpEvent, setEvents };
 }
 
-/**
- * Hook: Manage real-time updates via EventSource
- *
- * Responsibilities:
- * - Listen for group updates
- * - Handle new discussions
- * - Handle new events
- * - Reconnect on disconnect
- *
- * Usage:
- *   useRealTimeUpdates(groupId, { onDiscussionAdded, onEventAdded });
- */
 export function useRealTimeUpdates(
   groupId: string,
   callbacks?: {
@@ -416,6 +314,7 @@ export function useRealTimeUpdates(
   }
 ) {
   const callbacksRef = useRef(callbacks);
+  const [reconnectKey, setReconnectKey] = useState(0);
 
   useEffect(() => {
     callbacksRef.current = callbacks;
@@ -423,11 +322,11 @@ export function useRealTimeUpdates(
 
   useEffect(() => {
     const eventSource = new EventSource(`/api/groups/${groupId}/updates`);
+    let fallbackReconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
     eventSource.addEventListener("group-updated", (event) => {
       try {
-        const data = JSON.parse(event.data);
-
+        const data = JSON.parse((event as MessageEvent).data);
         if (data.type === "discussion-added") {
           callbacksRef.current?.onDiscussionAdded?.(data.discussion);
         } else if (data.type === "event-added") {
@@ -441,34 +340,38 @@ export function useRealTimeUpdates(
     });
 
     eventSource.addEventListener("error", () => {
-      eventSource.close();
-      // Reconnect after delay
-      setTimeout(() => {
-        // Reconnection handled by re-rendering
-      }, 3000);
+      if (eventSource.readyState === EventSource.CLOSED) {
+        fallbackReconnectTimeout = setTimeout(() => setReconnectKey((k) => k + 1), 3000);
+      }
     });
 
-    return () => eventSource.close();
-  }, [groupId]);
+    return () => {
+      if (fallbackReconnectTimeout) clearTimeout(fallbackReconnectTimeout);
+      eventSource.close();
+    };
+  }, [groupId, reconnectKey]);
 }
 
-/**
- * Hook: Manage group watchlist
- *
- * Responsibilities:
- * - Fetch shared watchlist movies
- * - Add/remove movies from watchlist
- *
- * Usage:
- *   const watchlist = useGroupWatchlist(groupId);
- *   watchlist.addMovie(movieId);
- */
 export function useGroupWatchlist(groupId: string, currentUser: UserProfile | null) {
   const [movies, setMovies] = useState<any[]>([]);
+  const moviesRef = useRef(movies);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    moviesRef.current = movies;
+  }, [movies]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadWatchlist = useCallback(async () => {
     try {
       const response = await fetchJsonValue<any>(`/api/groups/${groupId}/movies`);
+      if (!isMountedRef.current) return;
       const items = Array.isArray(response?.value) ? response.value : [];
       setMovies(items);
     } catch (err) {
@@ -476,47 +379,43 @@ export function useGroupWatchlist(groupId: string, currentUser: UserProfile | nu
     }
   }, [groupId]);
 
-  const addMovie = useCallback(
-    async (movieId: string): Promise<void> => {
-      if (!currentUser) throw new Error("User must be signed in");
+const addMovie = useCallback(
+  async (movieId: string): Promise<void> => {
+    if (!currentUser) throw new Error("User must be signed in");
 
-      try {
-        await fetch(`/api/groups/${groupId}/movies`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ movieId }),
-        });
+    try {
+      const response = await fetch(`/api/groups/${groupId}/movies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tmdbId: movieId }),
+      });
 
-        // Reload watchlist
-        await loadWatchlist();
-      } catch (err) {
-        console.error("Failed to add movie:", err);
-        throw err;
-      }
-    },
-    [groupId, currentUser, loadWatchlist]
-  );
+      await parseApiResponse(response);
+      await loadWatchlist();
+    } catch (err) {
+      console.error("Failed to add movie:", err);
+      throw err;
+    }
+  },
+  [groupId, currentUser, loadWatchlist]
+);
 
-  const removeMovie = useCallback(
-    async (movieId: string): Promise<void> => {
-      try {
-        await fetch(`/api/groups/${groupId}/movies/${movieId}`, {
-          method: "DELETE",
-        });
+const removeMovie = useCallback(
+  async (movieId: string): Promise<void> => {
+    const previousMovies = moviesRef.current;
+    setMovies((prev) => prev.filter((m) => m.id !== movieId));
 
-        setMovies((prev) => prev.filter((m) => m.id !== movieId));
-      } catch (err) {
-        console.error("Failed to remove movie:", err);
-        throw err;
-      }
-    },
-    [groupId]
-  );
+    try {
+      const response = await fetch(`/api/groups/${groupId}/movies/${movieId}`, { method: "DELETE" });
+      await parseApiResponse(response);
+    } catch (err) {
+      setMovies(previousMovies);
+      console.error("Failed to remove movie:", err);
+      throw err;
+    }
+  },
+  [groupId]
+);
 
-  return {
-    movies,
-    loadWatchlist,
-    addMovie,
-    removeMovie,
-  };
+  return { movies, loadWatchlist, addMovie, removeMovie };
 }
