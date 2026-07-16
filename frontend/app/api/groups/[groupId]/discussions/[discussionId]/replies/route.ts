@@ -14,6 +14,9 @@ import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events"
 
 export const runtime = "nodejs";
 
+/**
+ * Adds a reply to a discussion and notifies the discussion author.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ groupId: string; discussionId: string }> }
@@ -44,7 +47,6 @@ export async function POST(
       return apiNotFound("Discussion");
     }
 
-    // Create notification if replying to someone else's discussion
     if (discussion.authorId !== currentUser.id && actorName) {
       const notification = await prisma.notification.create({
         data: {
@@ -59,13 +61,14 @@ export async function POST(
       publishNotificationEvent(notification.id);
     }
 
+    // The shared helper updates both the reply count and the discussion payload in one step.
     const result = await addDiscussionReply(groupId, discussionId, replyBody);
 
     if ("error" in result) {
       return apiNotFound("Discussion");
     }
 
-    publishGroupEvent(groupId, { type: "group-updated", group: result.value ?? undefined }, opId);
+    publishGroupEvent(groupId, { type: "group-updated", discussion: result.value ?? undefined }, opId);
     return NextResponse.json({ value: result.value, opId }, { status: 201 });
   } catch (err) {
     console.error("/api/groups/[groupId]/discussions/[discussionId]/replies POST error:", err);

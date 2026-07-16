@@ -16,6 +16,9 @@ import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events"
 
 export const runtime = "nodejs";
 
+/**
+ * Returns the discussion feed for a group.
+ */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ groupId: string }> }
@@ -41,6 +44,9 @@ export async function GET(
   }
 }
 
+/**
+ * Creates a discussion and notifies the other group members.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ groupId: string }> }
@@ -72,6 +78,7 @@ export async function POST(
       return apiNotFound("Group");
     }
 
+    // Persist the discussion first so the server can attach a stable identifier to the event payload.
     const discussion = await prisma.groupDiscussion.create({
       data: {
         groupId,
@@ -81,8 +88,6 @@ export async function POST(
         movieId,
         likes: 0,
         replies: 0,
-        likedBy: [],
-        replyItems: [],
       },
     });
 

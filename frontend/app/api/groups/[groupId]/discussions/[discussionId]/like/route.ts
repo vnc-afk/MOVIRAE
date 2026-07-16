@@ -13,13 +13,9 @@ import { toggleDiscussionLike } from "@/lib/group-discussions";
 
 export const runtime = "nodejs";
 
-function normalizeLikedBy(likedBy: any): string[] {
-  if (!likedBy) return [];
-  if (typeof likedBy === "string") return [];
-  if (Array.isArray(likedBy)) return likedBy;
-  return [];
-}
-
+/**
+ * Toggles a like on a discussion and publishes the updated state to the group stream.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ groupId: string; discussionId: string }> }
@@ -39,8 +35,11 @@ export async function POST(
       return apiNotFound("Discussion");
     }
 
-    const likedBy = normalizeLikedBy(discussion.likedBy);
-    const isNewLike = !likedBy.includes(currentUser.id);
+    // Check whether this user already liked the discussion before creating a new record.
+    const existingLike = await prisma.groupDiscussionLike.findUnique({
+      where: { discussionId_userId: { discussionId, userId: currentUser.id } },
+    });
+    const isNewLike = !existingLike;
     const actorName = currentUser.displayName?.trim();
 
     if (isNewLike && discussion.authorId !== currentUser.id && actorName) {
@@ -72,8 +71,13 @@ export async function POST(
     const opId = typeof body?.opId === "string" ? body.opId : request.headers.get("x-op-id") ?? undefined;
 
     const result = await toggleDiscussionLike(groupId, discussionId);
-    publishGroupEvent(groupId, { type: "group-updated", group: result.value ?? undefined }, opId);
-    return apiSuccess({ ...result, opId });
+
+    if ("error" in result) {
+      return apiNotFound("Discussion");
+    }
+
+    publishGroupEvent(groupId, { type: "group-updated", discussion: result.value ?? undefined }, opId);
+    return apiSuccess({ value: result.value, opId });
   } catch (err) {
     console.error("/api/groups/[groupId]/discussions/[discussionId]/like POST error:", err);
     return apiInternalError();
