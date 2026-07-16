@@ -16,6 +16,9 @@ import { publishGroupEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
+/**
+ * Returns the shared movie watchlist for a group.
+ */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ groupId: string }> }
@@ -39,6 +42,9 @@ export async function GET(
   }
 }
 
+/**
+ * Adds a movie to the group's shared watchlist.
+ */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ groupId: string }> }
@@ -71,6 +77,7 @@ export async function POST(
       return apiBadRequest("tmdbId is required");
     }
 
+    // Prevent duplicate watchlist entries for the same movie within a group.
     const existing = await prisma.groupMovie.findUnique({
       where: { groupId_tmdbId: { groupId, tmdbId } },
     });

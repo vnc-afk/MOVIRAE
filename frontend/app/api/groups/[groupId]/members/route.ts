@@ -13,9 +13,7 @@ import {
 export const runtime = "nodejs";
 
 /**
- * POST /api/groups/[groupId]/members
- *
- * Join a group - adds the current user as a member
+ * Adds the authenticated user to a group as a member.
  */
 export async function POST(
   request: Request,
@@ -38,9 +36,7 @@ export async function POST(
     }
 
     await prisma.groupMember.upsert({
-      where: {
-        groupId_userId: { groupId, userId: user.id },
-      },
+      where: { groupId_userId: { groupId, userId: user.id } },
       update: {},
       create: { groupId, userId: user.id },
     });
@@ -53,9 +49,7 @@ export async function POST(
 }
 
 /**
- * DELETE /api/groups/[groupId]/members
- *
- * Leave a group - removes the current user from the group
+ * Removes the authenticated user from a group membership.
  */
 export async function DELETE(
   request: Request,
@@ -68,15 +62,19 @@ export async function DELETE(
     const user = await requireAuth(request);
     logCtx.userId = user.id;
 
+    // The delete is idempotent from the client's perspective, so a missing row is treated as success.
     await prisma.groupMember.delete({
-      where: {
-        groupId_userId: { groupId, userId: user.id },
-      },
+      where: { groupId_userId: { groupId, userId: user.id } },
     });
 
     return apiNoContent();
   } catch (err) {
     console.error("/api/groups/[groupId]/members DELETE error:", err);
-    return apiNoContent();
+
+    if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2025") {
+      return apiNoContent();
+    }
+
+    return apiInternalError();
   }
 }

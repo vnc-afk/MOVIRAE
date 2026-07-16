@@ -14,6 +14,9 @@ import { publishGroupEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
+/**
+ * Removes a movie from the group's shared watchlist.
+ */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ groupId: string; tmdbId: string }> }

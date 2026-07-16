@@ -3,6 +3,9 @@ import type { GroupEvent } from "@/lib/group-events";
 
 export const runtime = "nodejs";
 
+/**
+ * Opens a server-sent event stream for real-time group updates.
+ */
 export async function GET(request: Request, { params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
   const encoder = new TextEncoder();
@@ -17,6 +20,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ grou
         }
       };
 
+      // Push each group event to the client as soon as it arrives.
       const send = (event: GroupEvent) => {
         enqueue(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
       };
