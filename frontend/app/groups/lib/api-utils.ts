@@ -12,59 +12,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { UserProfile } from "@/lib/types";
 
-// ============================================================================
-// User Profile Building
-// ============================================================================
+export { buildUserProfile } from "@/lib/user-profiles";
 
-/**
- * Build a UserProfile from raw user data
- * Handles missing fields with sensible defaults
- */
-export function buildUserProfile(user: {
-  id: string;
-  email?: string | null;
-  name?: string | null;
-  displayName?: string | null;
-  username?: string | null;
-  avatar?: string | null;
-  image?: string | null;
-  bio?: string | null;
-} | null): UserProfile | null {
-  if (!user) return null;
-
-  const displayName =
-    user.displayName ||
-    user.name ||
-    user.email?.split("@")[0] ||
-    "Movie Lover";
-
-  const username =
-    user.username ||
-    displayName.toLowerCase().replace(/\s+/g, "_");
-
-  return {
-    id: user.id,
-    email: user.email || undefined,
-    username,
-    displayName,
-    avatar: user.avatar || user.image || "",
-    bio: user.bio || "",
-    followers: 0,
-    following: 0,
-    reviewCount: 0,
-    watchlistCount: 0,
-    favoriteMovies: [],
-  };
-}
-
-// ============================================================================
-// Authentication Helpers
-// ============================================================================
-
-/**
- * Get current user from session
- * Returns null if not authenticated
- */
 export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return null;
