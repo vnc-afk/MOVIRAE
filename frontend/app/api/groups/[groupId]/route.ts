@@ -1,55 +1,43 @@
 import { NextResponse } from "next/server";
 
 import { fetchGroupDetail, getCurrentUser } from "@/lib/group-discussions";
+import { buildUserProfile } from "@/lib/user-profiles";
 import { prisma } from "@/lib/prisma";
-import type { UserProfile } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-function buildUserProfile(user: any) {
-  if (!user) return null;
-
-  const displayName = user.displayName || user.name || user.email?.split("@")[0] || "Movie Lover";
-  const username = user.username || displayName.toLowerCase().replace(/\s+/g, "_");
-
-  return {
-    id: user.id,
-    email: user.email || undefined,
-    username,
-    displayName,
-    avatar: user.avatar || user.image || "",
-    bio: user.bio || "",
-    followers: 0,
-    following: 0,
-    reviewCount: 0,
-    watchlistCount: 0,
-    favoriteMovies: [],
-  } satisfies UserProfile;
-}
-
+/**
+ * Returns the full detail payload for a single group, including members, discussions, and watchlist data.
+ */
 export async function GET(_request: Request, { params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = await params;
   const currentUser = await getCurrentUser();
 
   try {
+    // The shared detail loader already assembles the group shape expected by the UI.
     const group = await fetchGroupDetail(groupId, currentUser);
     if (!group) {
-      // Provide a short list of existing group ids to aid debugging when
-      // a client requests an id that doesn't exist in the DB.
       const avail = await prisma.group.findMany({ select: { id: true }, take: 10, orderBy: { createdAt: "desc" } });
-      return NextResponse.json({ error: "Group not found", availableIds: avail.map((r) => r.id) }, { status: 404 });
+      console.warn("/api/groups/[groupId]: group not found", {
+        requestedId: groupId,
+        availableIds: avail.map((r) => r.id),
+      });
+      return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
     return NextResponse.json({ value: group, currentUser: buildUserProfile(currentUser) });
   } catch (err) {
-    // If fetchGroupDetail fails (e.g. missing JSON columns in DB),
-    // log and return a minimal group shape fetched via a raw query so
-    // the client can render a fallback instead of a bare 500.
     console.error("/api/groups/[groupId] GET error:", err);
 
     try {
-      const rows: Array<{ id: string; name: string; description: string | null; avatar: string | null; creatorId: string; "createdAt": Date }>
-        = await prisma.$queryRaw`
+      const rows: Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        avatar: string | null;
+        creatorId: string;
+        createdAt: Date;
+      }> = await prisma.$queryRaw`
           SELECT id, name, description, avatar, "creatorId", "createdAt"
           FROM "Group"
           WHERE id = ${groupId}
@@ -59,7 +47,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
       const row = rows[0];
       if (!row) {
         const avail = await prisma.group.findMany({ select: { id: true }, take: 10, orderBy: { createdAt: "desc" } });
-        return NextResponse.json({ error: "Group not found", availableIds: avail.map((r) => r.id) }, { status: 404 });
+        console.warn("/api/groups/[groupId]: raw fallback also found no group", {
+          requestedId: groupId,
+          availableIds: avail.map((r) => r.id),
+        });
+        return NextResponse.json({ error: "Group not found" }, { status: 404 });
       }
 
       const minimal = {
@@ -78,8 +70,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
       return NextResponse.json({ value: minimal, currentUser: buildUserProfile(currentUser) });
     } catch (rawErr) {
       console.error("/api/groups/[groupId] raw fallback failed:", rawErr);
-      const message = rawErr instanceof Error ? rawErr.message : String(rawErr);
-      return NextResponse.json({ error: message }, { status: 500 });
+      return NextResponse.json({ error: "Failed to load group" }, { status: 500 });
     }
   }
 }
