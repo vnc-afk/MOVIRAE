@@ -19,9 +19,7 @@ import {
 export const runtime = "nodejs";
 
 /**
- * GET /api/groups
- *
- * Fetch groups with pagination and current user membership state
+ * Lists groups with pagination and the current user's membership state.
  */
 export async function GET(request: Request) {
   const logCtx = buildLogContext(request);
@@ -106,9 +104,7 @@ export async function GET(request: Request) {
 }
 
 /**
- * POST /api/groups
- *
- * Create a new group
+ * Creates a new group and associates the authenticated user as its creator and first member.
  */
 export async function POST(request: Request) {
   const logCtx = buildLogContext(request);
