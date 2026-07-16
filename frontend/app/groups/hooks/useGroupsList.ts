@@ -1,102 +1,131 @@
 "use client";
 
-import { useCallback, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
-import { fetchJsonValue } from "../lib/groupUtils";
+import { fetchJson, parseApiResponse, ApiRequestError  } from "../lib/groupUtils";
 import type { GroupRecord, GroupsSnapshot, GroupsResponse } from "../lib/types";
-import type { UserProfile } from "@/lib/types";
 
-// Error types for better error handling
-export type GroupsError = 
+/**
+ * Represents the typed error states used by the groups feature.
+ */
+export type GroupsError =
   | { type: 'NETWORK'; message: string }
   | { type: 'AUTH'; message: string }
   | { type: 'SERVER'; message: string }
   | { type: 'VALIDATION'; message: string };
 
+/**
+ * Builds a typed error object for a groups-related request.
+ */
 export function createGroupsError(type: GroupsError['type'], message: string): GroupsError {
   return { type, message };
 }
 
+function isGroupsError(err: unknown): err is GroupsError {
+  return typeof err === "object" && err !== null && "type" in err && "message" in err;
+}
+
 /**
- * Hook: Load groups list
- * Single source of truth: queryClient cache
- * 
- * Responsibilities:
- * - Fetch groups from API
- * - Manage loading state
- * - Handle errors and retry logic
- * 
- * Usage:
- *   const { groups, currentUser, isLoading, error, refetch } = useGroupsList();
+ * Loads the groups list and keeps the query cache aligned with the latest server response.
  */
 export function useGroupsList() {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<GroupsError | null>(null);
   const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
   const MAX_RETRIES = 3;
 
-  const loadGroups = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const payload = await fetchJsonValue<GroupsResponse>("/api/groups");
-      
-      if (!payload) {
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    };
+  }, []);
+
+ const loadGroups = useCallback(async (page = 1) => {
+  // Reset loading state so the UI can show a fresh fetch cycle.
+  setIsLoading(true);
+  setError(null);
+
+  try {
+    const result = await fetchJson<GroupsResponse>(`/api/groups?page=${page}&limit=20`);
+
+    if (!result.ok) {
+      if (result.status === 401) {
+        throw createGroupsError('AUTH', 'Please sign in to view groups.');
+      }
+      if (result.status === 0) {
         throw createGroupsError('NETWORK', 'Failed to load groups. Please check your connection.');
       }
-
-      const groups: GroupRecord[] = Array.isArray(payload.value) ? payload.value : [];
-      const currentUser = payload.currentUser ?? null;
-      const snapshot: GroupsSnapshot = { groups, currentUser };
-
-      // Single source of truth: queryClient
-      queryClient.setQueryData(queryKeys.group.list(), snapshot);
-      retryCountRef.current = 0;
-      setError(null);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      const groupsError = createGroupsError('SERVER', errorMessage);
-      setError(groupsError);
-
-      // Retry logic with exponential backoff
-      if (retryCountRef.current < MAX_RETRIES) {
-        retryCountRef.current++;
-        const delay = Math.pow(2, retryCountRef.current) * 1000;
-        setTimeout(() => loadGroups(), delay);
-      }
-
-      console.error("Failed to load groups:", err);
-    } finally {
-      setIsLoading(false);
+      throw createGroupsError('SERVER', `Failed to load groups (status ${result.status}).`);
     }
-  }, [queryClient]);
 
-  // Get current state from queryClient
-  const snapshot = queryClient.getQueryData<GroupsSnapshot>(queryKeys.group.list()) ?? {
-    groups: [],
-    currentUser: null,
-  };
+    const payload = result.data;
+    // Merge newly fetched rows into the existing cache when paging through results.
+    const newGroups: GroupRecord[] = Array.isArray(payload.value) ? payload.value : [];
+    const currentUser = payload.currentUser ?? null;
 
-  return {
-    groups: snapshot.groups,
-    currentUser: snapshot.currentUser,
-    isLoading,
-    error,
-    refetch: loadGroups,
-  };
+    queryClient.setQueryData(queryKeys.group.list(), (current: GroupsSnapshot | undefined) => ({
+      groups: page === 1 ? newGroups : [...(current?.groups ?? []), ...newGroups],
+      currentUser,
+      page,
+      hasMore: payload.pagination?.hasMore ?? false,
+    }));
+
+    retryCountRef.current = 0;
+    setError(null);
+  } catch (err) {
+    const groupsError = isGroupsError(err)
+      ? err
+      : createGroupsError('SERVER', err instanceof Error ? err.message : 'Unknown error occurred');
+
+    if (isMountedRef.current) setError(groupsError);
+
+    if (groupsError.type !== 'AUTH' && retryCountRef.current < MAX_RETRIES) {
+      retryCountRef.current++;
+      const delay = Math.pow(2, retryCountRef.current) * 1000;
+      retryTimeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) loadGroups(page);
+      }, delay);
+    }
+
+    console.error("Failed to load groups:", groupsError);
+  } finally {
+    if (isMountedRef.current) setIsLoading(false);
+  }
+}, [queryClient]);
+
+const loadMore = useCallback(() => {
+  const current = queryClient.getQueryData<GroupsSnapshot>(queryKeys.group.list());
+  if (current?.hasMore) {
+    loadGroups(current.page + 1);
+  }
+}, [queryClient, loadGroups]);
+
+const snapshot = queryClient.getQueryData<GroupsSnapshot>(queryKeys.group.list()) ?? {
+  groups: [],
+  currentUser: null,
+  page: 1,
+  hasMore: false,
+};
+
+return {
+  groups: snapshot.groups,
+  currentUser: snapshot.currentUser,
+  isLoading,
+  error,
+  refetch: loadGroups,
+  loadMore,
+  hasMore: snapshot.hasMore,
+};
 }
 
 /**
- * Hook: Persist groups to API
- * 
- * Responsibilities:
- * - Save groups to API
- * - Update cache
- * - Handle errors with rollback
+ * Persists an updated groups snapshot back to the API.
  */
 export function usePersistGroups() {
   const queryClient = useQueryClient();
@@ -105,14 +134,9 @@ export function usePersistGroups() {
   const save = useCallback(
     async (nextGroups: GroupRecord[]): Promise<GroupRecord[]> => {
       setError(null);
-      
-      // Store current state for rollback
-      const previousSnapshot = queryClient.getQueryData<GroupsSnapshot>(
-        queryKeys.group.list()
-      );
+      const previousSnapshot = queryClient.getQueryData<GroupsSnapshot>(queryKeys.group.list());
 
       try {
-        // Optimistic update
         queryClient.setQueryData(queryKeys.group.list(), (current: GroupsSnapshot | undefined) => {
           if (!current) return current;
           return { ...current, groups: nextGroups };
@@ -132,11 +156,8 @@ export function usePersistGroups() {
         }
 
         const payload = await response.json();
-        const savedGroups: GroupRecord[] = Array.isArray(payload.value) 
-          ? payload.value 
-          : nextGroups;
+        const savedGroups: GroupRecord[] = Array.isArray(payload.value) ? payload.value : nextGroups;
 
-        // Update with server response
         queryClient.setQueryData(queryKeys.group.list(), (current: GroupsSnapshot | undefined) => {
           if (!current) return current;
           return { ...current, groups: savedGroups };
@@ -144,15 +165,14 @@ export function usePersistGroups() {
 
         return savedGroups;
       } catch (err) {
-        // Rollback on error
         if (previousSnapshot) {
           queryClient.setQueryData(queryKeys.group.list(), previousSnapshot);
         }
 
-        const groupsError = err instanceof Error 
-          ? createGroupsError('SERVER', err.message)
-          : createGroupsError('SERVER', 'Failed to save groups');
-        
+        const groupsError = isGroupsError(err)
+          ? err
+          : createGroupsError('SERVER', err instanceof Error ? err.message : 'Failed to save groups');
+
         setError(groupsError);
         throw groupsError;
       }
@@ -164,13 +184,7 @@ export function usePersistGroups() {
 }
 
 /**
- * Hook: Handle group membership (join/leave)
- * 
- * Responsibilities:
- * - Toggle join/leave state
- * - Call API
- * - Update cache with optimistic updates
- * - Handle errors with rollback
+ * Provides optimistic join and leave behavior for groups.
  */
 export function useGroupMembership(
   onError?: (error: GroupsError) => void,
@@ -187,6 +201,7 @@ export function useGroupMembership(
       if (!snapshot) {
         const error = createGroupsError('VALIDATION', 'Groups not loaded');
         onError?.(error);
+        setIsToggling(false);
         throw error;
       }
 
@@ -195,6 +210,7 @@ export function useGroupMembership(
       if (!currentUser) {
         const error = createGroupsError('AUTH', 'User must be signed in');
         onError?.(error);
+        setIsToggling(false);
         throw error;
       }
 
@@ -202,14 +218,15 @@ export function useGroupMembership(
       if (!group) {
         const error = createGroupsError('VALIDATION', 'Group not found');
         onError?.(error);
+        setIsToggling(false);
         throw error;
       }
 
       const isJoined = group.joined ?? false;
+      // Apply the optimistic update first so the UI responds immediately.
       const previousSnapshot = snapshot;
 
       try {
-        // Optimistic update
         const nextGroups = groups.map((g) =>
           g.id === groupId
             ? {
@@ -223,12 +240,8 @@ export function useGroupMembership(
             : g
         );
 
-        queryClient.setQueryData(queryKeys.group.list(), {
-          ...snapshot,
-          groups: nextGroups,
-        });
+        queryClient.setQueryData(queryKeys.group.list(), { ...snapshot, groups: nextGroups });
 
-        // API call
         const method = isJoined ? "DELETE" : "POST";
         const response = await fetch(`/api/groups/${groupId}/members`, {
           method,
@@ -244,12 +257,9 @@ export function useGroupMembership(
 
         onSuccess?.(isJoined ? 'left' : 'joined');
       } catch (err) {
-        // Rollback optimistic update
         queryClient.setQueryData(queryKeys.group.list(), previousSnapshot);
 
-        const groupsError = err instanceof Error && 'type' in err
-          ? (err as GroupsError)
-          : createGroupsError('SERVER', 'Failed to update membership');
+        const groupsError = isGroupsError(err) ? err : createGroupsError('SERVER', 'Failed to update membership');
 
         onError?.(groupsError);
         throw groupsError;
@@ -263,13 +273,19 @@ export function useGroupMembership(
   return { toggleJoin, isToggling };
 }
 
+function classifyError(err: unknown, fallbackMessage: string): GroupsError {
+  if (err instanceof ApiRequestError) {
+    if (err.status === 401) return createGroupsError('AUTH', err.message || 'Please sign in.');
+    if (err.status === 0) return createGroupsError('NETWORK', 'Please check your connection.');
+    if (err.status === 400) return createGroupsError('VALIDATION', err.message);
+    return createGroupsError('SERVER', err.message);
+  }
+  if (isGroupsError(err)) return err;
+  return createGroupsError('SERVER', err instanceof Error ? err.message : fallbackMessage);
+}
+
 /**
- * Hook: Handle group creation
- * 
- * Responsibilities:
- * - Create new group with user as creator
- * - Add to groups list
- * - Persist to API
+ * Creates a new group and prepends it to the cached list on success.
  */
 export function useCreateGroup(
   onError?: (error: GroupsError) => void,
@@ -286,6 +302,7 @@ export function useCreateGroup(
       if (!snapshot?.currentUser) {
         const error = createGroupsError('AUTH', 'User must be signed in');
         onError?.(error);
+        setIsCreating(false);
         throw error;
       }
 
@@ -295,53 +312,38 @@ export function useCreateGroup(
       if (!trimmedName || !trimmedDesc) {
         const error = createGroupsError('VALIDATION', 'Name and description are required');
         onError?.(error);
+        setIsCreating(false);
         throw error;
       }
 
-      try {
-        const response = await fetch("/api/groups", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            name: trimmedName, 
-            description: trimmedDesc 
-          }),
-        });
+    try {
+      const response = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedName, description: trimmedDesc }),
+      });
 
-        if (!response.ok) {
-          throw createGroupsError(
-            response.status === 401 ? 'AUTH' : 'SERVER',
-            "Failed to create group"
-          );
-        }
 
-        const result = await response.json();
-        const createdGroup = result.value as GroupRecord;
+      const createdGroup = await parseApiResponse<GroupRecord>(response);
 
-        // Update cache with new group
-        queryClient.setQueryData(queryKeys.group.list(), (current: GroupsSnapshot | undefined) => {
-          if (!current) return current;
-          return {
-            ...current,
-            groups: [createdGroup, ...current.groups],
-          };
-        });
+      queryClient.setQueryData(queryKeys.group.list(), (current: GroupsSnapshot | undefined) => {
+        if (!current) return current;
+        return { ...current, groups: [createdGroup, ...current.groups] };
+      });
 
-        onSuccess?.(createdGroup);
-        return createdGroup;
-      } catch (err) {
-        const groupsError = err instanceof Error && 'type' in err
-          ? (err as GroupsError)
-          : createGroupsError('SERVER', 'Failed to create group');
-
-        onError?.(groupsError);
-        throw groupsError;
-      } finally {
-        setIsCreating(false);
-      }
+      onSuccess?.(createdGroup);
+      return createdGroup;
+    } catch (err) {
+      const groupsError = classifyError(err, 'Failed to create group');
+      onError?.(groupsError);
+      throw groupsError;
+    } finally {
+      setIsCreating(false);
+    }
     },
     [queryClient, onError, onSuccess]
   );
 
   return { create, isCreating };
 }
+  
