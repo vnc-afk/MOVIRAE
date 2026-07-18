@@ -15,6 +15,9 @@ interface PresetManagerProps {
   currentFilters: FilterState;
 }
 
+/**
+ * Displays saved filter presets and allows creating new ones.
+ */
 export const PresetManager = memo(function PresetManager({
   presets,
   isLoading,

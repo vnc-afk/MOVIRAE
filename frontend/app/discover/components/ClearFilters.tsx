@@ -1,6 +1,5 @@
-"use client";
-
 import { X } from "lucide-react";
+import { memo } from "react";
 
 interface ClearFiltersProps {
   activeCount: number;
@@ -9,7 +8,10 @@ interface ClearFiltersProps {
   isLoading: boolean;
 }
 
-export function ClearFilters({
+/**
+ * Displays the current active filter count and a clear action.
+ */
+export const ClearFilters = memo(function ClearFilters({
   activeCount,
   movieCount,
   onClear,
@@ -27,11 +29,9 @@ export function ClearFilters({
           </button>
         )}
         <span className="text-xs text-muted-foreground">
-          {isLoading
-            ? "Loading films..."
-            : `${movieCount} ${movieCount === 1 ? "film" : "films"}`}
+          {isLoading ? "Loading films..." : `${movieCount} ${movieCount === 1 ? "film" : "films"}`}
         </span>
       </div>
     </div>
   );
-}
+});

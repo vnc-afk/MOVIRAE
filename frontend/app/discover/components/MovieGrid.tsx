@@ -11,6 +11,9 @@ interface MovieGridProps {
   isLoading: boolean;
 }
 
+/**
+ * Loading skeleton shown while movie results are being fetched.
+ */
 const SkeletonCard = memo(({ index }: { index: number }) => (
   <motion.div
     initial={{ opacity: 0 }}
@@ -45,6 +48,9 @@ const SkeletonCard = memo(({ index }: { index: number }) => (
 
 SkeletonCard.displayName = "SkeletonCard";
 
+/**
+ * Empty state shown when no movie results match the current filters.
+ */
 const EmptyState = memo(() => (
   <motion.div
     initial={{ opacity: 0, y: 16 }}
@@ -58,6 +64,9 @@ const EmptyState = memo(() => (
 
 EmptyState.displayName = "EmptyState";
 
+/**
+ * Renders the current page of movie cards in a responsive grid.
+ */
 const MovieGridContent = memo(({ movies }: { movies: Movie[] }) => (
   <motion.div
     initial={{ opacity: 0 }}
@@ -79,6 +88,9 @@ const MovieGridContent = memo(({ movies }: { movies: Movie[] }) => (
 
 MovieGridContent.displayName = "MovieGridContent";
 
+/**
+ * Movie grid wrapper that shows either a skeleton loader, empty state, or movie cards.
+ */
 export const MovieGrid = memo(function MovieGrid({
   movies,
   isLoading,

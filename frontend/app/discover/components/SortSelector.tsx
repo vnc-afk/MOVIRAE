@@ -11,6 +11,9 @@ interface SortSelectorProps {
   disabled?: boolean;
 }
 
+/**
+ * Selects the sort order for movie results in discover.
+ */
 export const SortSelector = memo(function SortSelector({ value, onChange, disabled = false }: SortSelectorProps) {
   return (
     <motion.div

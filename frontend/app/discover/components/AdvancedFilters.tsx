@@ -11,6 +11,9 @@ interface AdvancedFiltersProps {
   onRuntimeChange: (value: [number, number]) => void;
 }
 
+/**
+ * Shows collapsible advanced filter controls, currently exposing runtime filtering.
+ */
 export const AdvancedFilters = memo(function AdvancedFilters({
   runtimeRange,
   onRuntimeChange,

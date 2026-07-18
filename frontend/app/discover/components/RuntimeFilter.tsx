@@ -9,6 +9,9 @@ interface RuntimeFilterProps {
   onChange: (value: [number, number]) => void;
 }
 
+/**
+ * Provides a runtime slider for filtering movie durations.
+ */
 export function RuntimeFilter({ value, onChange }: RuntimeFilterProps) {
   return (
     <div className="space-y-3">

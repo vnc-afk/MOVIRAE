@@ -10,6 +10,9 @@ interface PaginationLoaderProps {
   onLoadMore: () => void;
 }
 
+/**
+ * Infinite-scroll pagination loader using an intersection observer sentinel.
+ */
 export const PaginationLoader = memo(function PaginationLoader({
   isLoading,
   hasMore,

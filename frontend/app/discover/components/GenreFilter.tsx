@@ -16,6 +16,9 @@ interface ChipProps {
   children: React.ReactNode;
 }
 
+/**
+ * Individual genre chip button used within the filter selector.
+ */
 function Chip({ active, onClick, children }: ChipProps) {
   return (
     <motion.button
@@ -34,6 +37,9 @@ function Chip({ active, onClick, children }: ChipProps) {
   );
 }
 
+/**
+ * Wraps genre chips and animates their entrance.
+ */
 function ChipContainer({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
@@ -55,6 +61,9 @@ function ChipContainer({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Renders genre selection chips for discover filtering.
+ */
 export const GenreFilter = memo(function GenreFilter({
   genres,
   selectedGenreId,

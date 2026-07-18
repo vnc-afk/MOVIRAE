@@ -1,9 +1,13 @@
 "use client";
 
+import { memo } from "react";
 import { motion } from "framer-motion";
 import { SlidersHorizontal } from "lucide-react";
 
-export function DiscoverHeader() {
+/**
+ * Page header for the discover experience.
+ */
+export const DiscoverHeader = memo(function DiscoverHeader() {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
       <div className="flex items-center gap-2 mb-1">
@@ -15,4 +19,4 @@ export function DiscoverHeader() {
       </p>
     </motion.div>
   );
-}
+});

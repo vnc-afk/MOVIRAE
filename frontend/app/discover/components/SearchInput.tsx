@@ -11,6 +11,9 @@ interface SearchInputProps {
   disabled?: boolean;
 }
 
+/**
+ * Search input with built-in icon support for discover queries.
+ */
 export const SearchInput = memo(function SearchInput({
   value,
   onChange,
