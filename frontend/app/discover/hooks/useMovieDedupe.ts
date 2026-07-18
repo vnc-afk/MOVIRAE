@@ -4,16 +4,7 @@ import { useCallback, useRef } from "react";
 import type { Movie } from "@/lib/types";
 
 /**
- * Hook: Manage movie deduplication across paginated results
- *
- * Responsibilities:
- * - Maintain a set of seen movie IDs
- * - Deduplicate incoming movie results
- * - Reset when filters change
- *
- * Usage:
- *   const { deduplicate, reset, isSeen } = useMovieDedupe();
- *   const unique = movies.filter(m => !isSeen(m.id));
+ * Tracks already-rendered movie IDs so paginated results do not repeat items.
  */
 export function useMovieDedupe() {
   const seenIdsRef = useRef<Set<string>>(new Set());

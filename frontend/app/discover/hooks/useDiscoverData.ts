@@ -34,19 +34,9 @@ interface DiscoverDataState {
 }
 
 /**
- * Hook: Manage data fetching for discover feature
+ * Loads discover metadata and exposes an abortable page fetcher for pagination.
  *
- * Responsibilities:
- * - Load genres on mount with error handling
- * - Fetch movies based on current mode (default/search/genre)
- * - Support request cancellation via AbortController
- * - Handle network timeouts
- * - Manage loading and error states
- *
- * Usage:
- *   const data = useDiscoverData(filters);
- *   if (data.error) return <ErrorUI error={data.error} />;
- *   const movies = await data.fetchPage(2);
+ * This hook supports the default trending flow as well as search and genre filters.
  */
 export function useDiscoverData(filters: FilterState): DiscoverDataState {
   const queryClient = useQueryClient();
@@ -66,6 +56,7 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
     const loadGenres = async () => {
       setGenresLoading(true);
       setGenresError(null);
+      // Load the genre list once on mount; genre errors are surfaced but do not block movie fetching.
 
       try {
         const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
@@ -114,68 +105,40 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
 
   const baseMovies = trendingQuery.data ?? [];
 
-  /**
-   * Fetch a specific page based on current mode with cancellation support
-   * @param page - Page number to fetch
-   * @param signal - Optional AbortSignal for request cancellation
-   * @returns Promise with movies and page size
-   */
   const fetchPage = useCallback(
     async (page: number, signal?: AbortSignal): Promise<MoviePage> => {
-      // Cancel previous request if new one is initiated
       if (abortControllerRef.current) {
-        abortControllerRef.current.abort(
-          new DOMException("Request superseded", "AbortError")
-        );
+        abortControllerRef.current.abort(new DOMException("Request superseded", "AbortError"));
       }
 
-      // Create new abort controller if signal not provided
       const controller = new AbortController();
       abortControllerRef.current = controller;
-
-      // Merge signals if both are provided
-      const mergedSignal = signal
-        ? AbortSignal.any([controller.signal, signal])
-        : controller.signal;
+      const mergedSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
 
       let results: Movie[] = [];
 
       try {
+        // Select the appropriate movie source according to the active discover mode.
         if (isSearchMode) {
           results = await searchMovies(trimmedQuery, page, { signal: mergedSignal });
         } else if (isGenreMode) {
-          results = await getMoviesByGenre(
-            Number(filters.genreId),
-            page,
-            { signal: mergedSignal }
-          );
+          results = await getMoviesByGenre(Number(filters.genreId), page, { signal: mergedSignal });
         } else {
           results = await getTrendingMovies(page, { signal: mergedSignal });
         }
 
-        return {
-          movies: results,
-          pageSize: results.length,
-        };
+        return { movies: results, pageSize: results.length };
       } catch (err) {
-        const error = normalizeError(err);
 
         if (mergedSignal.aborted) {
-          return {
-            movies: [],
-            pageSize: 0,
-          };
+          throw new DOMException("Request aborted", "AbortError");
         }
 
-        // Only log non-abort errors
+        const error = normalizeError(err);
         if (!(error instanceof AbortedError)) {
           console.error(`Failed to fetch page ${page}:`, error);
         }
-
-        return {
-          movies: [],
-          pageSize: 0,
-        };
+        return { movies: [], pageSize: 0 };
       } finally {
         if (abortControllerRef.current === controller) {
           abortControllerRef.current = null;
@@ -185,16 +148,13 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
     [isSearchMode, isGenreMode, trimmedQuery, filters.genreId]
   );
 
-  /**
-   * Invalidate TMDB caches when filters change significantly
-   */
   const invalidateCache = useCallback(() => {
+    // Invalidate trending seeds so default mode reloads fresh results after filter resets.
     queryClient.invalidateQueries({
       queryKey: queryKeys.discover.seeds(),
     });
   }, [queryClient]);
-
-  // Cleanup: abort any pending requests on unmount
+  
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {

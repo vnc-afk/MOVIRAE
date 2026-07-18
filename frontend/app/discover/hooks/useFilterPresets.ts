@@ -6,20 +6,7 @@ import { ValidationError, PersistenceError, normalizeError } from "../lib/errors
 import { STORAGE_KEYS, API_CONFIG } from "../lib/constants";
 
 /**
- * Hook: Manage user filter presets with persistence
- *
- * Responsibilities:
- * - Load presets from API
- * - Create new presets with validation
- * - Persist presets to API
- * - Delete presets
- * - Handle errors gracefully
- *
- * Usage:
- *   const presets = useFilterPresets();
- *   presets.save(name, currentFilters);
- *   presets.apply(preset);
- *   if (presets.error) return <Error />;
+ * Manages saved filter presets including load, save, and delete operations.
  */
 export function useFilterPresets() {
   const [presets, setPresets] = useState<FilterPreset[]>([]);
@@ -27,7 +14,6 @@ export function useFilterPresets() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Load presets on mount
   useEffect(() => {
     loadPresets();
   }, []);
@@ -35,11 +21,11 @@ export function useFilterPresets() {
   const loadPresets = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    // Retry transient preset fetch failures before falling back to an empty list.
 
     let lastError: Error | null = null;
 
     try {
-      // Retry logic for timeout and network errors
       for (let attempt = 0; attempt <= API_CONFIG.RETRY_ATTEMPTS; attempt++) {
         try {
           const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
@@ -54,14 +40,12 @@ export function useFilterPresets() {
 
           const data = await response.json();
 
-          // Validate presets array
           if (!Array.isArray(data.value)) {
             throw new ValidationError("Invalid presets format: expected array", {
               received: typeof data.value,
             });
           }
 
-          // Validate each preset
           const validPresets = data.value.filter((p: any) => {
             if (!p.id || typeof p.id !== "string") {
               console.warn("Skipping preset with invalid ID:", p);
@@ -75,29 +59,24 @@ export function useFilterPresets() {
           });
 
           setPresets(validPresets);
-          return; // Success, exit retry loop
+          return; 
         } catch (err) {
           lastError = err as Error;
           const error = normalizeError(err);
 
-          // Retry only on timeout or network errors
           if (error.code === "TIMEOUT" || error.code === "NETWORK_ERROR") {
             if (attempt < API_CONFIG.RETRY_ATTEMPTS) {
-              console.warn(`Attempt ${attempt + 1} failed, retrying...`, error);
-              // Wait before retry
-              await new Promise((resolve) =>
+              console.warn(`Attempt ${attempt + 1} failed, retrying...`, error);              await new Promise((resolve) =>
                 setTimeout(resolve, API_CONFIG.RETRY_DELAY_MS * (attempt + 1))
               );
-              continue; // Try again
+              continue; 
             }
           }
 
-          // Don't retry on validation or persistence errors
           throw error;
         }
       }
 
-      // If we get here, all retries failed
       if (lastError) {
         throw normalizeError(lastError);
       }
@@ -111,10 +90,6 @@ export function useFilterPresets() {
     }
   }, []);
 
-  /**
-   * Validate preset name
-   * @throws ValidationError if invalid
-   */
   function validatePresetName(name: string): string {
     const trimmed = name.trim();
 
@@ -135,20 +110,15 @@ export function useFilterPresets() {
     return trimmed;
   }
 
-  /**
-   * Create and save a new preset
-   * @returns true if successful, false otherwise
-   */
   const save = useCallback(
     async (name: string, filters: FilterState): Promise<boolean> => {
+      // Create and persist a new preset using the backend storage API.
       setError(null);
       setIsSaving(true);
 
       try {
-        // Validate name
         const validName = validatePresetName(name);
 
-        // Create preset
         const newPreset: FilterPreset = {
           id: `fp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: validName,
@@ -161,7 +131,6 @@ export function useFilterPresets() {
 
         const nextPresets = [...presets, newPreset];
 
-        // Persist to API
         const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
         const response = await fetch("/api/data/user-filter-presets", {
           method: "PUT",
@@ -191,18 +160,14 @@ export function useFilterPresets() {
     [presets]
   );
 
-  /**
-   * Delete a preset by ID
-   * @returns true if successful, false otherwise
-   */
   const remove = useCallback(
     async (presetId: string): Promise<boolean> => {
+      // Delete a preset and sync the remaining list with backend storage.
       setError(null);
 
       try {
         const nextPresets = presets.filter((p) => p.id !== presetId);
-
-        // Persist to API
+        
         const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
         const response = await fetch("/api/data/user-filter-presets", {
           method: "PUT",

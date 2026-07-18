@@ -13,17 +13,9 @@ import { ValidationError, normalizeError } from "../lib/errors";
 import { TIMING_CONFIG } from "../lib/constants";
 
 /**
- * Hook: Synchronize filter state with URL search params
+ * Synchronizes discover filters between internal state and the browser URL.
  *
- * Responsibilities:
- * - Read filters from URL on mount and when URL changes
- * - Update URL when filters change (with debounce)
- * - Prevent unnecessary re-renders with equality checks
- * - Validate filter parameters from URL
- *
- * Usage:
- *   const [filters, setFilters, error] = useFilterSync();
- *   if (error) { /* show error UI * / }
+ * The hook reads filter state from the URL on load and writes updates back with debouncing.
  */
 export function useFilterSync() {
   const router = useRouter();
@@ -40,10 +32,10 @@ export function useFilterSync() {
   const [error, setError] = useState<Error | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync URL to state when search params change (browser back/forward)
   useEffect(() => {
     try {
       const nextFilters = readFiltersFromSearchParams(searchParams);
+      // Update state when the URL changes, while avoiding redundant updates.
       setFilters((current: FilterState) =>
         areFiltersEqual(current, nextFilters) ? current : nextFilters
       );
@@ -51,15 +43,13 @@ export function useFilterSync() {
     } catch (err) {
       const error = normalizeError(err);
       setError(error);
-      // Fall back to defaults if URL is malformed
+
       setFilters(DEFAULT_FILTERS);
       console.error("Invalid filter parameters in URL:", error);
     }
   }, [searchParams]);
 
-  // Sync state to URL when filters change (with debounce to avoid thrashing)
   useEffect(() => {
-    // Clear previous timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
@@ -70,7 +60,7 @@ export function useFilterSync() {
         const currentSearch = searchParams.toString();
         const currentUrl = currentSearch ? `${pathname}?${currentSearch}` : pathname;
 
-        if (currentUrl !== nextUrl) {
+        if (nextUrl !== currentUrl) {
           router.replace(nextUrl, { scroll: false });
         }
       } catch (err) {
@@ -90,23 +80,23 @@ export function useFilterSync() {
   return [filters, setFilters, error] as const;
 }
 
+
 /**
- * Helper: Update a single filter field with type safety
+ * Produces a callback for updating a specific filter field.
  */
 export function useFilterUpdater(
-  filters: FilterState,
-  setFilters: (filters: FilterState) => void
+  setFilters: (updater: FilterState | ((current: FilterState) => FilterState)) => void
 ) {
   return useCallback(
     <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
       try {
-        setFilters({ ...filters, [key]: value });
+        setFilters((current) => ({ ...current, [key]: value }));
       } catch (err) {
         const error = normalizeError(err);
         console.error("Failed to update filter:", key, error);
         throw error;
       }
     },
-    [filters, setFilters]
+    [setFilters]
   );
 }
