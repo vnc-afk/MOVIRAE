@@ -11,10 +11,6 @@ export const DEFAULT_FILTERS: FilterState = {
   sortBy: "rating",
 };
 
-/**
- * Validates runtime range values
- * @throws ValidationError if values are invalid
- */
 function validateRuntimeRange(
   min: number,
   max: number
@@ -50,10 +46,6 @@ function validateRuntimeRange(
   return [Math.round(min), Math.round(max)];
 }
 
-/**
- * Validates a sort parameter
- * @throws ValidationError if invalid
- */
 function validateSortBy(
   value: unknown
 ): FilterState["sortBy"] {
@@ -74,12 +66,8 @@ function validateSortBy(
   return value as FilterState["sortBy"];
 }
 
-/**
- * Validates a genre ID (must be numeric string)
- * @throws ValidationError if invalid
- */
 function validateGenreId(genreId: string): string {
-  if (!genreId) return ""; // Empty is valid (means no genre filter)
+  if (!genreId) return "";
 
   if (!/^\d+$/.test(genreId)) {
     throw new ValidationError(`Invalid genre ID: ${genreId}`, { genreId });
@@ -89,8 +77,7 @@ function validateGenreId(genreId: string): string {
 }
 
 /**
- * Read filter state from URL search params with validation
- * @throws ValidationError if params are malformed
+ * Reads and validates discover filter state from URL search parameters.
  */
 export function readFiltersFromSearchParams(
   searchParams: { get: (key: string) => string | null }
@@ -115,7 +102,7 @@ export function readFiltersFromSearchParams(
 }
 
 /**
- * Build URL with filter params (only includes non-default values)
+ * Builds a URL with discover filter state encoded as query parameters.
  */
 export function buildFiltersUrl(pathname: string, filters: FilterState): string {
   const params = new URLSearchParams();
@@ -145,7 +132,7 @@ export function buildFiltersUrl(pathname: string, filters: FilterState): string 
 }
 
 /**
- * Check if two filter states are equal
+ * Compares filter values to avoid unnecessary state and URL updates.
  */
 export function areFiltersEqual(
   left: FilterState,
@@ -161,7 +148,7 @@ export function areFiltersEqual(
 }
 
 /**
- * Determine current mode based on filters
+ * Determines which discover mode is active based on the current filters.
  */
 export function getFilterMode(
   filters: FilterState
@@ -172,9 +159,6 @@ export function getFilterMode(
   return "default";
 }
 
-/**
- * Count active filters (excluding defaults)
- */
 export function countActiveFilters(filters: FilterState): number {
   return (
     (filters.genreId ? 1 : 0) +
@@ -185,12 +169,6 @@ export function countActiveFilters(filters: FilterState): number {
   );
 }
 
-/**
- * Sort movies according to filter preference
- * @param movies - Array of movies to sort (not mutated)
- * @param sortBy - Sort criteria
- * @returns New sorted array
- */
 export function sortMovies<T extends { rating?: number; year?: number; title?: string; runtime?: number }>(
   movies: readonly T[],
   sortBy: FilterState["sortBy"]
@@ -215,12 +193,7 @@ export function sortMovies<T extends { rating?: number; year?: number; title?: s
   return sorted;
 }
 
-/**
- * Filter movies by runtime range
- * @param movies - Array of movies to filter (not mutated)
- * @param runtimeRange - [min, max] inclusive range
- * @returns New filtered array
- */
+
 export function filterByRuntime<T extends { runtime?: number }>(
   movies: readonly T[],
   runtimeRange: [number, number]
@@ -232,11 +205,6 @@ export function filterByRuntime<T extends { runtime?: number }>(
   );
 }
 
-/**
- * Deduplicate movies by ID while preserving order
- * @param movies - Array of movies to deduplicate
- * @returns New array with duplicates removed
- */
 export function deduplicateMovies<T extends { id: string }>(
   movies: readonly T[]
 ): T[] {
