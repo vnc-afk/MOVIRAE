@@ -9,6 +9,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+/.verif
+*.md
 
 # testing
 /coverage
@@ -39,3 +41,20 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDEs and local editors
+.vscode/
+.idea/
+
+# Editor swap/temp files
+*.swp
+*.swo
+
+# Log files
+*.log
+
+# Windows thumbnail cache
+Thumbs.db
+
+# Sublime project/workspace
+*.sublime-workspace
