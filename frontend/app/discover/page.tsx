@@ -8,130 +8,87 @@ import {
   useMovieDedupe,
   usePagination,
   useFilterPresets,
+  useDebouncedValue, 
 } from "./hooks";
 import {
-  DiscoverHeader,
-  SearchInput,
-  PresetManager,
-  GenreFilter,
-  AdvancedFilters,
-  SortSelector,
-  MovieGrid,
-  PaginationLoader,
-  ClearFilters,
-  ErrorBoundary,
-  ErrorAlert,
+  DiscoverHeader, SearchInput, PresetManager, GenreFilter, AdvancedFilters,
+  SortSelector, MovieGrid, PaginationLoader, ClearFilters, ErrorBoundary, ErrorAlert,
 } from "./components";
 import {
-  DEFAULT_FILTERS,
-  filterByRuntime,
-  sortMovies,
-  countActiveFilters,
-  deduplicateMovies,
+  DEFAULT_FILTERS, filterByRuntime, sortMovies, countActiveFilters, deduplicateMovies,
 } from "./lib/filterUtils";
+import { TIMING_CONFIG } from "./lib/constants"; 
 import type { Movie } from "@/lib/types";
 import type { FilterPreset } from "./lib/types";
+import type { FilterState } from "./lib/types";
 
 /**
- * Smart Discover Page - Refactored
- *
- * Improvements:
- * - Comprehensive error handling with error boundary & error alerts
- * - Request cancellation via AbortController
- * - Input validation on URL filters
- * - Better edge case handling
- * - Accessibility improvements (ARIA labels, focus management)
- * - Network timeout support
- * - Type-safe filter utilities
- *
- * Feature-based architecture:
- * - hooks/: Business logic hooks (testable, reusable)
- * - components/: UI components (focused, single responsibility)
- * - lib/: Utilities, types, and error handling (pure functions)
+ * The discover page experience, including search, filtering, pagination, and preset handling.
  */
 function DiscoverContent() {
-  // Core state management
   const [filters, setFilters, filterError] = useFilterSync();
-  const updateFilter = useFilterUpdater(filters, setFilters);
+  const updateFilter = useFilterUpdater(setFilters);
 
-  // Data fetching
-  const data = useDiscoverData(filters);
+  const handleQueryChange = useCallback((q: string) => updateFilter("query", q), [updateFilter]);
+  const handleGenreChange = useCallback((genreId: string) => updateFilter("genreId", genreId), [updateFilter]);
+  const handleRuntimeChange = useCallback(
+  (range: [number, number]) => updateFilter("runtimeRange", range),
+  [updateFilter]
+  );
+  const handleSortChange = useCallback(
+  (sortBy: FilterState["sortBy"]) => updateFilter("sortBy", sortBy),
+  [updateFilter]
+);
+
+  const debouncedQuery = useDebouncedValue(filters.query, TIMING_CONFIG.SEARCH_DEBOUNCE_MS);
+  const debouncedFilters = useMemo(
+    () => ({ ...filters, query: debouncedQuery }),
+    [filters, debouncedQuery]
+  );
+
+  const data = useDiscoverData(debouncedFilters);
   const { genres, baseMovies, isDefaultMode } = data;
   const { fetchPage, invalidateCache } = data;
 
-  // Pagination
   const pagination = usePagination();
   const { hasMore, isFetching, error: paginationError } = pagination;
   const { reset: resetPagination, loadNext } = pagination;
 
-  // Deduplication
-  const {
-    deduplicate,
-    reset: resetDedupe,
-  } = useMovieDedupe();
-
-  // Presets
+  const { deduplicate, reset: resetDedupe } = useMovieDedupe();
   const presets = useFilterPresets();
 
-  // UI state
   const [pageMovies, setPageMovies] = useState<Movie[][]>([]);
   const [dismissedErrors, setDismissedErrors] = useState<Set<string>>(new Set());
 
-  // ========== Compute derived state ==========
-
-  const trimmedQuery = filters.query.trim();
+  const trimmedQuery = debouncedQuery.trim();
   const isLoading = isDefaultMode && baseMovies.length === 0 && pageMovies.length === 0;
 
-  // Keep pagination append-only: never globally re-sort newly fetched pages
-  // above cards the user has already scrolled past.
+  // Build the visible movie pages from the current mode, applying runtime and sort filters.
   const visiblePages = useMemo(() => {
     const pages = isDefaultMode ? [baseMovies, ...pageMovies] : pageMovies;
-
     return pages
       .map((page) => sortMovies(filterByRuntime(page, filters.runtimeRange), filters.sortBy))
       .filter((page) => page.length > 0);
   }, [baseMovies, filters.runtimeRange, filters.sortBy, isDefaultMode, pageMovies]);
 
-  const uniqueMovies = useMemo(
-    () => deduplicateMovies(visiblePages.flat()),
-    [visiblePages]
-  );
-
-  // Calculate active filters
+  const uniqueMovies = useMemo(() => deduplicateMovies(visiblePages.flat()), [visiblePages]);
   const activeFilterCount = countActiveFilters(filters);
 
-  // Collect all errors
-  const allErrors = [filterError, data.error, paginationError, presets.error].filter(
-    Boolean
-  );
+  const allErrors = [filterError, data.error, paginationError, presets.error].filter(Boolean);
   const visibleErrors = allErrors.filter((err) => !dismissedErrors.has(err?.message || ""));
 
-  // ========== Callbacks ==========
-
-  /**
-   * Handle preset application
-   */
   const applyPreset = useCallback((preset: FilterPreset) => {
     setFilters({
       ...DEFAULT_FILTERS,
       genreId: preset.filters.genreId || "",
-      runtimeRange: [
-        preset.filters.minRuntime || 0,
-        preset.filters.maxRuntime || 200,
-      ],
+      runtimeRange: [preset.filters.minRuntime || 0, preset.filters.maxRuntime || 200],
     });
   }, [setFilters]);
 
-  /**
-   * Reset filters to defaults
-   */
   const clearAllFilters = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
   }, [setFilters]);
 
-  /**
-   * Reset pagination when filters change
-   */
   useEffect(() => {
     resetPagination();
     setPageMovies([]);
@@ -139,9 +96,6 @@ function DiscoverContent() {
     invalidateCache();
   }, [trimmedQuery, filters.genreId, resetPagination, resetDedupe, invalidateCache]);
 
-  /**
-   * Load first page when entering search/genre mode
-   */
   useEffect(() => {
     if (isDefaultMode) return;
 
@@ -157,17 +111,16 @@ function DiscoverContent() {
           setPageMovies([unique]);
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
         console.error("Failed to load first page:", err);
-        // Error is handled by pagination state
       }
     };
 
     loadFirstPage();
   }, [isDefaultMode, fetchPage, resetPagination, resetDedupe, deduplicate]);
 
-  /**
-   * Handle loading next page with proper error handling
-   */
   const handleLoadNext = useCallback(() => {
     if (isFetching || !hasMore) return;
 
@@ -180,10 +133,7 @@ function DiscoverContent() {
           setPageMovies((prev) => [...prev, unique]);
         }
 
-        return {
-          results: unique,
-          pageSize: apiPageSize,
-        };
+        return { results: unique, pageSize: apiPageSize };
       } catch (err) {
         console.error("Failed to load page:", page, err);
         throw err;
@@ -197,22 +147,15 @@ function DiscoverContent() {
 
   const handleRetryError = useCallback((error: Error | null) => {
     if (!error) return;
-    
-    // Dismiss the error and let user interact
     handleDismissError(error.message);
-    
-    // Attempt to reload relevant data based on error type
     if (presets.error === error) {
       presets.reload();
     }
   }, [presets, handleDismissError]);
 
-  // ========== Render ==========
-
   return (
     <div className="pb-20 md:pb-0">
       <div className="container py-8 space-y-6">
-        {/* Error alerts */}
         {visibleErrors.length > 0 && (
           <div className="space-y-2" role="region" aria-label="Errors" aria-live="polite">
             {visibleErrors.map((error, idx) => (
@@ -227,10 +170,8 @@ function DiscoverContent() {
           </div>
         )}
 
-        {/* Header */}
         <DiscoverHeader />
 
-        {/* Presets */}
         <PresetManager
           presets={presets.presets}
           isLoading={presets.isLoading}
@@ -239,27 +180,23 @@ function DiscoverContent() {
           currentFilters={filters}
         />
 
-        {/* Search */}
-        <SearchInput 
-          value={filters.query} 
-          onChange={(q) => updateFilter("query", q)}
+        <SearchInput
+          value={filters.query}
+          onChange={handleQueryChange}
           disabled={isLoading}
         />
 
-        {/* Genre Filter */}
         <GenreFilter
           genres={genres}
           selectedGenreId={filters.genreId}
-          onGenreChange={(genreId) => updateFilter("genreId", genreId)}
+          onGenreChange={handleGenreChange}
         />
 
-        {/* Advanced Filters */}
         <AdvancedFilters
           runtimeRange={filters.runtimeRange}
-          onRuntimeChange={(range) => updateFilter("runtimeRange", range)}
+          onRuntimeChange={handleRuntimeChange}
         />
 
-        {/* Clear & Sort Controls */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <ClearFilters
             activeCount={activeFilterCount}
@@ -269,30 +206,21 @@ function DiscoverContent() {
           />
           <SortSelector
             value={filters.sortBy}
-            onChange={(sortBy) => updateFilter("sortBy", sortBy)}
+            onChange={handleSortChange}
             disabled={isLoading}
           />
         </div>
 
-        {/* Movie Grid */}
         <MovieGrid movies={uniqueMovies} isLoading={isLoading} />
 
-        {/* Pagination */}
         {!isLoading && uniqueMovies.length > 0 && (
-          <PaginationLoader
-            isLoading={isFetching}
-            hasMore={hasMore}
-            onLoadMore={handleLoadNext}
-          />
+          <PaginationLoader isLoading={isFetching} hasMore={hasMore} onLoadMore={handleLoadNext} />
         )}
       </div>
     </div>
   );
 }
 
-/**
- * Main Discover page component wrapped with error boundary
- */
 export default function Discover() {
   return (
     <ErrorBoundary>
