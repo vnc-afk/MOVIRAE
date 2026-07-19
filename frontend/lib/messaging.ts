@@ -1,5 +1,8 @@
 import type { Message, NotificationItem, UserProfile } from "@/lib/types";
 
+/**
+ * The combined notification and message snapshot used by the notifications UI.
+ */
 export type MessagingSnapshot = {
   items: NotificationItem[];
   messages: Message[];
@@ -7,12 +10,18 @@ export type MessagingSnapshot = {
   sessionEmail: string | null;
 };
 
+/**
+ * A single conversation thread payload used for the active message view.
+ */
 export type MessageThreadSnapshot = {
   partner: UserProfile | null;
   messages: Message[];
   sessionEmail: string | null;
 };
 
+/**
+ * Summary data for a conversation partner used in the sidebar.
+ */
 export type ConversationSummary = {
   partner: UserProfile;
   messages: Message[];
@@ -21,23 +30,40 @@ export type ConversationSummary = {
   conversationKey: string;
 };
 
+/**
+ * Returns a stable conversation key for two user IDs.
+ */
 export function getConversationKey(userAId: string, userBId: string) {
   return [userAId, userBId].sort().join(":");
 }
 
+/**
+ * Resolves the current authenticated user from the messaging snapshot.
+ */
 export function getCurrentUserFromSnapshot(snapshot: MessagingSnapshot) {
   if (!snapshot.sessionEmail) return null;
   return snapshot.users.find((user) => user.email === snapshot.sessionEmail) ?? null;
 }
 
+/**
+ * Determines the conversation partner ID from a message object.
+ *
+ * This function checks both explicit id fields and nested user objects.
+ */
 export function getConversationPartnerId(message: Message, currentUserId: string) {
   if (message.fromId && message.fromId !== currentUserId) return message.fromId;
   if (message.toId && message.toId !== currentUserId) return message.toId;
-  if (message.from.id !== currentUserId) return message.from.id;
+  if (message.from?.id && message.from.id !== currentUserId) return message.from.id;
   if (message.to?.id && message.to.id !== currentUserId) return message.to.id;
   return null;
 }
 
+/**
+ * Builds conversation summaries from raw messages and user profiles.
+ *
+ * Each partner gets a single summary containing the message list, unread count,
+ * and the date of the most recent message.
+ */
 export function buildConversationSummaries(snapshot: MessagingSnapshot, currentUserId: string | null) {
   if (!currentUserId) return [];
 
@@ -52,7 +78,7 @@ export function buildConversationSummaries(snapshot: MessagingSnapshot, currentU
 
     const existing = conversations.get(partnerId);
     const conversationKey = getConversationKey(currentUserId, partnerId);
-    const unreadCount = message.from.id !== currentUserId && !message.isRead ? 1 : 0;
+    const unreadCount = message.fromId === partnerId && message.toId === currentUserId && !message.isRead ? 1 : 0;
 
     if (!existing) {
       conversations.set(partnerId, {
@@ -75,13 +101,24 @@ export function buildConversationSummaries(snapshot: MessagingSnapshot, currentU
   return Array.from(conversations.values()).sort((a, b) => (a.lastMessageAt < b.lastMessageAt ? 1 : -1));
 }
 
+async function fetchJsonOrThrow(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Request to ${url} failed (status ${response.status})`);
+  }
+  return response.json();
+}
+
+/**
+ * Fetches the initial notifications, messages, users, and session data in parallel.
+ */
 export async function fetchMessagingSnapshot(): Promise<MessagingSnapshot> {
   const PAGE_LIMIT = 50;
   const [notificationsResponse, messagesResponse, usersResponse, sessionResponse] = await Promise.all([
-    fetch(`/api/data/user-notifications?limit=${PAGE_LIMIT}&offset=0`).then((response) => response.json()),
-    fetch(`/api/data/user-messages?limit=${PAGE_LIMIT}&offset=0`).then((response) => response.json()),
-    fetch("/api/users").then((response) => response.json()),
-    fetch("/api/auth/session").then((response) => response.json()),
+    fetchJsonOrThrow(`/api/data/user-notifications?limit=${PAGE_LIMIT}&offset=0`),
+    fetchJsonOrThrow(`/api/data/user-messages?limit=${PAGE_LIMIT}&offset=0`),
+    fetchJsonOrThrow("/api/users"),
+    fetchJsonOrThrow("/api/auth/session"),
   ]);
 
   return {
@@ -92,11 +129,17 @@ export async function fetchMessagingSnapshot(): Promise<MessagingSnapshot> {
   };
 }
 
+/**
+ * Fetches friend profiles for the current user.
+ */
 export async function fetchFriends(): Promise<UserProfile[]> {
-  const response = await fetch("/api/users/friends").then((res) => res.json());
+  const response = await fetchJsonOrThrow("/api/users/friends");
   return Array.isArray(response.value) ? response.value : [];
 }
 
+/**
+ * Loads the thread with a specific partner and normalizes the API response.
+ */
 export async function fetchMessageThread(userId: string): Promise<MessageThreadSnapshot> {
   const response = await fetch(`/api/messages/${userId}`).then((res) => res.json());
   const value = response?.value ?? null;
@@ -108,10 +151,16 @@ export async function fetchMessageThread(userId: string): Promise<MessageThreadS
   };
 }
 
+/**
+ * Generates a temporary ID for optimistic messages.
+ */
 export function makeTempMessageId() {
   return `temp-message-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+/**
+ * Builds an optimistic message payload for temporary UI rendering.
+ */
 export function createOptimisticMessage(params: {
   id: string;
   from: UserProfile;
@@ -131,6 +180,9 @@ export function createOptimisticMessage(params: {
   };
 }
 
+/**
+ * Appends a message to the shared messaging snapshot.
+ */
 export function appendMessageToSnapshot(snapshot: MessagingSnapshot, message: Message): MessagingSnapshot {
   return {
     ...snapshot,
@@ -138,6 +190,9 @@ export function appendMessageToSnapshot(snapshot: MessagingSnapshot, message: Me
   };
 }
 
+/**
+ * Adds or replaces a notification in the snapshot by id.
+ */
 export function appendNotificationToSnapshot(snapshot: MessagingSnapshot, notification: NotificationItem): MessagingSnapshot {
   const nextItems = snapshot.items.some((item) => item.id === notification.id)
     ? snapshot.items.map((item) => (item.id === notification.id ? notification : item))
@@ -149,6 +204,9 @@ export function appendNotificationToSnapshot(snapshot: MessagingSnapshot, notifi
   };
 }
 
+/**
+ * Appends a message to a generic thread snapshot.
+ */
 export function appendMessageToThread<T extends { messages: Message[] }>(snapshot: T, message: Message): T {
   return {
     ...snapshot,
@@ -156,6 +214,9 @@ export function appendMessageToThread<T extends { messages: Message[] }>(snapsho
   };
 }
 
+/**
+ * Replaces a temporary optimistic message with the server-confirmed message.
+ */
 export function replaceMessageInSnapshot(snapshot: MessagingSnapshot, tempMessageId: string, message: Message): MessagingSnapshot {
   const nextMessages = snapshot.messages.map((item) => (item.id === tempMessageId ? message : item));
 
@@ -165,6 +226,9 @@ export function replaceMessageInSnapshot(snapshot: MessagingSnapshot, tempMessag
   };
 }
 
+/**
+ * Replaces a temporary optimistic message in a thread snapshot.
+ */
 export function replaceMessageInThread<T extends { messages: Message[] }>(snapshot: T, tempMessageId: string, message: Message): T {
   return {
     ...snapshot,
@@ -172,6 +236,9 @@ export function replaceMessageInThread<T extends { messages: Message[] }>(snapsh
   };
 }
 
+/**
+ * Marks incoming messages from a partner as read in the notifications snapshot.
+ */
 export function markConversationMessagesReadInSnapshot(snapshot: MessagingSnapshot, currentUserId: string, otherUserId: string): MessagingSnapshot {
   return {
     ...snapshot,
@@ -187,6 +254,9 @@ export function markConversationMessagesReadInSnapshot(snapshot: MessagingSnapsh
   };
 }
 
+/**
+ * Marks incoming messages as read in a thread snapshot.
+ */
 export function markConversationMessagesReadInThread<T extends { messages: Message[] }>(snapshot: T, currentUserId: string, otherUserId: string): T {
   return {
     ...snapshot,
@@ -202,6 +272,9 @@ export function markConversationMessagesReadInThread<T extends { messages: Messa
   };
 }
 
+/**
+ * Marks a notification read in the snapshot by id.
+ */
 export function markNotificationReadInSnapshot(snapshot: MessagingSnapshot, notificationId: string): MessagingSnapshot {
   return {
     ...snapshot,
@@ -209,6 +282,9 @@ export function markNotificationReadInSnapshot(snapshot: MessagingSnapshot, noti
   };
 }
 
+/**
+ * Marks all notifications read in the snapshot.
+ */
 export function markAllNotificationsReadInSnapshot(snapshot: MessagingSnapshot): MessagingSnapshot {
   return {
     ...snapshot,
