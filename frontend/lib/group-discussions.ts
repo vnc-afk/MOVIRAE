@@ -9,6 +9,9 @@ import type { Group, Movie, UserProfile } from "@/lib/types";
 
 type PrismaUser = Awaited<ReturnType<typeof prisma.user.findUnique>>;
 
+/**
+ * A single discussion reply normalized for the frontend.
+ */
 export interface DiscussionReplyRecord {
   id: string;
   author: UserProfile;
@@ -16,6 +19,9 @@ export interface DiscussionReplyRecord {
   date: string;
 }
 
+/**
+ * Normalized discussion payload used by the UI.
+ */
 export interface DiscussionRecord {
   id: string;
   author: UserProfile;
@@ -63,6 +69,11 @@ export async function getCurrentUser() {
   });
 }
 
+/**
+ * Returns the current authenticated user record (server-side session lookup).
+ * Returns `null` when not signed in.
+ */
+
 const userSelectForProfile = {
   id: true, email: true, name: true, username: true,
   displayName: true, avatar: true, image: true, bio: true,
@@ -91,6 +102,7 @@ function serializeDiscussionRow(
   },
   currentUserId?: string | null
 ): DiscussionRecord {
+  // Map the DB row shape into the frontend-friendly DiscussionRecord.
   return {
     id: discussion.id,
     author: (isProfileUser(discussion.author) ? buildUserProfile(discussion.author) : null) ?? fallbackProfile,
@@ -111,6 +123,9 @@ function serializeDiscussionRow(
   };
 }
 
+/**
+ * Loads and serializes all discussions for a group.
+ */
 export async function fetchGroupDiscussions(groupId: string, currentUser: CurrentUser | null) {
   const discussions = await prisma.groupDiscussion.findMany({
     where: { groupId },
@@ -121,6 +136,9 @@ export async function fetchGroupDiscussions(groupId: string, currentUser: Curren
   return discussions.map((discussion) => serializeDiscussionRow(discussion, currentUser?.id));
 }
 
+/**
+ * Fetches a single discussion by id and serializes it for the UI.
+ */
 export async function fetchDiscussionById(discussionId: string, currentUserId?: string | null) {
   const discussion = await prisma.groupDiscussion.findUnique({
     where: { id: discussionId },
@@ -144,9 +162,11 @@ async function normalizeGroupMovie(
     }
 
     if (index < 3 && typeof movie.tmdbId === "string") {
+      // For the first few items we attempt to fetch TMDB details to enrich the UI.
       const details = await getMovieDetails(movie.tmdbId);
       if (details) {
         if (movie.groupId) {
+          // Cache enriched metadata back to the group movie row, ignore failures
           await prisma.groupMovie
             .update({
               where: { groupId_tmdbId: { groupId: movie.groupId, tmdbId: movie.tmdbId } },
@@ -279,6 +299,7 @@ export async function createDiscussion(groupId: string, input: { title: string; 
     },
   });
 
+  // Return the updated group detail so callers can refresh their UI state.
   return { value: await fetchGroupDetail(groupId, currentUser) } as const;
 }
 
