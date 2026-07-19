@@ -9,6 +9,14 @@ interface UsePaginatedApiOptions<T> {
   enabled?: boolean;
 }
 
+/**
+ * Generic hook for paginated API queries using React Query infinite loading.
+ *
+ * @param queryKey - Unique cache key for this paginated resource.
+ * @param pageLimit - Number of items per page.
+ * @param fetchPage - Function that loads a page by offset.
+ * @param enabled - Controls whether the query should run.
+ */
 export function usePaginatedApi<T>({
   queryKey,
   pageLimit,
@@ -22,6 +30,7 @@ export function usePaginatedApi<T>({
       return fetchPage(offset);
     },
     getNextPageParam: (lastPage, pages) => {
+      // Fetch the next page only when the last page is full.
       return lastPage.length === pageLimit ? pages.flat().length : undefined;
     },
     initialPageParam: 0,

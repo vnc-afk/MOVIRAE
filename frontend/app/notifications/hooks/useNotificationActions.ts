@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
 import {
   appendMessageToSnapshot,
   appendMessageToThread,
@@ -37,6 +36,12 @@ interface UseNotificationActionsResult {
   sendMessage: (text: string) => Promise<void>;
 }
 
+/**
+ * Provides notification and messaging actions with optimistic cache updates.
+ *
+ * This hook updates the shared notifications snapshot immediately for
+ * a responsive UI, and rolls back changes if the server request fails.
+ */
 export function useNotificationActions({
   activeConversation,
   activeConversationPartnerId,
@@ -52,6 +57,7 @@ export function useNotificationActions({
     async (notification: NotificationItem) => {
       const previousSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
 
+      // Apply an optimistic update so the notification appears read instantly.
       if (previousSnapshot) {
         queryClient.setQueryData<MessagingSnapshot>(
           notificationsKey,
@@ -69,6 +75,7 @@ export function useNotificationActions({
         }
       } catch (error) {
         console.error("Failed to mark notification read:", error);
+        // Roll back optimistic changes when the server update fails.
         if (previousSnapshot) {
           queryClient.setQueryData(notificationsKey, previousSnapshot);
         }
@@ -80,6 +87,7 @@ export function useNotificationActions({
   const markAllRead = useCallback(async () => {
     const previousSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
 
+    // Mark all notifications as read immediately for a fast response.
     if (previousSnapshot) {
       queryClient.setQueryData<MessagingSnapshot>(
         notificationsKey,
@@ -122,6 +130,9 @@ export function useNotificationActions({
       const previousThread = activeConversationPartnerId
         ? queryClient.getQueryData<MessageThreadSnapshot>(threadQueryKey)
         : undefined;
+
+      // Render the new message immediately in both the notifications snapshot
+      // and the current conversation thread while the network request is pending.
 
       if (previousSnapshot) {
         queryClient.setQueryData<MessagingSnapshot>(
@@ -171,6 +182,7 @@ export function useNotificationActions({
         }
       } catch (error) {
         console.error("Failed to send message:", error);
+        // Revert optimistic updates if the message could not be sent.
         if (previousSnapshot) {
           queryClient.setQueryData(notificationsKey, previousSnapshot);
         }
@@ -181,6 +193,8 @@ export function useNotificationActions({
     },
     [activeConversation, activeConversationPartnerId, currentUser, notificationsKey, queryClient, threadQueryKey]
   );
+
+  const markedReadRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (
@@ -193,35 +207,31 @@ export function useNotificationActions({
     }
 
     const hasUnreadIncoming = activeThread.messages.some(
-      (message) => message.fromId !== currentUser.id && !message.isRead
+    (message) => message.fromId !== currentUser.id && !message.isRead
     );
-
     if (!hasUnreadIncoming) return;
 
+    const markKey = activeConversation.partner.id;
+    if (markedReadRef.current === markKey) return;
+
+    // Optimistically mark the current conversation as read when the user views it.
     const previousSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
     const previousThread = activeConversationPartnerId
       ? queryClient.getQueryData<MessageThreadSnapshot>(threadQueryKey)
       : undefined;
+    markedReadRef.current = markKey;
 
     if (previousSnapshot) {
       queryClient.setQueryData<MessagingSnapshot>(
         notificationsKey,
-        markConversationMessagesReadInSnapshot(
-          previousSnapshot,
-          currentUser.id,
-          activeConversation.partner.id
-        )
+        markConversationMessagesReadInSnapshot(previousSnapshot, currentUser.id, activeConversation.partner.id)
       );
     }
 
     if (previousThread && activeConversationPartnerId) {
       queryClient.setQueryData<MessageThreadSnapshot>(
         threadQueryKey,
-        markConversationMessagesReadInThread(
-          previousThread,
-          currentUser.id,
-          activeConversation.partner.id
-        )
+        markConversationMessagesReadInThread(previousThread, currentUser.id, activeConversation.partner.id)
       );
     }
 
@@ -233,6 +243,7 @@ export function useNotificationActions({
       }
     }).catch((error) => {
       console.error("Failed to mark conversation read:", error);
+      markedReadRef.current = null;
       if (previousSnapshot) {
         queryClient.setQueryData(notificationsKey, previousSnapshot);
       }

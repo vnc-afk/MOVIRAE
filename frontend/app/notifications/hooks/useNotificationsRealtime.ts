@@ -4,9 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import useEventSource from "@/hooks/use-event-source";
 import { appendNotificationToSnapshot } from "@/lib/messaging";
 import type { MessagingSnapshot } from "@/lib/messaging";
-import type { MessageThreadSnapshot } from "@/lib/messaging";
 import type { NotificationItem, UserProfile } from "@/lib/types";
-import { queryKeys } from "@/lib/queryKeys";
 
 interface UseNotificationsRealtimeOptions {
   currentUser: UserProfile | null;
@@ -17,6 +15,10 @@ interface UseNotificationsRealtimeOptions {
   refetchThread: () => Promise<unknown>;
 }
 
+/**
+ * Subscribes to notification and message SSE channels and keeps React Query cache
+ * in sync with server-side events.
+ */
 export function useNotificationsRealtime({
   currentUser,
   notificationsKey,
@@ -37,18 +39,20 @@ export function useNotificationsRealtime({
             notification?: NotificationItem;
           };
 
-          if (
-            currentUser &&
-            payload.recipientId === currentUser.id &&
-            payload.notification
-          ) {
+          if (!currentUser) return;
+
+          // Ignore events that are not intended for the current authenticated user.
+          if (payload.recipientId !== currentUser.id) {
+            return; 
+          }
+
+          if (payload.notification) {
             queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
               if (!current) return current;
               return appendNotificationToSnapshot(current, payload.notification as NotificationItem);
             });
             return;
           }
-
           void refetchNotifications();
         } catch (error) {
           console.error("Failed to update notifications from SSE:", error);
@@ -73,6 +77,7 @@ export function useNotificationsRealtime({
       },
       "message-read": async () => {
         try {
+          // Refresh notifications and current thread when read receipts change.
           await refetchNotifications();
           if (activeConversationPartnerId) {
             await refetchThread();

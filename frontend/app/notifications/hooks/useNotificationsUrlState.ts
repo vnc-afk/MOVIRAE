@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 export type NotificationsTab = "notifications" | "messages";
@@ -14,6 +14,12 @@ interface UseNotificationsUrlStateResult {
   selectConversation: (userId: string | null) => void;
 }
 
+/**
+ * Manages the notifications page tab state and selected conversation URL state.
+ *
+ * This hook keeps the selected conversation in sync with the URL query string
+ * while adjusting the mobile message view for list/thread navigation.
+ */
 export function useNotificationsUrlState(isMobile: boolean): UseNotificationsUrlStateResult {
   const pathname = usePathname();
   const router = useRouter();

@@ -19,6 +19,12 @@ const DEFAULT_THREAD: MessageThreadSnapshot = {
   sessionEmail: null,
 };
 
+/**
+ * Loads the currently selected message thread and keeps it cached by conversation.
+ *
+ * The hook returns a stable query key, thread data, and a refetch callback. The
+ * thread query is only enabled when a conversation partner is selected.
+ */
 export function useConversationThread(
   activeConversationPartnerId: string | null,
   enabled: boolean
