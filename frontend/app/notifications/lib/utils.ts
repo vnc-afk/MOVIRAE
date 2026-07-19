@@ -4,6 +4,12 @@ import { queryKeys } from "@/lib/queryKeys";
 import type { NotificationItem } from "@/lib/types";
 import prefetchHelpers from "@/lib/prefetchHelpers";
 
+/**
+ * Merges paginated results into a single deduplicated list.
+ *
+ * This helper preserves the first occurrence of each id while avoiding
+ * duplicates across pages.
+ */
 export const mergePages = <T extends { id: string }>(pages: T[][]): T[] => {
   const seen = new Set<string>();
   const merged: T[] = [];
@@ -35,52 +41,60 @@ export const formatExactDate = (value: string) => {
   return format(parsed, "PPpp");
 };
 
-export async function prefetchNotificationTargets(
-  queryClient: QueryClient,
-  notification: NotificationItem
-) {
-  try {
-    if (notification.user?.id) {
-      await queryClient.prefetchQuery({
+/**
+ * Prefetches data related to a notification so the target page loads faster.
+ */
+export async function prefetchNotificationTargets(queryClient: QueryClient, notification: NotificationItem) {
+  const tasks: Promise<unknown>[] = [];
+
+  if (notification.user?.id) {
+    tasks.push(
+      queryClient.prefetchQuery({
         queryKey: queryKeys.profile.detail(notification.user.id),
         queryFn: async () => {
           const response = await fetch(`/api/users/${notification.user.id}`);
           const json = await response.json().catch(() => null);
           return json?.value ?? json;
         },
-      });
-    }
+      })
+    );
+  }
 
-    if (notification.movieId) {
-      await prefetchHelpers.scheduleMovieDetailPrefetch(
-        queryClient,
-        notification.movieId,
-        `notif-movie-${notification.movieId}`
-      );
-    }
+  if (notification.movieId) {
+    tasks.push(
+      prefetchHelpers.scheduleMovieDetailPrefetch(queryClient, notification.movieId, `notif-movie-${notification.movieId}`)
+    );
+  }
 
-    if (notification.sharedListId) {
-      await queryClient.prefetchQuery({
+  if (notification.sharedListId) {
+    tasks.push(
+      queryClient.prefetchQuery({
         queryKey: queryKeys.sharedLists.detail(notification.sharedListId),
         queryFn: async () => {
           const response = await fetch(`/api/shared-lists/${notification.sharedListId}`);
           const json = await response.json().catch(() => null);
           return json?.value ?? json;
         },
-      });
-    }
+      })
+    );
+  }
 
-    if (notification.groupId) {
-      await queryClient.prefetchQuery({
+  if (notification.groupId) {
+    tasks.push(
+      queryClient.prefetchQuery({
         queryKey: queryKeys.group.detail(notification.groupId),
         queryFn: async () => {
           const response = await fetch(`/api/groups/${notification.groupId}`);
           const json = await response.json().catch(() => null);
           return json?.value ?? json;
         },
-      });
-    }
-  } catch (error) {
-    console.debug("Notification prefetch failed", error);
+      })
+    );
+  }
+
+  const results = await Promise.allSettled(tasks);
+  const failed = results.filter((r) => r.status === "rejected");
+  if (failed.length > 0) {
+    console.debug("Notification prefetch: some targets failed", failed);
   }
 }

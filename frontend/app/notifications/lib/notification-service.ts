@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import type { CurrentUser } from "./api-utils";
 
+/**
+ * Marks all unread notifications as read for the authenticated user.
+ */
 export async function markAllNotificationsRead(
   currentUser: CurrentUser
 ): Promise<{ value: { ok: true } } | { error: "unauthorized" } | { error: "not-found" }> {
@@ -14,6 +17,9 @@ export async function markAllNotificationsRead(
   return { value: { ok: true } };
 }
 
+/**
+ * Marks a single notification read if the current user owns it.
+ */
 export async function markNotificationRead(
   notificationId: string,
   currentUser: CurrentUser
