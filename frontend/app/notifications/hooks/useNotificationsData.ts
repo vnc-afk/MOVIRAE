@@ -101,40 +101,53 @@ export function useNotificationsData(
     [items, messages, users, sessionEmail]
   );
 
-  // Seed the shared notifications cache after each successful fetch so that
-  // optimistic updates and SSE writes can be merged into the same snapshot.
-  useEffect(() => {
-    queryClient.setQueryData<MessagingSnapshot>(notificationsKey, fetchedSnapshot);
-  }, [notificationsKey, queryClient, fetchedSnapshot]);
+  const hasAnySnapshotData = Boolean(notificationsQuery.data || messagesQuery.data || usersQuery.data);
 
-  // FIX: this is the piece that was missing entirely. The component used to
-  // render `fetchedSnapshot` directly — a value derived ONLY from the raw
-  // paginated/user queries above. Every optimistic update elsewhere
-  // (markNotificationRead, markAllRead, sendMessage, the SSE
-  // notification-created/message-created handlers) wrote to
-  // `notificationsKey` via queryClient.setQueryData, but nothing subscribed
-  // to that key for rendering — so those writes were invisible until an
-  // unrelated refetch happened to independently reflect the same change
-  // from the server.
-  //
-  // Subscribing here makes notificationsKey the actual source of truth:
-  // fetchedSnapshot seeds it on every real fetch, and this subscription
-  // picks up both those seeds and any direct optimistic writes other hooks
-  // make to the same key — which is exactly the pattern already used
-  // correctly for threadQueryKey in useConversationThread.
+  function areSnapshotsEqual(
+    left: MessagingSnapshot,
+    right: MessagingSnapshot
+  ) {
+    if (left === right) return true;
+    if (left.sessionEmail !== right.sessionEmail) return false;
+    if (left.items.length !== right.items.length) return false;
+    if (left.messages.length !== right.messages.length) return false;
+    if (left.users.length !== right.users.length) return false;
+
+    for (let i = 0; i < left.items.length; i += 1) {
+      if (left.items[i].id !== right.items[i].id) return false;
+    }
+
+    for (let i = 0; i < left.messages.length; i += 1) {
+      if (left.messages[i].id !== right.messages[i].id) return false;
+    }
+
+    for (let i = 0; i < left.users.length; i += 1) {
+      if (left.users[i].id !== right.users[i].id) return false;
+    }
+
+    return true;
+  }
+
+  useEffect(() => {
+    if (!hasAnySnapshotData) return;
+
+    const currentSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
+    if (currentSnapshot && areSnapshotsEqual(currentSnapshot, fetchedSnapshot)) {
+      return;
+    }
+
+    queryClient.setQueryData<MessagingSnapshot>(notificationsKey, fetchedSnapshot);
+  }, [hasAnySnapshotData, notificationsKey, queryClient, fetchedSnapshot]);
+
   const cachedSnapshotQuery = useQuery<MessagingSnapshot>({
     queryKey: notificationsKey,
     queryFn: () => queryClient.getQueryData<MessagingSnapshot>(notificationsKey) ?? fetchedSnapshot,
-    enabled: false, // never auto-fetches; this is a read-only subscription
+    enabled: false,
     initialData: () => queryClient.getQueryData<MessagingSnapshot>(notificationsKey) ?? fetchedSnapshot,
     staleTime: Infinity,
   });
 
   const snapshot = cachedSnapshotQuery.data ?? fetchedSnapshot;
-
-  // Use the cached snapshot as the render source of truth for notification UI.
-  // This ensures the component observes updates written directly to `notificationsKey`.
-
   return {
     notificationPages,
     messagePages,
