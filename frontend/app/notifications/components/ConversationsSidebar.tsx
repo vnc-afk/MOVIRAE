@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { MessageCircle } from "lucide-react";
 import FriendsList from "@/components/FriendsList";
 import ConversationListItem from "@/components/ConversationListItem";
-import { queryKeys } from "@/lib/queryKeys";
 import type { ConversationSummary } from "@/lib/messaging";
 
 interface ConversationsSidebarProps {
@@ -15,6 +14,12 @@ interface ConversationsSidebarProps {
   onHoverConversation: (userId: string) => void;
 }
 
+/**
+ * Sidebar showing conversation summaries and frequently messaged friends.
+ *
+ * This sidebar uses virtualization so large conversation lists do not
+ * render all items at once.
+ */
 export default function ConversationsSidebar({
   conversations,
   activeConversationId,
@@ -29,16 +34,6 @@ export default function ConversationsSidebar({
     estimateSize: () => 72,
     overscan: 3,
   });
-
-  useEffect(() => {
-    const items = virtualizer.getVirtualItems();
-    if (!items.length) return;
-
-    const last = items[items.length - 1];
-    if (last.index >= conversations.length - 6) {
-      // Prefetching is managed by the caller via onHover
-    }
-  }, [virtualizer.getVirtualItems(), conversations.length]);
 
   return (
     <aside className="rounded-xl bg-card card-shadow overflow-hidden border border-border lg:min-h-0 lg:h-full flex flex-col">

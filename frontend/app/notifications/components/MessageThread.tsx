@@ -5,6 +5,7 @@ import { ChevronLeft, MessageCircle, Send } from "lucide-react";
 import type { ConversationSummary, MessageThreadSnapshot } from "@/lib/messaging";
 import type { UserProfile } from "@/lib/types";
 import { formatExactDate, formatRelativeDate } from "../lib/utils";
+import NoConversationSelected from "./NoConversationSelected";
 
 interface MessageThreadProps {
   activeConversation: ConversationSummary | null;
@@ -15,6 +16,11 @@ interface MessageThreadProps {
   isMobile: boolean;
 }
 
+/**
+ * Renders the active message thread and input form for the selected conversation.
+ *
+ * The component auto-scrolls to the latest message and preserves the draft state.
+ */
 export default function MessageThread({
   activeConversation,
   activeThread,
@@ -39,6 +45,8 @@ export default function MessageThread({
   };
 
   useLayoutEffect(() => {
+    // Scroll to the latest message when the conversation changes or a new
+    // message is appended, using multiple RAF calls to handle layout timing.
     scrollToBottom();
     const raf1 = requestAnimationFrame(scrollToBottom);
     const raf2 = requestAnimationFrame(scrollToBottom);
@@ -50,7 +58,7 @@ export default function MessageThread({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!draftMessage.trim()) return;
+    if (isSending || !draftMessage.trim()) return;
 
     setIsSending(true);
     await onSendMessage(draftMessage);
@@ -147,17 +155,7 @@ export default function MessageThread({
           </form>
         </>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-secondary text-muted-foreground">
-            <MessageCircle className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="font-semibold text-foreground">No conversation selected</p>
-            <p className="text-sm text-muted-foreground">
-              Pick a conversation to read and reply.
-            </p>
-          </div>
-        </div>
+          <NoConversationSelected />
       )}
     </div>
   );

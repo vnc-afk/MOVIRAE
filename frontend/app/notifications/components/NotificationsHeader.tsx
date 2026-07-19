@@ -1,5 +1,5 @@
 import { Bell, Check, MessageCircle } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { NotificationsTab } from "../hooks/useNotificationsUrlState";
 
 interface NotificationsHeaderProps {
@@ -10,6 +10,9 @@ interface NotificationsHeaderProps {
   onMarkAllRead: () => void;
 }
 
+/**
+ * Header for the notifications page, including tab selection and mark-all-read action.
+ */
 export default function NotificationsHeader({
   activeTab,
   unreadAlertCount,

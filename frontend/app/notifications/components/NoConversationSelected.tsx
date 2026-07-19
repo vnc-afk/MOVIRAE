@@ -1,5 +1,8 @@
 import { MessageCircle } from "lucide-react";
 
+/**
+ * Placeholder shown when no conversation is selected.
+ */
 export default function NoConversationSelected() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">

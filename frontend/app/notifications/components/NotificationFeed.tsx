@@ -15,6 +15,12 @@ interface NotificationFeedProps {
   hasMore: boolean;
 }
 
+/**
+ * A virtualized notification feed that loads more alerts as the user scrolls.
+ *
+ * Virtualization keeps the DOM small for long notification lists, and
+ * prefetches related notification targets on hover.
+ */
 export default function NotificationFeed({
   notifications,
   onNotificationClick,
@@ -31,50 +37,21 @@ export default function NotificationFeed({
     estimateSize: () => 84,
     overscan: 5,
   });
+  const virtualItems = virtualizer.getVirtualItems();
+  const lastVisibleIndex = virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
 
   useEffect(() => {
-    const el = parentRef.current;
-    if (!el) return;
-
-    let ticking = false;
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(() => {
-        try {
-          const remaining = el.scrollHeight - (el.scrollTop + el.clientHeight);
-          if (remaining < 400 && hasMore) {
-            loadMore();
-          }
-        } finally {
-          ticking = false;
-        }
-      });
-    };
-
-    el.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [hasMore, loadMore]);
-
-  useEffect(() => {
-    const items = virtualizer.getVirtualItems();
-    if (!items.length) return;
-    const last = items[items.length - 1];
-    if (last.index >= notifications.length - 6 && hasMore) {
+    if (lastVisibleIndex >= notifications.length - 6 && hasMore) {
+      // Load the next page before the user reaches the end of the list.
       loadMore();
     }
-  }, [virtualizer.getVirtualItems(), notifications.length, hasMore, loadMore]);
+  }, [lastVisibleIndex, notifications.length, hasMore, loadMore]);
 
   return (
     <div className="space-y-2 overflow-x-hidden">
-      <div
-        ref={parentRef}
-        className="min-h-0 max-h-[60vh] overflow-y-auto overflow-x-hidden"
-      >
+      <div ref={parentRef} className="min-h-0 max-h-[60vh] overflow-y-auto overflow-x-hidden">
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-          {virtualizer.getVirtualItems().map((virtualRow) => {
+          {virtualItems.map((virtualRow) => {
             const notification = notifications[virtualRow.index];
             return (
               <div
