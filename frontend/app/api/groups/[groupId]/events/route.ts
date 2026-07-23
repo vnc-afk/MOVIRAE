@@ -301,10 +301,10 @@ export async function POST(
       });
 
       // Create notifications for other members
-      const otherMembers = groupMembers.filter((m) => m.userId !== user.id);
+      const otherMembers = groupMembers.filter((m: { userId: string }) => m.userId !== user.id);
       if (otherMembers.length > 0) {
         const createdNotifications = await Promise.all(
-          otherMembers.map((member) =>
+          otherMembers.map((member: { userId: string }) =>
             tx.notification.create({
               data: {
                 recipientId: member.userId,
