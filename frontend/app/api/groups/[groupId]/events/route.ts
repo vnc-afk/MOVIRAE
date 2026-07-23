@@ -9,6 +9,7 @@
  * Copy this pattern to all other endpoints
  */
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   requireAuth,
@@ -256,7 +257,7 @@ export async function POST(
     }
 
     // Create event in transaction
-    const event = await prisma.$transaction(async (tx) => {
+    const event = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Create event
       const newEvent = await tx.event.create({
         data: {
