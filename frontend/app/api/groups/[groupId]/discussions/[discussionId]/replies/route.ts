@@ -58,8 +58,7 @@ export async function POST(
           message: `replied to your discussion`,
         },
       });
-      publishNotificationEvent(notification.id);
-    }
+      publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });    }
 
     // The shared helper updates both the reply count and the discussion payload in one step.
     const result = await addDiscussionReply(groupId, discussionId, replyBody);

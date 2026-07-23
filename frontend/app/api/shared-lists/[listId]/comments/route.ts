@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
             message: `commented on your movie list`,
           },
         });
-        publishNotificationEvent(notification.id);
+        publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
       }
 
       // Notify SSE subscribers that the list has been updated (includes opId for reconciliation).

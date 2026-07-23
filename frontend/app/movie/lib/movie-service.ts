@@ -175,7 +175,7 @@ export async function toggleReviewLike(
         try {
           // lazy require to avoid circular imports at module load
           const { publishNotificationEvent } = await import("@/lib/group-events");
-          publishNotificationEvent(notification.id);
+          publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
         } catch (e) {
           console.warn("publishNotificationEvent failed:", e);
         }
@@ -270,7 +270,7 @@ export async function createReply(
     });
     try {
       const { publishNotificationEvent } = await import("@/lib/group-events");
-      publishNotificationEvent(notification.id);
+      publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
     } catch (e) {
       console.warn("publishNotificationEvent failed:", e);
     }

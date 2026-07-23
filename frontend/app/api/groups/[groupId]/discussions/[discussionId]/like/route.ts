@@ -63,7 +63,7 @@ export async function POST(
             message: `liked your discussion`,
           },
         });
-        publishNotificationEvent(notification.id);
+        publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
       }
     }
 

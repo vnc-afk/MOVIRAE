@@ -54,8 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
             message: `liked your movie list`,
           },
         });
-        publishNotificationEvent(notification.id);
-      }
+        publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });      }
     }
 
     // Notify SSE subscribers of the updated list. `opId` helps reconcile optimistic UI.
