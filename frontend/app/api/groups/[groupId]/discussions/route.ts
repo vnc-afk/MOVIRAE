@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import {
   getCurrentUser,
   requireAuth,
@@ -79,7 +80,7 @@ export async function POST(
     }
 
     // Persist the discussion and create notifications in a transaction
-    const discussion = await prisma.$transaction(async (tx) => {
+    const discussion = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const newDiscussion = await tx.groupDiscussion.create({
         data: {
           groupId,
