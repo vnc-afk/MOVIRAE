@@ -294,22 +294,23 @@ export async function POST(
       // Create notifications for other members
       const otherMembers = groupMembers.filter((m) => m.userId !== user.id);
       if (otherMembers.length > 0) {
-        const notifications = await tx.notification.createMany({
-          data: otherMembers.map((member) => ({
-            recipientId: member.userId,
-            actorId: user.id,
-            type: "event_created" as const,
-            groupId,
-            eventId: newEvent.id,
-            message: `created a new event: "${title}"`,
-          })),
-        });
+        const createdNotifications = await Promise.all(
+          otherMembers.map((member) =>
+            tx.notification.create({
+              data: {
+                recipientId: member.userId,
+                actorId: user.id,
+                type: "event_created" as const, // or "discussion_created" in the discussions route
+                groupId,
+                eventId: newEvent.id, // or discussionId: discussion.id in the discussions route
+                message: `created a new event: "${title}"`, // adjust per route
+              },
+            })
+          )
+        );
 
-        // Publish notification events
-        if (notifications.count > 0) {
-          for (const member of otherMembers) {
-            publishNotificationEvent(`${groupId}-${member.userId}`);
-          }
+        for (const notification of createdNotifications) {
+          publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
         }
       }
 
