@@ -796,7 +796,9 @@ async function getUserMessages(
   const conversationPartnerIds = Array.from(
     new Set(
       messages
-        .map((message) => (message.fromId === currentUser.id ? message.toId : message.fromId))
+        .map((message: { fromId: string; toId: string | null }) =>
+          message.fromId === currentUser.id ? message.toId : message.fromId
+        )
         .filter((partnerId): partnerId is string => typeof partnerId === "string" && partnerId.length > 0)
     )
   );
