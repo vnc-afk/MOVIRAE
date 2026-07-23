@@ -799,7 +799,7 @@ async function getUserMessages(
         .map((message: { fromId: string; toId: string | null }) =>
           message.fromId === currentUser.id ? message.toId : message.fromId
         )
-        .filter((partnerId): partnerId is string => typeof partnerId === "string" && partnerId.length > 0)
+        .filter((partnerId: string | null): partnerId is string => typeof partnerId === "string" && partnerId.length > 0)
     )
   );
 
