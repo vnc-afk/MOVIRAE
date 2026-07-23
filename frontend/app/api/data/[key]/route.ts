@@ -814,7 +814,15 @@ async function getUserMessages(
     readStates.map(({ partnerId, state }) => [partnerId, state])
   );
 
-  return messages.map((message) => ({
+  return messages.map((message: {
+    id: string;
+    fromId: string;
+    toId: string;
+    text: string;
+    createdAt: Date;
+    from: Record<string, unknown>;
+    to: Record<string, unknown>;
+  }) => ({
     id: message.id,
     from: buildUserProfile(message.from)!,
     to: buildUserProfile(message.to)!,
