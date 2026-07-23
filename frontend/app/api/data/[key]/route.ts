@@ -218,6 +218,29 @@ async function normalizeGroupMovie(movie: any, index: number): Promise<any> {
   };
 }
 
+type GroupWithRelations = {
+  id: string;
+  name: string;
+  avatar: string | null;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  creatorId: string;
+  members: Array<{ userId: string; user: any }>;
+  movies: any[];
+  discussions: Array<{
+    id: string;
+    author: any;
+    title: string;
+    body: string;
+    createdAt: Date;
+    likes: number;
+    replies: number;
+    pinned: boolean;
+    movieId: string | null;
+  }>;
+};
+
 async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
   try {
     const groups = await prisma.group.findMany({
@@ -227,7 +250,7 @@ async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>
         discussions: { include: { author: true } },
       },
       orderBy: { createdAt: "desc" },
-    });
+    }) as GroupWithRelations[];
 
     return await Promise.all(groups.map(async (group) => ({
       id: group.id,
