@@ -880,7 +880,7 @@ async function getUserFavorites(userId: string) {
     where: { userId },
     orderBy: { addedAt: "desc" },
   });
-  return favorites.map((item) => item.tmdbId);
+  return favorites.map((item: { tmdbId: string }) => item.tmdbId);
 }
 
 async function getUserWatched(userId: string) {
