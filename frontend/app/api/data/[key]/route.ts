@@ -508,15 +508,15 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     return acc;
   }, {} as Record<string, number>);
 
-  const contextCounts = watchExperienceStats.contextBreakdown.reduce<Record<string, number>>((acc, entry) => {
+  const contextCounts = watchExperienceStats.contextBreakdown.reduce((acc: Record<string, number>, entry: { context: string; count: number }) => {
     acc[entry.context] = entry.count;
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
 
-  const moodCounts = watchExperienceStats.moodBreakdown.reduce<Record<string, number>>((acc, entry) => {
+  const moodCounts = watchExperienceStats.moodBreakdown.reduce((acc: Record<string, number>, entry: { mood: string; count: number }) => {
     acc[entry.mood] = entry.count;
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
 
   const ratingCounts = reviews.reduce<Record<number, number>>((acc, review) => {
     acc[review.rating] = (acc[review.rating] ?? 0) + 1;
