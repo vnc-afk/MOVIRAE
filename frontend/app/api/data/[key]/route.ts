@@ -663,7 +663,7 @@ async function getUserNotifications(
     )
   );
 
-  const reviews = missingMovieByReviewIds.length
+  const reviews: Array<{ id: string; tmdbId: string }> = missingMovieByReviewIds.length
     ? await prisma.review.findMany({
         where: { id: { in: missingMovieByReviewIds } },
         select: { id: true, tmdbId: true },
@@ -677,8 +677,8 @@ async function getUserNotifications(
       })
     : [];
 
-  const reviewMovieMap = new Map(reviews.map((review) => [review.id, review.tmdbId]));
-  const discussionGroupMap = new Map(discussions.map((discussion) => [discussion.id, discussion.groupId]));
+  const reviewMovieMap = new Map(reviews.map((review: { id: string; tmdbId: string }) => [review.id, review.tmdbId]));
+  const discussionGroupMap = new Map(discussions.map((discussion: { id: string; groupId: string | null }) => [discussion.id, discussion.groupId]));
 
   const databaseNotifications = notifications.map((notification) => {
     const movieId = notification.movieId ?? (notification.reviewId ? reviewMovieMap.get(notification.reviewId) : undefined);
