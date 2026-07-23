@@ -680,7 +680,20 @@ async function getUserNotifications(
   const reviewMovieMap = new Map(reviews.map((review: { id: string; tmdbId: string }) => [review.id, review.tmdbId]));
   const discussionGroupMap = new Map(discussions.map((discussion: { id: string; groupId: string | null }) => [discussion.id, discussion.groupId]));
 
-  const databaseNotifications = notifications.map((notification) => {
+  const databaseNotifications = notifications.map((notification: {
+    id: string;
+    type: string;
+    message: string;
+    createdAt: Date;
+    read: boolean;
+    movieId: string | null;
+    reviewId: string | null;
+    discussionId: string | null;
+    eventId: string | null;
+    sharedListId: string | null;
+    groupId: string | null;
+    actor: any;
+  }) => {
     const movieId = notification.movieId ?? (notification.reviewId ? reviewMovieMap.get(notification.reviewId) : undefined);
     const groupId = notification.groupId ?? (notification.discussionId ? discussionGroupMap.get(notification.discussionId) : undefined);
 
