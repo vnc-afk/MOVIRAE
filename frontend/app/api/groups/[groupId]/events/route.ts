@@ -9,8 +9,6 @@
  * Copy this pattern to all other endpoints
  */
 
-import type { Prisma } from "@prisma/client";
-
 import { prisma } from "@/lib/prisma";
 import {
   requireAuth,
@@ -95,18 +93,21 @@ export async function GET(
     const { page, limit, upcoming, sort, order } = queryResult.data;
     const skip = (page - 1) * limit;
 
+    type EventFindManyArgs = NonNullable<Parameters<typeof prisma.event.findMany>[0]>;
+
     // Restrict the fetch to the requested group and optionally to upcoming dates.
-    const where: Prisma.EventWhereInput = { groupId };
+    const where: NonNullable<EventFindManyArgs["where"]> = { groupId };
 
     if (upcoming) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      where.startDate = { gte: today };
+      Object.assign(where, { startDate: { gte: today } });
     }
 
     // Build order by
-    const orderBy: Prisma.EventOrderByWithRelationInput =
-      sort === "title" ? { title: order } : { startDate: order };
+    const orderBy: NonNullable<EventFindManyArgs["orderBy"]> = sort === "title"
+      ? { title: order }
+      : { startDate: order };
 
     // Fetch events
     const [events, total] = await prisma.$transaction([
