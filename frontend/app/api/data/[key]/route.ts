@@ -972,7 +972,14 @@ async function getUserReviews(currentUser: Awaited<ReturnType<typeof getCurrentU
     orderBy: { createdAt: "desc" },
   });
 
-  return reviews.map((review) => ({
+  return reviews.map((review: {
+    id: string;
+    tmdbId: string;
+    rating: number;
+    comment: string | null;
+    createdAt: Date;
+    likes: number;
+  }) => ({
     id: review.id,
     movieId: review.tmdbId,
     rating: review.rating,
