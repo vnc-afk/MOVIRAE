@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
 import { getMessageThreadReadState } from "@/lib/message-threads";
 import type { Movie, UserProfile } from "@/lib/types";
+import type { Prisma } from "@prisma/client";
 import { getWatchExperienceStats } from "@/lib/watch-experiences";
 import { getHomeActivityFeedSnapshot, refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot, getUserStatsSnapshot } from "@/lib/aggregations";
 
@@ -605,6 +606,66 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
   };
 }
 
+async function getActivityFeed() {
+  const reviews: Prisma.ReviewGetPayload<{ include: { user: true } }>[] = await prisma.review.findMany({
+    include: { user: true },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+  });
+
+  const watchlist = await prisma.userWatchlistItem.findMany({
+    include: { user: true },
+    orderBy: { addedAt: "desc" },
+    take: 8,
+  });
+
+  const reviewFeedItems = reviews.map((review) => ({
+    id: `review-${review.id}` as const,
+    action: "reviewed" as const,
+    user: buildUserProfile(review.user),
+    movieId: review.tmdbId,
+    rating: review.rating,
+    comment: review.comment ?? undefined,
+    date: review.createdAt.toISOString(),
+  }));
+
+  const watchlistFeedItems = watchlist.map((watch) => ({
+    id: `watch-${watch.id}` as const,
+    action: "added_to_watchlist" as const,
+    user: buildUserProfile(watch.user),
+    movieId: watch.tmdbId,
+    date: watch.addedAt.toISOString(),
+  }));
+
+  const feedItems = [...reviewFeedItems, ...watchlistFeedItems];
+
+  const uniqueMovieIds = Array.from(new Set(feedItems.map((item) => item.movieId))).slice(0, 10);
+  const movies = await getMovieDetailsBatch(uniqueMovieIds);
+  const movieMap = new Map(movies.map((movie) => [movie.id, movie]));
+
+  return feedItems
+    .filter((item) => movieMap.has(item.movieId))
+    .map((item) => {
+      const base = {
+        id: item.id,
+        action: item.action,
+        user: item.user!,
+        movie: movieMap.get(item.movieId)!,
+        date: item.date,
+      };
+
+      if (item.action === "reviewed") {
+        return {
+          ...base,
+          rating: item.rating,
+          comment: item.comment,
+        };
+      }
+
+      return base;
+    })
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+}
 
 async function getUserNotifications(
   currentUser: Awaited<ReturnType<typeof getCurrentUser>>,
