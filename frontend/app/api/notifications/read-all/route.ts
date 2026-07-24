@@ -4,9 +4,15 @@ import { markAllNotificationsRead } from "@/app/notifications/lib/notification-s
 
 export const runtime = "nodejs";
 
-export async function PATCH() {
+/**
+ * Marks all unread notifications as read for the authenticated user.
+ *
+ * This endpoint enforces authentication and translates service errors into
+ * standard API responses.
+ */
+export async function PATCH(request: Request) {
   try {
-    const currentUser = await requireAuth(new Request("/"));
+    const currentUser = await requireAuth(request);
     const result = await markAllNotificationsRead(currentUser);
 
     if ("error" in result) {

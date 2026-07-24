@@ -1,32 +1,55 @@
-import { NextResponse } from "next/server";
+import { getCurrentUser } from "@/app/notifications/lib/api-utils";
 import { subscribeToNotifications } from "@/app/notifications/lib/events";
+import type { NotificationEvent } from "@/app/notifications/lib/events";
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request) {
+/**
+ * Server-Sent Events endpoint for notification updates.
+ *
+ * Only events destined for the authenticated recipient are forwarded.
+ * A heartbeat comment keeps the connection alive through proxies.
+ */
+export async function GET(request: Request) {
   const encoder = new TextEncoder();
+  const currentUser = await getCurrentUser();
 
   const stream = new ReadableStream({
     start(controller) {
-      const send = (event: { type: string; notificationId: string; timestamp: string }) => {
-        controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
+      let isClosed = false;
+
+      const enqueue = (chunk: string) => {
+        if (!isClosed) controller.enqueue(encoder.encode(chunk));
+      };
+
+      const send = (event: NotificationEvent) => {
+        if (!currentUser) return;
+
+        if (event.recipientId) {
+          if (event.recipientId !== currentUser.id) return;
+        } else {
+          console.warn("notification-created event published with no recipientId — update its publish call site to include one", event);
+        }
+
+        enqueue(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
       };
 
       const unsubscribe = subscribeToNotifications(send);
-      controller.enqueue(encoder.encode(`event: connected\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`));
+      enqueue(`event: connected\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
 
-      const heartbeatId = setInterval(() => {
-        controller.enqueue(encoder.encode(`: heartbeat\n\n`));
-      }, 30000);
+      const heartbeatId = setInterval(() => enqueue(`: heartbeat\n\n`), 30000);
 
-      _request.signal.addEventListener("abort", () => {
+      const close = () => {
+        if (isClosed) return;
+        isClosed = true;
         clearInterval(heartbeatId);
         unsubscribe();
         controller.close();
-      });
+      };
+
+      request.signal.addEventListener("abort", close, { once: true });
     },
     cancel() {
-      // handled via abort listener
     },
   });
 
