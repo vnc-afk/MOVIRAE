@@ -793,7 +793,7 @@ async function getUserMessages(
     skip: offset,
   });
 
-  const conversationPartnerIds: string[] = Array.from(
+  const conversationPartnerIds = Array.from(
     new Set(
       messages
         .map((message: { fromId: string; toId: string | null }) =>
