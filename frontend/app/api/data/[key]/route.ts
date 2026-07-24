@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 
+import type { SharedList, SharedListCollaborator, SharedListMovie, User } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
@@ -74,18 +75,10 @@ function normalizeDiscussionReplies(value: unknown) {
     }));
 }
 
-type SharedListWithRelations = {
-  id: string;
-  name: string;
-  description: string;
-  visibility: string;
-  owner: Record<string, unknown>;
-  collaborators: Array<{ user: Record<string, unknown> }>;
-  movies: Array<{ metadata?: unknown; tmdbId?: string }>;
-  likes: number;
-  comments: number;
-  createdAt: Date;
-  groupId: string | null;
+type SharedListWithRelations = SharedList & {
+  owner: User;
+  collaborators: Array<SharedListCollaborator & { user: User }>;
+  movies: SharedListMovie[];
 };
 
 async function getSharedLists() {
