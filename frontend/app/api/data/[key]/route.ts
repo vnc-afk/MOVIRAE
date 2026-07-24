@@ -210,7 +210,16 @@ async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>
       include: {
         members: { include: { user: true } },
         movies: true,
-        discussions: { include: { author: true } },
+        discussions: {
+          include: {
+            author: true,
+            likesRecords: { select: { userId: true } },
+            replyRecords: {
+              orderBy: { createdAt: "asc" },
+              include: { author: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -235,8 +244,13 @@ async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>
         date: discussion.createdAt.toISOString(),
         likes: discussion.likes,
         replies: discussion.replies,
-        likedByMe: currentUser ? normalizeDiscussionLikes(discussion.likedBy).includes(currentUser.id) : false,
-        replyItems: normalizeDiscussionReplies(discussion.replyItems),
+        likedByMe: currentUser ? discussion.likesRecords.some((record) => record.userId === currentUser.id) : false,
+        replyItems: discussion.replyRecords.map((reply) => ({
+          id: reply.id,
+          author: buildUserProfile(reply.author),
+          body: reply.body,
+          date: reply.createdAt.toISOString(),
+        })),
         pinned: discussion.pinned,
         movieId: discussion.movieId ?? undefined,
       })),
@@ -320,8 +334,6 @@ async function setGroups(payload: unknown, currentUser: Awaited<ReturnType<typeo
               body: discussion.body || "",
               likes: typeof discussion.likes === "number" ? discussion.likes : 0,
               replies: typeof discussion.replies === "number" ? discussion.replies : 0,
-              likedByMe: currentUser ? normalizeDiscussionLikes(discussion.likedBy).includes(currentUser.id) : false,
-              replyItems: normalizeDiscussionReplies(discussion.replyItems),
               pinned: Boolean(discussion.pinned),
               movieId: typeof discussion.movieId === "string" ? discussion.movieId : undefined,
             })),
