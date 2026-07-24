@@ -25,10 +25,10 @@ export async function GET() {
     const followings = await prisma.userFollow.findMany({ where: { followerId: currentUser.id }, select: { followingId: true } });
     const followers = await prisma.userFollow.findMany({ where: { followingId: currentUser.id }, select: { followerId: true } });
 
-    const followingIds = new Set(followings.map(f => f.followingId));
-    const followerIds = new Set(followers.map(f => f.followerId));
+    const followingIds = new Set(followings.map((f: { followingId: string }) => f.followingId));
+    const followerIds = new Set(followers.map((f: { followerId: string }) => f.followerId));
 
-    const mutualIds = [...followingIds].filter(id => followerIds.has(id));
+    const mutualIds = [...followingIds].filter((id: string) => followerIds.has(id));
 
     if (mutualIds.length === 0) {
       return NextResponse.json({ value: [] });
@@ -48,7 +48,7 @@ export async function GET() {
       },
     });
 
-    const profiles = users.map(u => buildUserProfile(u)).filter(Boolean);
+    const profiles = users.map((u: { id: string; email: string | null; name: string | null; username: string | null; displayName: string | null; avatar: string | null; image: string | null; bio: string | null }) => buildUserProfile(u)).filter(Boolean);
 
     return NextResponse.json({ value: profiles });
   } catch (error) {
