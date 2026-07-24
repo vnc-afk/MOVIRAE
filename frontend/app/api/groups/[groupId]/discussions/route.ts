@@ -105,7 +105,7 @@ export async function POST(
         // of a real notification id. Promise.all of individual creates gives us
         // the actual created rows to publish correctly.
         const createdNotifications = await Promise.all(
-          otherMembers.map((member: { userId: string }) =>
+          otherMembers.map((member) =>
             tx.notification.create({
               data: {
                 recipientId: member.userId,
