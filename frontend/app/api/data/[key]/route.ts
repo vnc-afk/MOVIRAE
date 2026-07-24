@@ -6,7 +6,6 @@ import { prisma } from "@/lib/prisma";
 import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
 import { getMessageThreadReadState } from "@/lib/message-threads";
 import type { Movie, UserProfile } from "@/lib/types";
-import type { Prisma } from "@prisma/client";
 import { getWatchExperienceStats } from "@/lib/watch-experiences";
 import { getHomeActivityFeedSnapshot, refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot, getUserStatsSnapshot } from "@/lib/aggregations";
 
@@ -607,7 +606,7 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
 }
 
 async function getActivityFeed() {
-  const reviews: Prisma.ReviewGetPayload<{ include: { user: true } }>[] = await prisma.review.findMany({
+  const reviews = await prisma.review.findMany({
     include: { user: true },
     orderBy: { createdAt: "desc" },
     take: 8,
