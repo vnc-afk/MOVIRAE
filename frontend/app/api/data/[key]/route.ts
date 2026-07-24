@@ -651,7 +651,7 @@ async function getUserNotifications(
     new Set(
       notifications
         .filter((notification: { movieId: string | null; reviewId: string | null }) => !notification.movieId && notification.reviewId)
-        .map((notification: { reviewId: string | null }) => notification.reviewId as string)
+        .map((notification) => notification.reviewId as string)
     )
   );
 
@@ -659,7 +659,7 @@ async function getUserNotifications(
     new Set(
       notifications
         .filter((notification: { groupId: string | null; discussionId: string | null }) => !notification.groupId && notification.discussionId)
-        .map((notification: { discussionId: string | null }) => notification.discussionId as string)
+        .map((notification) => notification.discussionId as string)
     )
   );
 
