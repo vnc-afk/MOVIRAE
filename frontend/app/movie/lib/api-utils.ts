@@ -1,21 +1,17 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { User } from "@prisma/client";
 
-export type CurrentUser = Pick<
-  User,
-  | "id"
-  | "email"
-  | "name"
-  | "username"
-  | "displayName"
-  | "avatar"
-  | "image"
-  | "bio"
-  | "emailVerified"
-  | "passwordHash"
->;
+export interface CurrentUser {
+  id: string;
+  email: string | null;
+  name: string | null;
+  username: string | null;
+  displayName: string | null;
+  avatar: string | null;
+  image: string | null;
+  bio: string | null;
+}
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await getServerSession(authOptions);
