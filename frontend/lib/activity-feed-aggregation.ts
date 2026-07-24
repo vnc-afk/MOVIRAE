@@ -51,8 +51,42 @@ async function buildHomeActivityFeedSnapshot(): Promise<ActivityItem[]> {
     take: 8,
   });
 
+  type ReviewFeedItem = {
+    id: string;
+    tmdbId: string;
+    rating: number;
+    comment: string | null;
+    createdAt: Date;
+    user: {
+      id: string;
+      name: string | null;
+      email: string | null;
+      image: string | null;
+      username: string | null;
+      displayName: string | null;
+      avatar: string | null;
+      bio: string | null;
+    };
+  };
+
+  type WatchlistFeedItem = {
+    id: string;
+    tmdbId: string;
+    addedAt: Date;
+    user: {
+      id: string;
+      name: string | null;
+      email: string | null;
+      image: string | null;
+      username: string | null;
+      displayName: string | null;
+      avatar: string | null;
+      bio: string | null;
+    };
+  };
+
   const feedItems = [
-    ...reviews.map((review) => ({
+    ...reviews.map((review: ReviewFeedItem) => ({
       id: `review-${review.id}` as const,
       action: "reviewed" as const,
       user: buildUserProfile(review.user),
@@ -61,7 +95,7 @@ async function buildHomeActivityFeedSnapshot(): Promise<ActivityItem[]> {
       comment: review.comment ?? undefined,
       date: review.createdAt.toISOString(),
     })),
-    ...watchlist.map((watch) => ({
+    ...watchlist.map((watch: WatchlistFeedItem) => ({
       id: `watch-${watch.id}` as const,
       action: "added_to_watchlist" as const,
       user: buildUserProfile(watch.user),
