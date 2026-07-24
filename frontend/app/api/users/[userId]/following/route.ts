@@ -60,17 +60,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
             await prisma.userFollow.findMany({
               where: {
                 followerId: currentUser.id,
-                followingId: { in: following.map((follow) => follow.followingId) },
+                followingId: { in: following.map((follow: { followingId: string }) => follow.followingId) },
               },
               select: { followingId: true },
             })
-          ).map((follow) => follow.followingId)
+          ).map((follow: { followingId: string }) => follow.followingId)
         )
       : new Set<string>();
 
     return NextResponse.json({
       value: following
-        .map((follow) => buildUserProfile(follow.following, followingIds.has(follow.followingId)))
+        .map((follow: { following: typeof following[number]["following"]; followingId: string }) =>
+          buildUserProfile(follow.following, followingIds.has(follow.followingId))
+        )
         .filter(Boolean),
     });
   } catch (error) {
