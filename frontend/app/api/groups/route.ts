@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    const currentGroupIds = new Set(membership.map((member) => member.groupId));
+    const currentGroupIds = new Set(membership.map((member: { groupId: string }) => member.groupId));
 
     const groupRecords = groups.map((group) => ({
       id: group.id,
