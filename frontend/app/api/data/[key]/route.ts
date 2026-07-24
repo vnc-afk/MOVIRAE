@@ -583,23 +583,23 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     countriesExplored,
     activityStart,
     activityEnd,
-    monthlyBreakdown: (Object.entries(monthlyCounts) as [string, number][])
+    monthlyBreakdown: Object.entries(monthlyCounts)
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, count]) => ({ month, count })),
     genreBreakdown,
-    ratingDistribution: (Object.entries(ratingCounts) as [string, number][])
+    ratingDistribution: Object.entries(ratingCounts)
       .map(([stars, count]) => ({ stars: Number(stars), count }))
       .sort((a, b) => a.stars - b.stars),
-    moodBreakdown: (Object.entries(moodCounts) as [string, number][])
-      .map(([mood, count]) => ({ mood, count }))
+    moodBreakdown: Object.entries(moodCounts)
+      .map(([mood, count]) => ({ mood: mood as any, count }))
       .sort((a, b) => b.count - a.count || a.mood.localeCompare(b.mood)),
-    platformBreakdown: (Object.entries(platformCounts) as [string, number][])
-      .map(([platform, count]) => ({ platform, count }))
+    platformBreakdown: Object.entries(platformCounts)
+      .map(([platform, count]) => ({ platform: platform as any, count }))
       .sort((a, b) => b.count - a.count || a.platform.localeCompare(b.platform)),
-    contextBreakdown: (Object.entries(contextCounts) as [string, number][])
-      .map(([context, count]) => ({ context, count }))
+    contextBreakdown: Object.entries(contextCounts)
+      .map(([context, count]) => ({ context: context as any, count }))
       .sort((a, b) => b.count - a.count || a.context.localeCompare(b.context)),
-    weekdayBreakdown: (Object.entries(weekdayCounts) as [string, number][])
+    weekdayBreakdown: Object.entries(weekdayCounts)
       .map(([day, count]) => ({ day, count }))
       .sort((a, b) => WEEKDAY_ORDER.indexOf(a.day as (typeof WEEKDAY_ORDER)[number]) - WEEKDAY_ORDER.indexOf(b.day as (typeof WEEKDAY_ORDER)[number])),
   };
