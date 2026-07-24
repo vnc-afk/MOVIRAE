@@ -70,7 +70,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
 
     return NextResponse.json({
       value: followers
-        .map((follow) => buildUserProfile(follow.follower, followingIds.has(follow.followerId)))
+        .map((follow: { follower: typeof followers[number]["follower"]; followerId: string }) =>
+          buildUserProfile(follow.follower, followingIds.has(follow.followerId))
+        )
         .filter(Boolean),
     });
   } catch (error) {
