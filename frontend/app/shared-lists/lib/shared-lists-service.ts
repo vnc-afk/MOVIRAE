@@ -4,10 +4,7 @@ import { getMovieDetails } from "@/lib/tmdb";
 import { getSharedListForView } from "@/lib/shared-lists";
 import type { CurrentUser } from "./api-utils";
 
-type TransactionClient = {
-  sharedListLike: typeof prisma.sharedListLike;
-  sharedList: typeof prisma.sharedList;
-};
+type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 /*
   Server-side helpers for shared lists API routes.
