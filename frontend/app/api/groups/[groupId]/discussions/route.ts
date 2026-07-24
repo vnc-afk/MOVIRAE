@@ -78,53 +78,45 @@ export async function POST(
       return apiNotFound("Group");
     }
 
-    // Persist the discussion and create notifications in a transaction
-    const discussion = await prisma.$transaction(async (tx) => {
-      const newDiscussion = await tx.groupDiscussion.create({
-        data: {
-          groupId,
-          authorId: currentUser.id,
-          title,
-          body: discussionBody,
-          movieId,
-          likes: 0,
-          replies: 0,
-        },
+    // Persist the discussion first so the server can attach a stable identifier to the event payload.
+    const discussion = await prisma.groupDiscussion.create({
+      data: {
+        groupId,
+        authorId: currentUser.id,
+        title,
+        body: discussionBody,
+        movieId,
+        likes: 0,
+        replies: 0,
+      },
+    });
+
+    const groupMembers = await prisma.groupMember.findMany({
+      where: { groupId },
+      select: { userId: true },
+    });
+
+    const otherMembers = groupMembers.filter((member) => member.userId !== currentUser.id);
+    if (otherMembers.length > 0) {
+      const notificationData = otherMembers.map((member) => ({
+        recipientId: member.userId,
+        actorId: currentUser.id,
+        type: "discussion_created" as const,
+        groupId,
+        discussionId: discussion.id,
+        message: `started a discussion in your group: "${title}"`,
+      }));
+
+      const createdNotifications = await prisma.notification.createMany({
+        data: notificationData,
       });
 
-      const groupMembers = await tx.groupMember.findMany({
-        where: { groupId },
-        select: { userId: true },
-      });
-
-      const otherMembers = groupMembers.filter((member) => member.userId !== currentUser.id);
-      if (otherMembers.length > 0) {
-        // FIX: createMany() returns only a count, no row data — that's why the old
-        // code published a fabricated `${groupId}-${member.userId}` string instead
-        // of a real notification id. Promise.all of individual creates gives us
-        // the actual created rows to publish correctly.
-        const createdNotifications = await Promise.all(
-          otherMembers.map((member) =>
-            tx.notification.create({
-              data: {
-                recipientId: member.userId,
-                actorId: currentUser.id,
-                type: "discussion_created" as const,
-                groupId,
-                discussionId: newDiscussion.id,
-                message: `created a new discussion: "${title}"`,
-              },
-            })
-          )
-        );
-
-        for (const notification of createdNotifications) {
-          publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
+      if (createdNotifications.count > 0) {
+        for (const member of otherMembers) {
+          publishNotificationEvent(`${groupId}-${member.userId}`);
         }
       }
-
-      return newDiscussion;
-    });
+    }
 
     publishGroupEvent(
       groupId,
