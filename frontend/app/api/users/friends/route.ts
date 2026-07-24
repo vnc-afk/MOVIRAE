@@ -28,7 +28,7 @@ export async function GET() {
     const followingIds = new Set(followings.map((f: { followingId: string }) => f.followingId));
     const followerIds = new Set(followers.map((f: { followerId: string }) => f.followerId));
 
-    const mutualIds = [...followingIds].filter((id: unknown): id is string => typeof id === "string" && followerIds.has(id));
+    const mutualIds = [...followingIds].filter((id: string) => followerIds.has(id));
 
     if (mutualIds.length === 0) {
       return NextResponse.json({ value: [] });
