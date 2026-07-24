@@ -251,7 +251,7 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
             },
             select: { followingId: true },
           })
-        ).map((follow) => follow.followingId)
+        ).map((follow: { followingId: string }) => follow.followingId)
       )
     : new Set<string>();
 
