@@ -1,5 +1,4 @@
 import { getServerSession } from "next-auth/next";
-import { Prisma } from "@prisma/client";
 
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -172,7 +171,7 @@ async function normalizeGroupMovie(
           await prisma.groupMovie
             .update({
               where: { groupId_tmdbId: { groupId: movie.groupId, tmdbId: movie.tmdbId } },
-              data: { metadata: details as unknown as Prisma.InputJsonValue },
+              data: { metadata: details as any },
             })
             .catch((err) => console.error("Failed to cache movie metadata:", err));
         }
