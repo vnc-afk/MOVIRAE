@@ -8,6 +8,17 @@ import { getMessageThreadReadState } from "@/lib/message-threads";
 
 export const runtime = "nodejs";
 
+type MessageProfileUser = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  username?: string | null;
+  displayName?: string | null;
+  avatar?: string | null;
+  image?: string | null;
+  bio?: string | null;
+};
+
 export async function GET(_request: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
     const session = await getServerSession(authOptions);
@@ -97,7 +108,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
       value: {
         partner: buildUserProfile(otherUser),
         sessionEmail: currentUser.email ?? null,
-        messages: messages.map((message) => ({
+        messages: messages.map((message: {
+          id: string;
+          fromId: string;
+          toId: string;
+          text: string;
+          createdAt: Date;
+          from: MessageProfileUser;
+          to: MessageProfileUser;
+        }) => ({
           id: message.id,
           from: buildUserProfile(message.from)!,
           to: buildUserProfile(message.to)!,
