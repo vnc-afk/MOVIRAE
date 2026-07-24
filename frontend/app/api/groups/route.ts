@@ -74,14 +74,24 @@ export async function GET(request: Request) {
 
     const currentGroupIds = new Set(membership.map((member: { groupId: string }) => member.groupId));
 
-    const groupRecords = groups.map((group) => ({
+    const groupRecords = groups.map((group: {
+      id: string;
+      name: string;
+      description: string | null;
+      avatar: string | null;
+      creatorId: string;
+      creator: any;
+      members: Array<{ user: any }>;
+      sharedLists: any[];
+      createdAt: Date;
+    }) => ({
       id: group.id,
       name: group.name,
       description: group.description || "",
       avatar: group.avatar || "",
       creatorId: group.creatorId,
       creator: buildUserProfile(group.creator),
-      members: group.members.map((member) => buildUserProfile(member.user)),
+      members: group.members.map((member: { user: any }) => buildUserProfile(member.user)),
       memberCount: group.members.length,
       sharedList: group.sharedLists || [],
       joined: currentGroupIds.has(group.id),
