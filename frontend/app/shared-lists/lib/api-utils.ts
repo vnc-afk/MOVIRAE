@@ -14,8 +14,6 @@ export type CurrentUser = Pick<
   | "avatar"
   | "image"
   | "bio"
-  | "emailVerified"
-  | "passwordHash"
 >;
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {

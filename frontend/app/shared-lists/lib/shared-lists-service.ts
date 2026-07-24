@@ -1,10 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
-import { getSharedListForView } from "@/lib/shared-lists";
+import { getSharedListForView} from "@/lib/shared-lists";
 import type { CurrentUser } from "./api-utils";
-
-type TransactionClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
 
 /*
   Server-side helpers for shared lists API routes.
@@ -56,7 +54,7 @@ export async function toggleSharedListLike(
 > {
   // Use a transaction for like/unlike to ensure the like record and the
   // `likes` counter on `sharedList` remain consistent.
-  const transactionResult = await prisma.$transaction(async (tx: TransactionClient) => {
+  const transactionResult = await prisma.$transaction(async (tx) => {
     const existingLike = await tx.sharedListLike.findUnique({
       where: {
         sharedListId_userId: {
