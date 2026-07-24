@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 
-import type { SharedList, SharedListCollaborator, SharedListMovie, User } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
@@ -75,12 +74,6 @@ function normalizeDiscussionReplies(value: unknown) {
     }));
 }
 
-type SharedListWithRelations = SharedList & {
-  owner: User;
-  collaborators: Array<SharedListCollaborator & { user: User }>;
-  movies: SharedListMovie[];
-};
-
 async function getSharedLists() {
   const lists = await prisma.sharedList.findMany({
     include: {
@@ -89,7 +82,7 @@ async function getSharedLists() {
       movies: true,
     },
     orderBy: { createdAt: "desc" },
-  }) as SharedListWithRelations[];
+  });
 
   return lists.map((list) => ({
     id: list.id,
