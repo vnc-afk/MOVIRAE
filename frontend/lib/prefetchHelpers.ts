@@ -172,17 +172,13 @@ export async function safePrefetchQuery(client: QueryClient, options: { queryKey
   }
 }
 
-export async function scheduleMovieDetailPrefetch(client: QueryClient, movieId: string, token: string, delayMs = 150) {
-  return new Promise<void>((resolve) => {
-    schedulePrefetchTask({
-      token,
-      client,
-      queryKey: queryKeys.movie.detail(movieId),
-      queryFn: () => getMovieDetails(movieId, { suppressClientErrors: true }),
-      delayMs,
-    });
-
-    resolve();
+export function scheduleMovieDetailPrefetch(client: QueryClient, movieId: string, token: string, delayMs = 150) {
+  schedulePrefetchTask({
+    token,
+    client,
+    queryKey: queryKeys.movie.detail(movieId),
+    queryFn: () => getMovieDetails(movieId, { suppressClientErrors: true }),
+    delayMs,
   });
 }
 
