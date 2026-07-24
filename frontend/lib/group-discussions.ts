@@ -96,9 +96,9 @@ function serializeDiscussionRow(
     createdAt: Date;
     pinned: boolean;
     movieId: string | null;
-    author: any;
-    likesRecords: Array<{ userId: string }>;
-    replyRecords: Array<{ id: string; body: string; createdAt: Date; author: any }>;
+    author?: unknown;
+    likesRecords?: Array<{ userId: string }>;
+    replyRecords?: Array<{ id: string; body: string; createdAt: Date; author?: unknown }>;
   },
   currentUserId?: string | null
 ): DiscussionRecord {
@@ -109,10 +109,10 @@ function serializeDiscussionRow(
     title: discussion.title,
     body: discussion.body,
     date: discussion.createdAt.toISOString(),
-    likes: discussion.likesRecords.length,
-    replies: discussion.replyRecords.length,
-    likedByMe: currentUserId ? discussion.likesRecords.some((r) => r.userId === currentUserId) : false,
-    replyItems: discussion.replyRecords.map((reply) => ({
+    likes: discussion.likesRecords?.length ?? 0,
+    replies: discussion.replyRecords?.length ?? 0,
+    likedByMe: currentUserId ? (discussion.likesRecords?.some((r) => r.userId === currentUserId) ?? false) : false,
+    replyItems: (discussion.replyRecords ?? []).map((reply) => ({
       id: reply.id,
       author: (isProfileUser(reply.author) ? buildUserProfile(reply.author) : null) ?? fallbackProfile,
       body: reply.body,
@@ -133,7 +133,9 @@ export async function fetchGroupDiscussions(groupId: string, currentUser: Curren
     include: discussionInclude,
   });
 
-  return discussions.map((discussion) => serializeDiscussionRow(discussion, currentUser?.id));
+  return discussions.map((discussion: Awaited<ReturnType<typeof prisma.groupDiscussion.findMany>>[number]) =>
+    serializeDiscussionRow(discussion, currentUser?.id)
+  );
 }
 
 /**
