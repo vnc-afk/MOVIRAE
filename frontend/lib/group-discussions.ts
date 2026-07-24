@@ -266,7 +266,7 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
     memberCount: group.members.length,
     avatar: group.avatar ?? "",
     members: group.members
-      .map((member: { user?: { id: string; [key: string]: unknown }; userId: string | null }) => {
+      .map((member) => {
         if (!member.user) return null;
 
         return buildUserProfile(
