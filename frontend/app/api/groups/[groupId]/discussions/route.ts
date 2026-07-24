@@ -98,23 +98,26 @@ export async function POST(
 
     const otherMembers = groupMembers.filter((member) => member.userId !== currentUser.id);
     if (otherMembers.length > 0) {
-      const notificationData = otherMembers.map((member) => ({
-        recipientId: member.userId,
-        actorId: currentUser.id,
-        type: "discussion_created" as const,
-        groupId,
-        discussionId: discussion.id,
-        message: `started a discussion in your group: "${title}"`,
-      }));
+      const createdNotifications = await Promise.all(
+        otherMembers.map((member) =>
+          prisma.notification.create({
+            data: {
+              recipientId: member.userId,
+              actorId: currentUser.id,
+              type: "discussion_created",
+              groupId,
+              discussionId: discussion.id,
+              message: `started a discussion in your group: "${title}"`,
+            },
+          })
+        )
+      );
 
-      const createdNotifications = await prisma.notification.createMany({
-        data: notificationData,
-      });
-
-      if (createdNotifications.count > 0) {
-        for (const member of otherMembers) {
-          publishNotificationEvent(`${groupId}-${member.userId}`);
-        }
+      for (const notification of createdNotifications) {
+        publishNotificationEvent({
+          notificationId: notification.id,
+          recipientId: notification.recipientId,
+        });
       }
     }
 
