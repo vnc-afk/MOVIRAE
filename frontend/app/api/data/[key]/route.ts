@@ -650,7 +650,7 @@ async function getUserNotifications(
   const missingMovieByReviewIds = Array.from(
     new Set(
       notifications
-        .filter((notification: { movieId: string | null; reviewId: string | null }) => !notification.movieId && notification.reviewId)
+        .filter((notification) => !notification.movieId && notification.reviewId)
         .map((notification) => notification.reviewId as string)
     )
   );
@@ -658,7 +658,7 @@ async function getUserNotifications(
   const missingGroupByDiscussionIds = Array.from(
     new Set(
       notifications
-        .filter((notification: { groupId: string | null; discussionId: string | null }) => !notification.groupId && notification.discussionId)
+        .filter((notification) => !notification.groupId && notification.discussionId)
         .map((notification) => notification.discussionId as string)
     )
   );
