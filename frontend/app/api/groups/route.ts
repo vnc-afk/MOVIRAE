@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   buildUserProfile,
@@ -37,18 +38,11 @@ export async function GET(request: Request) {
     const { page, limit, search, order } = queryResult.data;
     const skip = (page - 1) * limit;
 
-    type GroupWhereInput = {
-      OR?: Array<{
-        name?: { contains: string; mode: "insensitive" };
-        description?: { contains: string; mode: "insensitive" };
-      }>;
-    };
-
-    const where: GroupWhereInput = search
+    const where: Prisma.GroupWhereInput = search
       ? {
           OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { description: { contains: search, mode: "insensitive" } },
+            { name: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
+            { description: { contains: search, mode: "insensitive" as Prisma.QueryMode } },
           ],
         }
       : {};
