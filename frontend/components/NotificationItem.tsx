@@ -28,6 +28,8 @@ type Props = {
 
 function NotificationItem({ notif, index = 0, onClick, onHover }: Props) {
   const Icon = Bell;
+  const actorName = notif.user?.displayName ?? "Someone";
+  const actorAvatar = notif.user?.avatar;
 
   return (
     <motion.div
@@ -36,6 +38,14 @@ function NotificationItem({ notif, index = 0, onClick, onHover }: Props) {
       transition={{ delay: index * 0.05 }}
       onClick={() => onClick?.(notif)}
       onMouseEnter={() => onHover?.(notif)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick?.(notif);
+        }
+      }}
       className={`flex w-full items-start gap-3 rounded-lg p-4 transition-colors cursor-pointer hover:opacity-80 ${
         notif.read ? "bg-card" : "bg-primary/5 border border-primary/10"
       }`}
@@ -49,19 +59,15 @@ function NotificationItem({ notif, index = 0, onClick, onHover }: Props) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm">
-          <span className="font-semibold text-foreground">{notif.user.displayName}</span>{" "}
+          <span className="font-semibold text-foreground">{actorName}</span>{" "}
           <span className="text-muted-foreground">{notif.message}</span>
         </p>
         <p className="text-xs text-muted-foreground mt-1" title={formatExactDate(notif.date)}>
           {formatRelativeDate(notif.date)}
         </p>
       </div>
-      {notif.user.avatar ? (
-        <img
-          src={notif.user.avatar}
-          alt={notif.user.displayName}
-          className="h-8 w-8 rounded-full bg-muted flex-shrink-0"
-        />
+      {actorAvatar ? (
+        <img src={actorAvatar} alt={actorName} className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
       ) : (
         <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
       )}
@@ -76,8 +82,8 @@ function areEqual(prev: Props, next: Props) {
     a.id === b.id &&
     a.read === b.read &&
     a.message === b.message &&
-    a.user.avatar === b.user.avatar &&
-    a.user.displayName === b.user.displayName
+    a.user?.avatar === b.user?.avatar &&
+    a.user?.displayName === b.user?.displayName
   );
 }
 
