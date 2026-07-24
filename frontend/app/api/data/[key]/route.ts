@@ -491,7 +491,7 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
 
   const watchedMovies = await getMovieDetailsBatch(Array.from(watchedMovieIdSet));
 
-  const avgRating = reviews.length > 0 ? reviews.reduce((sum: number, review: { rating: number }) => sum + review.rating, 0) / reviews.length : 0;
+  const avgRating = reviews.length > 0 ? reviews.reduce<number>((sum, review) => sum + review.rating, 0) / reviews.length : 0;
 
   const monthlyCounts = watchExperienceStats.monthlyBreakdown.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.month] = entry.count;
