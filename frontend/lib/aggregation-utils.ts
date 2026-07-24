@@ -1,8 +1,10 @@
 import type { UserProfile } from "@/lib/types";
-import type { User } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+
+type PrismaUser = Awaited<ReturnType<typeof prisma.user.findUnique>>;
 
 export type RawUserProfile = Pick<
-  User,
+  NonNullable<PrismaUser>,
   | "id"
   | "email"
   | "name"
