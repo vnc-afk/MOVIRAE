@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 
+import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
@@ -82,7 +83,13 @@ async function getSharedLists() {
       movies: true,
     },
     orderBy: { createdAt: "desc" },
-  });
+  }) as Array<Prisma.SharedListGetPayload<{
+    include: {
+      owner: true;
+      collaborators: { include: { user: true } };
+      movies: true;
+    };
+  }>>;
 
   return lists.map((list) => ({
     id: list.id,
