@@ -98,17 +98,17 @@ async function getSharedLists() {
     orderBy: { createdAt: "desc" },
   }) as SharedListWithRelations[];
 
-  return lists.map((list: SharedListWithRelations) => ({
+  return lists.map((list) => ({
     id: list.id,
     name: list.name,
     description: list.description,
     visibility: list.visibility,
     owner: buildUserProfile(list.owner),
     collaborators: list.collaborators
-      .map((collaborator: { user: Record<string, unknown> }) => buildUserProfile(collaborator.user))
+      .map((collaborator) => buildUserProfile(collaborator.user))
       .filter(Boolean),
     movies: list.movies
-      .map((movie: { metadata?: unknown; tmdbId?: string }) => movie.metadata ?? { id: movie.tmdbId }),
+      .map((movie) => movie.metadata ?? { id: movie.tmdbId }),
     likes: list.likes,
     comments: list.comments,
     createdAt: list.createdAt.toISOString(),
@@ -252,19 +252,19 @@ async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>
       orderBy: { createdAt: "desc" },
     }) as GroupWithRelations[];
 
-    return await Promise.all(groups.map(async (group: GroupWithRelations) => ({
+    return await Promise.all(groups.map(async (group) => ({
       id: group.id,
       name: group.name,
       description: group.description || "",
       memberCount: group.members.length,
       avatar: group.avatar || "",
       members: group.members
-        .map((member: { user: any }) => buildUserProfile(member.user))
+        .map((member) => buildUserProfile(member.user))
         .filter(Boolean),
       sharedList: await Promise.all(
-        group.movies.map((movie: any, index: number) => normalizeGroupMovie(movie, index))
+        group.movies.map((movie, index) => normalizeGroupMovie(movie, index))
       ),
-      discussions: group.discussions.map((discussion: { id: string; author: any; title: string; body: string; createdAt: Date; likes: number; replies: number; pinned: boolean; movieId: string | null }) => ({
+      discussions: group.discussions.map((discussion) => ({
         id: discussion.id,
         author: buildUserProfile(discussion.author),
         title: discussion.title,
@@ -275,7 +275,7 @@ async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>
         pinned: discussion.pinned,
         movieId: discussion.movieId ?? undefined,
       })),
-      joined: currentUser ? group.members.some((member: { userId: string }) => member.userId === currentUser.id) : false,
+      joined: currentUser ? group.members.some((member) => member.userId === currentUser.id) : false,
     })));
   } catch (err) {
     // If the DB is missing recently added JSON columns (e.g. likedBy, replyItems),
@@ -491,7 +491,7 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
 
   const watchedMovies = await getMovieDetailsBatch(Array.from(watchedMovieIdSet));
 
-  const avgRating = reviews.length > 0 ? reviews.reduce<number>((sum, review) => sum + review.rating, 0) / reviews.length : 0;
+  const avgRating = reviews.length > 0 ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0;
 
   const monthlyCounts = watchExperienceStats.monthlyBreakdown.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.month] = entry.count;
