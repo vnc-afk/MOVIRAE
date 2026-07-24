@@ -804,7 +804,7 @@ async function getUserMessages(
   );
 
   const readStates = await Promise.all(
-    conversationPartnerIds.map(async (partnerId: string) => ({
+    conversationPartnerIds.map(async (partnerId) => ({
       partnerId,
       state: await getMessageThreadReadState(currentUser.id, partnerId),
     }))
