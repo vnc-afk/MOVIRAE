@@ -518,10 +518,10 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
     return acc;
   }, {} as Record<string, number>);
 
-  const ratingCounts = reviews.reduce((acc: Record<number, number>, review: { rating: number }) => {
+  const ratingCounts = reviews.reduce<Record<number, number>>((acc, review) => {
     acc[review.rating] = (acc[review.rating] ?? 0) + 1;
     return acc;
-  }, {} as Record<number, number>);
+  }, {});
 
   const totalRuntimeMinutes = watchedMovies.reduce((sum, movie) => {
     if (!Number.isFinite(movie.runtime) || movie.runtime <= 0) return sum;
