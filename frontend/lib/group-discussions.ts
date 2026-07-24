@@ -256,8 +256,8 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
     : new Set<string>();
 
   const [sharedList, discussions] = await Promise.all([
-    Promise.all(group.movies.map((movie: { groupId?: string; tmdbId?: string | null; metadata?: any }, index: number) => normalizeGroupMovie(movie, index))),
-    Promise.all(group.discussions.map((discussion: Awaited<ReturnType<typeof prisma.groupDiscussion.findMany>>[number]) => serializeDiscussionRow(discussion, currentUserId))),
+    Promise.all(group.movies.map((movie, index) => normalizeGroupMovie(movie, index))),
+    Promise.all(group.discussions.map((discussion) => serializeDiscussionRow(discussion, currentUserId))),
   ]);
 
   return {
