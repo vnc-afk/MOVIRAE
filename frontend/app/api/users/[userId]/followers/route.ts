@@ -60,11 +60,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
             await prisma.userFollow.findMany({
               where: {
                 followerId: currentUser.id,
-                followingId: { in: followers.map((follow) => follow.followerId) },
+                followingId: { in: followers.map((follow: { followerId: string }) => follow.followerId) },
               },
               select: { followingId: true },
             })
-          ).map((follow) => follow.followingId)
+          ).map((follow: { followingId: string }) => follow.followingId)
         )
       : new Set<string>();
 
