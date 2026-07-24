@@ -93,26 +93,19 @@ export async function GET(
     const { page, limit, upcoming, sort, order } = queryResult.data;
     const skip = (page - 1) * limit;
 
-    type EventWhereInput = {
-      groupId: string;
-      startDate?: { gte: Date };
-    };
-
-    type EventOrderByInput =
-      | { title: "asc" | "desc" }
-      | { startDate: "asc" | "desc" };
+    type EventFindManyArgs = NonNullable<Parameters<typeof prisma.event.findMany>[0]>;
 
     // Restrict the fetch to the requested group and optionally to upcoming dates.
-    const where: EventWhereInput = { groupId };
+    const where: NonNullable<EventFindManyArgs["where"]> = { groupId };
 
     if (upcoming) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      where.startDate = { gte: today };
+      Object.assign(where, { startDate: { gte: today } });
     }
 
     // Build order by
-    const orderBy: EventOrderByInput = sort === "title"
+    const orderBy: NonNullable<EventFindManyArgs["orderBy"]> = sort === "title"
       ? { title: order }
       : { startDate: order };
 
