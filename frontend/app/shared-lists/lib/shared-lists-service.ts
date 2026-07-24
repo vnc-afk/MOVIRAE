@@ -127,7 +127,9 @@ export async function addSharedListMovie(
   }
 
   // Determine whether the current user can modify the list (owner or explicit collaborator).
-  const isEditor = list.ownerId === currentUser.id || list.collaborators.some((collaborator) => collaborator.userId === currentUser.id);
+  const isEditor =
+    list.ownerId === currentUser.id ||
+    list.collaborators.some((collaborator: { userId: string }) => collaborator.userId === currentUser.id);
   if (!isEditor) {
     return { error: "unauthorized" };
   }
