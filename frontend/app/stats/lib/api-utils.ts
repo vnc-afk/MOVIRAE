@@ -1,10 +1,11 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import type { User } from "@prisma/client";
+
+type PrismaUser = Awaited<ReturnType<typeof prisma.user.findUnique>>;
 
 export type CurrentUser = Pick<
-  User,
+    NonNullable<PrismaUser>,
   | "id"
   | "email"
   | "name"
