@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
 import { getSharedListForView } from "@/lib/shared-lists";
@@ -151,11 +150,11 @@ export async function addSharedListMovie(
       sharedListId: listId,
       tmdbId: movieId,
       position: existingCount,
-      metadata: movie as unknown as Prisma.InputJsonValue,
+      metadata: movie as any,
     },
     update: {
       // Update stored metadata to keep list items reasonably in-sync with TMDb.
-      metadata: movie as unknown as Prisma.InputJsonValue,
+      metadata: movie as any,
     },
   });
 
