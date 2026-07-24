@@ -173,7 +173,7 @@ async function normalizeGroupMovie(
               where: { groupId_tmdbId: { groupId: movie.groupId, tmdbId: movie.tmdbId } },
               data: { metadata: details as any },
             })
-            .catch((err: unknown) => console.error("Failed to cache movie metadata:", err));
+            .catch((err) => console.error("Failed to cache movie metadata:", err));
         }
         return details;
       }
