@@ -138,7 +138,7 @@ async function setSharedLists(payload: unknown, currentUser: Awaited<ReturnType<
   let existingOwners = new Set<string>();
   if (ownerIdsArray.length > 0) {
     const owners = await prisma.user.findMany({ where: { id: { in: ownerIdsArray } }, select: { id: true } });
-    existingOwners = new Set(owners.map((o: { id: string }) => o.id));
+    existingOwners = new Set(owners.map((o) => o.id));
   }
 
   for (const item of payload) {
