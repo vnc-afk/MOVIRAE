@@ -20,7 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
       const avail = await prisma.group.findMany({ select: { id: true }, take: 10, orderBy: { createdAt: "desc" } });
       console.warn("/api/groups/[groupId]: group not found", {
         requestedId: groupId,
-        availableIds: avail.map((r: { id: string }) => r.id),
+        availableIds: avail.map((r) => r.id),
       });
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
@@ -49,7 +49,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ gro
         const avail = await prisma.group.findMany({ select: { id: true }, take: 10, orderBy: { createdAt: "desc" } });
         console.warn("/api/groups/[groupId]: raw fallback also found no group", {
           requestedId: groupId,
-          availableIds: avail.map((r: { id: string }) => r.id),
+          availableIds: avail.map((r) => r.id),
         });
         return NextResponse.json({ error: "Group not found" }, { status: 404 });
       }
