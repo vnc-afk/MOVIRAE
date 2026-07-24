@@ -331,7 +331,7 @@ export async function getMovieReviews(
   tmdbId: string,
   currentUser: CurrentUser | null
 ): Promise<any[]> {
-  const reviews: Awaited<ReturnType<typeof prisma.review.findMany>> = await prisma.review.findMany({
+  const reviews = await prisma.review.findMany({
     where: { tmdbId },
     include: {
       user: true,
@@ -341,7 +341,7 @@ export async function getMovieReviews(
     orderBy: { createdAt: "desc" },
   });
 
-  return reviews.map((review: Awaited<ReturnType<typeof prisma.review.findMany>>[number]) => serializeReview(review, currentUser?.id));
+  return reviews.map((review) => serializeReview(review, currentUser?.id));
 }
 
 // Watch-experience helpers: thin wrappers over existing lib functions
