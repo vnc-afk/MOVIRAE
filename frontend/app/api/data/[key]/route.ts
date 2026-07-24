@@ -872,7 +872,7 @@ async function getUserWatchlist(userId: string) {
     where: { userId },
     orderBy: { addedAt: "desc" },
   });
-  return watchlist.map((item: { tmdbId: string }) => item.tmdbId);
+  return watchlist.map((item) => item.tmdbId);
 }
 
 async function getUserFavorites(userId: string) {
