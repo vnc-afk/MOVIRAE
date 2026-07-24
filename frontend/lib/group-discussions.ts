@@ -238,7 +238,7 @@ export async function fetchGroupDetail(groupId: string, currentUser: CurrentUser
 
   const currentUserId = currentUser?.id;
   const memberIds = group.members
-    .map((member: { userId: string | null }) => member.userId)
+    .map((member) => member.userId)
     .filter((memberId): memberId is string => Boolean(memberId));
 
   const followedMemberIds = currentUserId && memberIds.length > 0
