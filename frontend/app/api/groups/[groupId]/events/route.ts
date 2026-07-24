@@ -247,9 +247,8 @@ export async function POST(
       return apiNotFound("Group");
     }
 
-    // Create event in transaction
-    const event = await prisma.$transaction(async (tx) => {
-      // Create event
+    // Create event and notifications in a transaction
+    const { event, notifications } = await prisma.$transaction(async (tx) => {
       const newEvent = await tx.event.create({
         data: {
           groupId,
@@ -285,36 +284,40 @@ export async function POST(
         },
       });
 
-      // Get group members for notifications
       const groupMembers = await tx.groupMember.findMany({
         where: { groupId },
         select: { userId: true },
       });
 
-      // Create notifications for other members
       const otherMembers = groupMembers.filter((m) => m.userId !== user.id);
-      if (otherMembers.length > 0) {
-        const notifications = await tx.notification.createMany({
-          data: otherMembers.map((member) => ({
-            recipientId: member.userId,
-            actorId: user.id,
-            type: "event_created" as const,
-            groupId,
-            eventId: newEvent.id,
-            message: `created a new event: "${title}"`,
-          })),
-        });
+      const createdNotifications = otherMembers.length
+        ? await Promise.all(
+            otherMembers.map((member) =>
+              tx.notification.create({
+                data: {
+                  recipientId: member.userId,
+                  actorId: user.id,
+                  type: "event_created",
+                  groupId,
+                  eventId: newEvent.id,
+                  message: `created a new event: "${title}"`,
+                },
+              })
+            )
+          )
+        : [];
 
-        // Publish notification events
-        if (notifications.count > 0) {
-          for (const member of otherMembers) {
-            publishNotificationEvent(`${groupId}-${member.userId}`);
-          }
-        }
-      }
-
-      return newEvent;
+      return { event: newEvent, notifications: createdNotifications };
     });
+
+    if (notifications.length > 0) {
+      for (const notification of notifications) {
+        publishNotificationEvent({
+          notificationId: notification.id,
+          recipientId: notification.recipientId,
+        });
+      }
+    }
 
     // Log success
     logger.info("Event created", {
