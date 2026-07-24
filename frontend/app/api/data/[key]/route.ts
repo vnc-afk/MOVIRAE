@@ -370,7 +370,7 @@ async function setGroups(payload: unknown, currentUser: Awaited<ReturnType<typeo
 
 async function getUserFilterPresets(currentUser: Awaited<ReturnType<typeof getCurrentUser>>) {
   if (!currentUser) return [];
-  const presets: Awaited<ReturnType<typeof prisma.filterPreset.findMany>> = await prisma.filterPreset.findMany({
+  const presets = await prisma.filterPreset.findMany({
     where: { userId: currentUser.id },
     orderBy: { createdAt: "desc" },
   });
