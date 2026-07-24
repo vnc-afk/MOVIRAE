@@ -4,6 +4,12 @@ import { markNotificationRead } from "@/app/notifications/lib/notification-servi
 
 export const runtime = "nodejs";
 
+/**
+ * Marks a single notification as read for the authenticated user.
+ *
+ * The route validates ownership and returns standard API error responses
+ * for missing or unauthorized access.
+ */
 export async function PATCH(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
