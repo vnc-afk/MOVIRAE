@@ -173,7 +173,7 @@ export async function POST(request: Request) {
       avatar: group.avatar || "",
       creatorId: group.creatorId,
       creator: buildUserProfile(group.creator),
-      members: group.members.map((member: { user: any }) => buildUserProfile(member.user)),
+      members: group.members.map((member) => buildUserProfile(member.user)),
       memberCount: group.members.length,
       sharedList: group.sharedLists || [],
       joined: true,
