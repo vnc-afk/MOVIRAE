@@ -29,23 +29,7 @@ export async function GET() {
     },
   });
 
-  const value = users.map((user: {
-    id: string;
-    name: string | null;
-    email: string | null;
-    image: string | null;
-    username: string | null;
-    displayName: string | null;
-    avatar: string | null;
-    bio: string | null;
-    favorites: Array<{ tmdbId: string }>;
-    _count: {
-      followers: number;
-      followings: number;
-      reviews: number;
-      watchlist: number;
-    };
-  }) => {
+  const value = users.map((user) => {
     const displayName = user.displayName || user.name || user.email?.split("@")[0] || "Movie Lover";
     const username = user.username || displayName.toLowerCase().replace(/\s+/g, "_");
 
