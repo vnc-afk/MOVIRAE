@@ -493,20 +493,20 @@ async function getUserStats(currentUser: Awaited<ReturnType<typeof getCurrentUse
 
   const avgRating = reviews.length > 0 ? reviews.reduce((sum: number, review: { rating: number }) => sum + review.rating, 0) / reviews.length : 0;
 
-  const monthlyCounts = watchExperienceStats.monthlyBreakdown.reduce((acc: Record<string, number>, entry: { month: string; count: number }) => {
+  const monthlyCounts = watchExperienceStats.monthlyBreakdown.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.month] = entry.count;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
-  const weekdayCounts = watchExperienceStats.weekdayBreakdown.reduce((acc: Record<string, number>, entry: { day: string; count: number }) => {
+  const weekdayCounts = watchExperienceStats.weekdayBreakdown.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.day] = entry.count;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
-  const platformCounts = watchExperienceStats.platformBreakdown.reduce((acc: Record<string, number>, entry: { platform: string; count: number }) => {
+  const platformCounts = watchExperienceStats.platformBreakdown.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.platform] = entry.count;
     return acc;
-  }, {} as Record<string, number>);
+  }, {});
 
   const contextCounts = watchExperienceStats.contextBreakdown.reduce<Record<string, number>>((acc, entry) => {
     acc[entry.context] = entry.count;
