@@ -7,6 +7,7 @@ import { getSharedListDetail } from "@/app/shared-lists/lib/shared-lists-service
 import { getCurrentUser } from "@/app/shared-lists/lib/api-utils";
 import { publishNotificationEvent } from "@/lib/group-events";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export const runtime = "nodejs";
 
@@ -69,8 +70,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
       publishSharedListEvent(listId, "updated", opId, updatedList);
       return NextResponse.json({ value: [updatedList], opId });
     } catch (error) {
-      const prismaError = error as { code?: string; name?: string } | null;
-      if (prismaError?.code === "P2025" || prismaError?.name === "PrismaClientKnownRequestError") {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
         // Map Prisma's "record not found" to a 404 for the client.
         return NextResponse.json({ error: "Comment thread not found." }, { status: 404 });
       }
