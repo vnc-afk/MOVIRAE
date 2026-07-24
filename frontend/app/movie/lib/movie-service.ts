@@ -1,9 +1,23 @@
+import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { canReviewMovie, serializeReview } from "@/lib/reviews";
 import { publishReviewEvent } from "@/lib/review-events";
 import { refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot } from "@/lib/aggregations";
 import type { CurrentUser } from "./api-utils";
+
+type ReviewWithRelations = Prisma.ReviewGetPayload<{
+  include: {
+    user: true;
+    likesRecords: true;
+    replies: {
+      include: {
+        user: true;
+        likesRecords: true;
+      };
+    };
+  };
+}>;
 
 export async function addReview(
   payload: { tmdbId: string; rating: number; comment?: string | null; opId?: string | undefined },
@@ -331,7 +345,7 @@ export async function getMovieReviews(
   tmdbId: string,
   currentUser: CurrentUser | null
 ): Promise<any[]> {
-  const reviews = await prisma.review.findMany({
+  const reviews: ReviewWithRelations[] = await prisma.review.findMany({
     where: { tmdbId },
     include: {
       user: true,
@@ -341,7 +355,7 @@ export async function getMovieReviews(
     orderBy: { createdAt: "desc" },
   });
 
-  return reviews.map((review) => serializeReview(review, currentUser?.id));
+  return reviews.map((review: ReviewWithRelations) => serializeReview(review, currentUser?.id));
 }
 
 // Watch-experience helpers: thin wrappers over existing lib functions
