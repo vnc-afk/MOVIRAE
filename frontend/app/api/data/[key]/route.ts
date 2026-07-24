@@ -375,7 +375,7 @@ async function getUserFilterPresets(currentUser: Awaited<ReturnType<typeof getCu
     orderBy: { createdAt: "desc" },
   });
 
-  return presets.map((preset: { id: string; name: string; genreId: string | null; minRuntime: number | null; maxRuntime: number | null }) => ({
+  return presets.map((preset) => ({
     id: preset.id,
     name: preset.name,
     filters: {
