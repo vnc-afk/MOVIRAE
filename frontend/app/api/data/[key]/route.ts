@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 
-import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails, getMovieDetailsBatch } from "@/lib/tmdb";
 import { getMessageThreadReadState } from "@/lib/message-threads";
 import type { Movie, UserProfile } from "@/lib/types";
 import { getWatchExperienceStats } from "@/lib/watch-experiences";
-import { getHomeActivityFeedSnapshot, refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot, getUserStatsSnapshot } from "@/lib/aggregations";
+import { getHomeActivityFeedSnapshot, getUserStatsSnapshot, refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot } from "@/lib/aggregations";
 
 export const runtime = "nodejs";
 
@@ -83,13 +82,7 @@ async function getSharedLists() {
       movies: true,
     },
     orderBy: { createdAt: "desc" },
-  }) as Array<Prisma.SharedListGetPayload<{
-    include: {
-      owner: true;
-      collaborators: { include: { user: true } };
-      movies: true;
-    };
-  }>>;
+  });
 
   return lists.map((list) => ({
     id: list.id,
@@ -242,6 +235,8 @@ async function getGroups(currentUser: Awaited<ReturnType<typeof getCurrentUser>>
         date: discussion.createdAt.toISOString(),
         likes: discussion.likes,
         replies: discussion.replies,
+        likedByMe: currentUser ? normalizeDiscussionLikes(discussion.likedBy).includes(currentUser.id) : false,
+        replyItems: normalizeDiscussionReplies(discussion.replyItems),
         pinned: discussion.pinned,
         movieId: discussion.movieId ?? undefined,
       })),
@@ -1010,18 +1005,21 @@ export async function GET(
         });
       case key === "user-filter-presets":
         return NextResponse.json({ value: await getUserFilterPresets(currentUser) });
+      case key === "user-stats":
+              // User stats are user-specific and should always reflect the latest watch/review data.
+        return makeJsonResponse({ value: currentUser ? await getUserStatsSnapshot(currentUser.id) : await getUserStats(currentUser) }, "private, no-store");
       case key === "user-wrapped":
         return makeJsonResponse({ value: currentUser ? await getUserStatsSnapshot(currentUser.id) : await getUserStats(currentUser) }, "private, no-store");
       case key === "home-activity-feed":
         // Public activity feed: short CDN cache to reduce DB pressure
-        return makeJsonResponse({ value: await getHomeActivityFeedSnapshot() }, "public, s-maxage=30, stale-while-revalidate=60");
-      case key === "user-notifications": {
-        // Support pagination via ?limit=&offset=
-        const url = new URL(_request.url);
-        const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? 50)));
-        const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
-        return NextResponse.json({ value: await getUserNotifications(currentUser, { limit, offset }) });
-      }
+              return makeJsonResponse({ value: await getHomeActivityFeedSnapshot() }, "public, s-maxage=30, stale-while-revalidate=60");
+          case key === "user-notifications": {
+            // Support pagination via ?limit=&offset=
+            const url = new URL(_request.url);
+            const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? 50)));
+            const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+            return NextResponse.json({ value: await getUserNotifications(currentUser, { limit, offset }) });
+          }
           case key === "user-messages": {
             const url = new URL(_request.url);
             const limit = Math.max(1, Math.min(1000, Number(url.searchParams.get("limit") ?? 50)));
