@@ -98,7 +98,7 @@ export async function POST(
         select: { userId: true },
       });
 
-      const otherMembers = groupMembers.filter((member: { userId: string }) => member.userId !== currentUser.id);
+      const otherMembers = groupMembers.filter((member) => member.userId !== currentUser.id);
       if (otherMembers.length > 0) {
         // FIX: createMany() returns only a count, no row data — that's why the old
         // code published a fabricated `${groupId}-${member.userId}` string instead
