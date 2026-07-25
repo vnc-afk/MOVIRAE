@@ -113,43 +113,37 @@ export async function toggleReviewLike(
 ): Promise<{ value: any; opId?: string } | { error: "not-found" | "unauthorized" }> {
   const existing = await prisma.review.findUnique({ where: { id: reviewId } });
   if (!existing) return { error: "not-found" };
+  
+  const existingLike = await prisma.reviewLike.findUnique({
+    where: { reviewId_userId: { reviewId, userId: currentUser.id } },
+  });
 
-  const existingLike = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT id
-    FROM "ReviewLike"
-    WHERE "reviewId" = ${reviewId} AND "userId" = ${currentUser.id}
-    LIMIT 1
-  `;
+  let willBeLiked = !existingLike;
 
-  const willBeLiked = existingLike.length === 0;
-
-  if (!willBeLiked) {
+  if (existingLike) {
     await prisma.$transaction([
-      prisma.$executeRaw`
-        DELETE FROM "ReviewLike"
-        WHERE "reviewId" = ${reviewId} AND "userId" = ${currentUser.id}
-      `,
-      prisma.$executeRaw`
-        UPDATE "Review"
-        SET "likes" = GREATEST("likes" - 1, 0)
-        WHERE id = ${reviewId}
-      `,
+      prisma.reviewLike.delete({ where: { reviewId_userId: { reviewId, userId: currentUser.id } } }),
+      prisma.review.update({ where: { id: reviewId }, data: { likes: { decrement: 1 } } }),
     ]);
   } else {
-    await prisma.$transaction([
-      prisma.$executeRaw`
-        INSERT INTO "ReviewLike" ("id", "reviewId", "userId")
-        VALUES (${randomUUID()}, ${reviewId}, ${currentUser.id})
-      `,
-      prisma.$executeRaw`
-        UPDATE "Review"
-        SET "likes" = "likes" + 1
-        WHERE id = ${reviewId}
-      `,
-    ]);
+    try {
+      await prisma.$transaction([
+        prisma.reviewLike.create({ data: { reviewId, userId: currentUser.id } }),
+        prisma.review.update({ where: { id: reviewId }, data: { likes: { increment: 1 } } }),
+      ]);
+    } catch (err) {
+      // FIX: this is the race window — a concurrent request (double-click,
+      // retry) may have already inserted the like between our check above
+      // and this transaction. P2002 is Prisma's unique-constraint-violation
+      // code; treat that as "already liked" instead of surfacing a 500.
+      if (err && typeof err === "object" && "code" in err && (err as { code?: string }).code === "P2002") {
+        willBeLiked = true; // the other request already applied this like
+      } else {
+        throw err;
+      }
+    }
 
-    // Create notification if liking someone else's review
-    if (existing.userId !== currentUser.id && currentUser.displayName) {
+    if (willBeLiked && existing.userId !== currentUser.id && currentUser.displayName) {
       const actorName = currentUser.displayName.trim();
       const recentNotification = await prisma.notification.findFirst({
         where: {
@@ -171,9 +165,7 @@ export async function toggleReviewLike(
             message: `liked your review`,
           },
         });
-        // publishNotificationEvent expects either id or payload; import from group-events where used by routes
         try {
-          // lazy require to avoid circular imports at module load
           const { publishNotificationEvent } = await import("@/lib/group-events");
           publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
         } catch (e) {
