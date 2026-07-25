@@ -2,7 +2,7 @@
  * CastSection Component
  * Displays movie cast carousel
  */
-
+import { memo } from "react";
 import { CastCarousel } from "@/components/CastCarousel";
 import type { Movie } from "@/lib/types";
 
@@ -10,7 +10,7 @@ interface CastSectionProps {
   cast: Movie["cast"];
 }
 
-export function CastSection({ cast }: CastSectionProps) {
+export const CastSection = memo(function CastSection({ cast }: CastSectionProps) {
   if (!cast || cast.length === 0) {
     return null;
   }
@@ -21,4 +21,4 @@ export function CastSection({ cast }: CastSectionProps) {
       <CastCarousel cast={cast} />
     </section>
   );
-}
+});

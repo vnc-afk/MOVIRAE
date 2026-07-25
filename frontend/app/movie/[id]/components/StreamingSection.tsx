@@ -3,6 +3,7 @@
  * Displays streaming platform availability
  */
 
+import { memo } from "react";
 import { StreamingBadges } from "@/components/StreamingBadges";
 
 interface StreamingSectionProps {
@@ -10,10 +11,10 @@ interface StreamingSectionProps {
   isLoading: boolean;
 }
 
-export function StreamingSection({ platforms, isLoading }: StreamingSectionProps) {
+export const StreamingSection = memo(function StreamingSection({ platforms, isLoading }: StreamingSectionProps) {
   return (
     <div className="mt-6">
       <StreamingBadges platforms={platforms} loading={isLoading} />
     </div>
   );
-}
+});
