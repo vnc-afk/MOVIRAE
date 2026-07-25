@@ -4,7 +4,16 @@
  */
 
 import type { Review } from "@/lib/types";
-import type { MovieApiResponse } from "../types";
+
+async function parseApiResponse<T>(response: Response): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  const json = await response.json().catch(() => null);
+
+  if (!response.ok || json?.success === false) {
+    return { ok: false, error: json?.error?.message ?? json?.error ?? "Request failed." };
+  }
+
+  return { ok: true, data: json?.data as T };
+}
 
 /**
  * Fetch reviews for a movie
@@ -12,12 +21,8 @@ import type { MovieApiResponse } from "../types";
 export async function fetchMovieReviews(movieId: string): Promise<Review[]> {
   try {
     const response = await fetch(`/api/reviews/movie/${movieId}`);
-    const json = await response.json().catch(() => null);
-    
-    if (response.ok && Array.isArray(json?.data)) {
-      return json.data;
-    }
-    return [];
+    const result = await parseApiResponse<Review[]>(response);
+    return result.ok && Array.isArray(result.data) ? result.data : [];
   } catch (error) {
     console.error("Failed to fetch reviews:", error);
     return [];
@@ -32,7 +37,7 @@ export async function createReview(
   rating: number,
   comment: string,
   headers: Record<string, string>
-): Promise<{ success: boolean; data?: any; error?: string }> {
+): Promise<{ success: boolean; data?: { value: Review; opId?: string }; error?: string }> {
   try {
     const response = await fetch("/api/reviews", {
       method: "POST",
@@ -40,13 +45,13 @@ export async function createReview(
       body: JSON.stringify({ tmdbId, rating, comment }),
     });
 
-    const json = await response.json().catch(() => null);
+    const result = await parseApiResponse<{ value: Review; opId?: string }>(response);
 
-    if (!response.ok) {
-      return { success: false, error: json?.error || "Unable to save review." };
+    if (!result.ok) {
+      return { success: false, error: result.error };
     }
 
-    return { success: true, data: json };
+    return { success: true, data: result.data };
   } catch (error) {
     return {
       success: false,
@@ -71,11 +76,8 @@ export async function updateReview(
       body: JSON.stringify({ tmdbId, rating, comment }),
     });
 
-    const json = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      return { success: false, error: json?.error || "Unable to save review." };
-    }
+    const result = await parseApiResponse(response);
+    if (!result.ok) return { success: false, error: result.error };
 
     return { success: true };
   } catch (error) {
@@ -92,11 +94,8 @@ export async function updateReview(
 export async function deleteReview(reviewId: string): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(`/api/reviews/${reviewId}`, { method: "DELETE" });
-    const json = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      return { success: false, error: json?.error || "Unable to delete review." };
-    }
+    const result = await parseApiResponse(response);
+    if (!result.ok) return { success: false, error: result.error };
 
     return { success: true };
   } catch (error) {
@@ -117,14 +116,17 @@ export async function toggleReviewLike(reviewId: string): Promise<Review | null>
       headers: { "Content-Type": "application/json" },
     });
 
-    const json = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      console.error("Failed to toggle review like:", json?.error);
+    // FIX: was `json?.value ?? null` — the route wraps its payload as
+    // apiSuccess(result.value), i.e. `{ success, data: <review> }`. There
+    // is no top-level `.value` key in that response at all, so this always
+    // returned null regardless of whether the like actually succeeded.
+    const result = await parseApiResponse<Review>(response);
+    if (!result.ok) {
+      console.error("Failed to toggle review like:", result.error);
       return null;
     }
 
-    return json?.value ?? null;
+    return result.data;
   } catch (error) {
     console.error("Error toggling review like:", error);
     return null;
@@ -146,13 +148,12 @@ export async function replyToReview(
       body: JSON.stringify({ comment }),
     });
 
-    const json = await response.json().catch(() => null);
+    // FIX: same double-wrap issue as createReview — data is now the
+    // unwrapped review payload, not the full response envelope.
+    const result = await parseApiResponse(response);
+    if (!result.ok) return { success: false, error: result.error };
 
-    if (!response.ok) {
-      return { success: false, error: json?.error || "Unable to add reply." };
-    }
-
-    return { success: true, data: json };
+    return { success: true, data: result.data };
   } catch (error) {
     return {
       success: false,

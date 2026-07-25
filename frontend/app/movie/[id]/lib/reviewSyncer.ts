@@ -137,6 +137,8 @@ export class ReviewEventSyncer {
 
       // Op-based reconciliation for replies
       if (action === "replied" && incomingOpId && serverReview) {
+        let handled = false;
+
         for (let i = 0; i < nextReviews.length; i++) {
           const review = nextReviews[i];
           const tempReply = (review.replies ?? []).find(
@@ -145,10 +147,7 @@ export class ReviewEventSyncer {
 
           if (tempReply && serverReview.replies) {
             const serverReply = serverReview.replies.find(
-              (sr: any) =>
-                sr.comment === tempReply.comment &&
-                sr.user?.id === tempReply.user?.id &&
-                !String(sr.id).startsWith("temp-")
+              (sr: any) => sr.comment === tempReply.comment && sr.user?.id === tempReply.user?.id && !String(sr.id).startsWith("temp-")
             );
 
             if (serverReply) {
@@ -158,11 +157,20 @@ export class ReviewEventSyncer {
                   .map((rep) => (rep.id === tempReply.id ? serverReply : rep))
                   .filter((rep) => !String(rep.id).startsWith("temp-")),
               };
-
-              this.notifyListeners(nextReviews);
-              return;
+              handled = true;
+              break;
             }
           }
+        }
+
+        if (handled) {
+          this.notifyListeners(nextReviews);
+          return;
+        }
+        
+        if (serverReview.id) {
+          nextReviews = nextReviews.map((review) => (review.id === serverReview.id ? serverReview : review));
+          this.notifyListeners(nextReviews);
         }
       }
     } catch (error) {
