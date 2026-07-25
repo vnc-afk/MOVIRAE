@@ -1,17 +1,6 @@
-/**
- * Review Deduplication Logic
- * Prevents duplicate reviews and handles reconciliation
- */
 
 import type { Review } from "@/lib/types";
-
-/**
- * Deduplicates reviews by checking for temporary IDs and server reconciliation
- */
 export class ReviewDeduplicator {
-  /**
-   * Check if a review is a temporary/optimistic one
-   */
   static isTemporary(review: Review): boolean {
     return (
       String(review.id).startsWith("temp-") ||
@@ -20,15 +9,11 @@ export class ReviewDeduplicator {
     );
   }
 
-  /**
-   * Find a temporary review that matches a server review
-   */
   static findMatchingTemp(
     tempReview: Review,
     serverReview: Review,
     userEmail: string | undefined
   ): boolean {
-    // Match by content if user email matches
     if (tempReview.user.email === serverReview.user.email) {
       return (
         tempReview.rating === serverReview.rating &&
@@ -39,14 +24,10 @@ export class ReviewDeduplicator {
     return false;
   }
 
-  /**
-   * Deduplicate reviews array after server reconciliation
-   */
   static deduplicate(reviews: Review[]): Review[] {
     const seen = new Set<string>();
     const deduped: Review[] = [];
 
-    // First pass: add all non-temporary reviews
     for (const review of reviews) {
       if (!this.isTemporary(review)) {
         if (!seen.has(review.id)) {
@@ -56,7 +37,6 @@ export class ReviewDeduplicator {
       }
     }
 
-    // Second pass: add temporary reviews only if no matching server review
     for (const review of reviews) {
       if (this.isTemporary(review)) {
         const tempId = (review as any).tempId || review.id;
@@ -70,9 +50,6 @@ export class ReviewDeduplicator {
     return deduped;
   }
 
-  /**
-   * Reconcile a temporary review with server response
-   */
   static reconcileTemp(
     reviews: Review[],
     tempId: string,
@@ -100,9 +77,6 @@ export class ReviewDeduplicator {
       });
   }
 
-  /**
-   * Filter out a deleted review
-   */
   static removeById(reviews: Review[], reviewId: string): Review[] {
     return reviews.filter((review) => review.id !== reviewId);
   }

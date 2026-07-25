@@ -1,6 +1,3 @@
-/**
- * Constants for Movie Detail Feature
- */
 
 export const MOVIE_DETAIL_CONSTANTS = {
   // Pagination

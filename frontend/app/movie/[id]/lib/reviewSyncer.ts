@@ -1,15 +1,8 @@
-/**
- * Review SSE Syncer
- * Handles real-time review updates via Server-Sent Events
- */
 
 import type { Review } from "@/lib/types";
 import type { ReviewSSEPayload } from "../types";
 import { ReviewDeduplicator } from "./reviewDeduplicator";
 
-/**
- * Manages SSE connection and event handling for reviews
- */
 export class ReviewEventSyncer {
   private eventSource: EventSource | null = null;
   private listeners: Set<(reviews: Review[]) => void> = new Set();
@@ -17,12 +10,9 @@ export class ReviewEventSyncer {
 
   constructor(private movieId: string) {}
 
-  /**
-   * Connect to review events stream
-   */
   connect(): void {
     if (this.eventSource) {
-      return; // Already connected
+      return;
     }
 
     try {
@@ -40,34 +30,23 @@ export class ReviewEventSyncer {
     }
   }
 
-  /**
-   * Subscribe to review updates
-   */
   subscribe(listener: (reviews: Review[]) => void): () => void {
     this.listeners.add(listener);
 
-    // Return unsubscribe function
     return () => {
       this.listeners.delete(listener);
     };
   }
 
-  /**
-   * Update current reviews (for reconciliation context)
-   */
   setCurrentReviews(reviews: Review[]): void {
     this.currentReviews = reviews;
   }
 
-  /**
-   * Handle incoming SSE event
-   */
   private handleReviewUpdate(ev: MessageEvent): void {
     try {
       const payload = JSON.parse(ev.data || "{}") as ReviewSSEPayload;
       const incomingMovieId = payload?.movieId;
       
-      // Filter: only handle events for this movie
       if (incomingMovieId !== this.movieId) {
         return;
       }
@@ -78,14 +57,12 @@ export class ReviewEventSyncer {
 
       let nextReviews = [...this.currentReviews];
 
-      // Handle deletions
       if (action === "deleted" && serverReview?.id) {
         nextReviews = ReviewDeduplicator.removeById(nextReviews, serverReview.id);
         this.notifyListeners(nextReviews);
         return;
       }
 
-      // Fast-path: handle likes without full reconciliation
       if (action === "liked" && serverReview?.id) {
         nextReviews = nextReviews.map((review) =>
           review.id === serverReview.id
@@ -96,7 +73,6 @@ export class ReviewEventSyncer {
         return;
       }
 
-      // Fast-path: handle updates
       if (action === "updated" && serverReview?.id) {
         nextReviews = nextReviews.map((review) =>
           review.id === serverReview.id ? serverReview : review
@@ -105,10 +81,8 @@ export class ReviewEventSyncer {
         return;
       }
 
-      // Op-based reconciliation for creates
       if (action === "created" && serverReview) {
         if (incomingOpId) {
-          // This is our optimistic review being reconciled
           const tempReview = nextReviews.find(
             (r) => (r as any).opId === incomingOpId || (r as any).tempId === incomingOpId
           );
@@ -120,11 +94,9 @@ export class ReviewEventSyncer {
               serverReview
             );
           } else {
-            // New review from another user
             nextReviews = [serverReview, ...nextReviews];
           }
         } else {
-          // Review from another user (no opId), just add it
           const exists = nextReviews.some((r) => r.id === serverReview.id);
           if (!exists) {
             nextReviews = [serverReview, ...nextReviews];
@@ -135,7 +107,6 @@ export class ReviewEventSyncer {
         return;
       }
 
-      // Op-based reconciliation for replies
       if (action === "replied" && incomingOpId && serverReview) {
         let handled = false;
 
@@ -178,9 +149,6 @@ export class ReviewEventSyncer {
     }
   }
 
-  /**
-   * Notify all listeners of review changes
-   */
   private notifyListeners(reviews: Review[]): void {
     this.currentReviews = reviews;
     for (const listener of this.listeners) {
@@ -188,9 +156,6 @@ export class ReviewEventSyncer {
     }
   }
 
-  /**
-   * Disconnect from event stream
-   */
   disconnect(): void {
     if (this.eventSource) {
       this.eventSource.close();
@@ -199,17 +164,11 @@ export class ReviewEventSyncer {
     this.listeners.clear();
   }
 
-  /**
-   * Check if connected
-   */
   isConnected(): boolean {
     return this.eventSource !== null && this.eventSource.readyState === EventSource.OPEN;
   }
 }
 
-/**
- * Global registry of syncers to prevent duplicate connections
- */
 const syncerRegistry = new Map<string, ReviewEventSyncer>();
 
 export function getOrCreateSyncer(movieId: string): ReviewEventSyncer {

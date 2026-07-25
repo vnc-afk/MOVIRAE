@@ -1,8 +1,3 @@
-/**
- * Movie Detail Feature - Utilities
- * Re-export all utility functions and classes
- */
-
 export * from "./movieApi";
 export * from "./reviewsApi";
 export { ReviewDeduplicator } from "./reviewDeduplicator";

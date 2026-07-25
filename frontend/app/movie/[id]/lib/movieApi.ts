@@ -1,13 +1,7 @@
-/**
- * Movie Detail API Layer
- * Handles all data fetching for movie details, streaming, and state
- */
-
-import type { MovieApiResponse } from "../types";
 
 /**
- * Fetch user's movie-related lists in parallel
- * Returns [watchlist, favorites, watched] IDs
+ * Load the current user's movie-related action state and watch experience.
+ * This is used to hydrate the movie detail page when the user first opens it.
  */
 export async function fetchUserMovieState(movieId: string) {
   try {
@@ -48,7 +42,7 @@ export async function fetchUserMovieState(movieId: string) {
 }
 
 /**
- * Update a movie action (watchlist, favorites, watched)
+ * Toggle a movie action for the current user and return the updated movie id list.
  */
 export async function updateMovieAction(
   key: "user-watchlist-current" | "user-favorites-current" | "user-watched-current",
@@ -77,7 +71,11 @@ export async function updateMovieAction(
 }
 
 /**
- * Save watch experience for a movie
+ * Persist the user's watch experience for this movie.
+ * Returns the saved experience if successful, otherwise an error object.
+ */
+/**
+ * Persist the user's watch experience for this movie to the backend.
  */
 export async function saveWatchExperience(movieId: string, experience: any) {
   try {

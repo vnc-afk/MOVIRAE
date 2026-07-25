@@ -1,10 +1,10 @@
-/**
- * Reviews API Layer
- * Handles all review-related API calls with proper error handling
- */
 
 import type { Review } from "@/lib/types";
 
+/**
+ * Normalize API responses and surface a standard ok/error result shape.
+ * Handles both non-2xx responses and API responses with success=false.
+ */
 async function parseApiResponse<T>(response: Response): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
   const json = await response.json().catch(() => null);
 
@@ -16,7 +16,7 @@ async function parseApiResponse<T>(response: Response): Promise<{ ok: true; data
 }
 
 /**
- * Fetch reviews for a movie
+ * Load movie reviews from the API and return an empty list on failure.
  */
 export async function fetchMovieReviews(movieId: string): Promise<Review[]> {
   try {
@@ -30,7 +30,8 @@ export async function fetchMovieReviews(movieId: string): Promise<Review[]> {
 }
 
 /**
- * Create a new review with optimistic operation tracking
+ * Create a review and return the saved Review payload.
+ * Headers are provided by optimistic operation tracking.
  */
 export async function createReview(
   tmdbId: string,
@@ -63,6 +64,9 @@ export async function createReview(
 /**
  * Update an existing review
  */
+/**
+ * Update an existing review with the user's latest rating and comment.
+ */
 export async function updateReview(
   reviewId: string,
   tmdbId: string,
@@ -89,7 +93,7 @@ export async function updateReview(
 }
 
 /**
- * Delete a review
+ * Remove a review by id.
  */
 export async function deleteReview(reviewId: string): Promise<{ success: boolean; error?: string }> {
   try {
@@ -106,20 +110,13 @@ export async function deleteReview(reviewId: string): Promise<{ success: boolean
   }
 }
 
-/**
- * Like/unlike a review
- */
+
 export async function toggleReviewLike(reviewId: string): Promise<Review | null> {
   try {
     const response = await fetch(`/api/reviews/${reviewId}/like`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
-
-    // FIX: was `json?.value ?? null` — the route wraps its payload as
-    // apiSuccess(result.value), i.e. `{ success, data: <review> }`. There
-    // is no top-level `.value` key in that response at all, so this always
-    // returned null regardless of whether the like actually succeeded.
     const result = await parseApiResponse<Review>(response);
     if (!result.ok) {
       console.error("Failed to toggle review like:", result.error);
@@ -133,9 +130,7 @@ export async function toggleReviewLike(reviewId: string): Promise<Review | null>
   }
 }
 
-/**
- * Reply to a review
- */
+
 export async function replyToReview(
   reviewId: string,
   comment: string,
@@ -148,8 +143,6 @@ export async function replyToReview(
       body: JSON.stringify({ comment }),
     });
 
-    // FIX: same double-wrap issue as createReview — data is now the
-    // unwrapped review payload, not the full response envelope.
     const result = await parseApiResponse(response);
     if (!result.ok) return { success: false, error: result.error };
 
