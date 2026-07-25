@@ -89,6 +89,9 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
     if (session?.user?.email) {
       initializeState();
+    } else {
+      movieActions.setInitialState([], [], []);
+      watchExperience.setInitialValue(null);
     }
   }, [resolvedParams.id, session?.user?.email]);
 
@@ -179,6 +182,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       } catch (error) {
         reviewsManager.removeReview(tempId);
         toast.error(error instanceof Error ? error.message : "Unable to save review.");
+        reviewDialog.setSubmitting(false);
       } finally {
         removeInFlightOp(opId);
       }
