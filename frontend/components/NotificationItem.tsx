@@ -2,7 +2,18 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { Bell } from "lucide-react";
+import {
+  Bell,
+  UserPlus,
+  Heart,
+  MessageCircle,
+  MessagesSquare,
+  CalendarPlus,
+  Share2,
+  Users,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import type { NotificationItem as NotificationItemType } from "@/lib/types";
 import { formatDistanceToNowStrict, format } from "date-fns";
 
@@ -19,6 +30,20 @@ function formatExactDate(value: string) {
   return format(parsed, "PPpp");
 }
 
+const NOTIFICATION_ICONS: Record<NotificationItemType["type"], LucideIcon> = {
+  follow: UserPlus,
+  review_like: Heart,
+  review_reply: MessageCircle,
+  discussion_created: MessagesSquare,
+  discussion_like: Heart,
+  discussion_reply: MessageCircle,
+  event_created: CalendarPlus,
+  shared_list_like: Heart,
+  shared_list_comment: MessageCircle,
+  group_invite: Users,
+  recommendation: Sparkles,
+};
+
 type Props = {
   notif: NotificationItemType;
   index?: number;
@@ -27,7 +52,8 @@ type Props = {
 };
 
 function NotificationItem({ notif, index = 0, onClick, onHover }: Props) {
-  const Icon = Bell;
+  const Icon = NOTIFICATION_ICONS[notif.type] ?? Bell;
+
   const actorName = notif.user?.displayName ?? "Someone";
   const actorAvatar = notif.user?.avatar;
 
@@ -82,6 +108,7 @@ function areEqual(prev: Props, next: Props) {
     a.id === b.id &&
     a.read === b.read &&
     a.message === b.message &&
+    a.type === b.type &&
     a.user?.avatar === b.user?.avatar &&
     a.user?.displayName === b.user?.displayName
   );
