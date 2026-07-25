@@ -1,7 +1,3 @@
-/**
- * Movie Detail Feature Hooks
- * Re-export all hooks for clean imports
- */
 
 export { useMovieDetail } from "./useMovieDetail";
 export type { UseMovieDetailOptions, UseMovieDetailResult } from "./useMovieDetail";

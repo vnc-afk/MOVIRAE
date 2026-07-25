@@ -1,7 +1,3 @@
-/**
- * useWatchExperience Hook
- * Manages watch experience state and persistence
- */
 
 import { useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +13,10 @@ export interface UseWatchExperienceResult {
   saveWatchExperience: (experience: WatchExperience) => Promise<boolean>;
 }
 
+/**
+ * Tracks the user's watch experience for a movie and persists it to the server.
+ * Invalidates dependent caches after a successful save.
+ */
 export function useWatchExperience(movieId: string): UseWatchExperienceResult {
   const queryClient = useQueryClient();
   const [watchExperience, setWatchExperience] = useState<WatchExperience | null>(null);

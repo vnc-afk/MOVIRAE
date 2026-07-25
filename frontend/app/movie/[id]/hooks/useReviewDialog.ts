@@ -1,7 +1,3 @@
-/**
- * useReviewDialog Hook
- * Manages review creation/editing dialog state
- */
 
 import { useState, useCallback } from "react";
 import type { Review } from "@/lib/types";
@@ -20,6 +16,9 @@ export interface UseReviewDialogResult {
   reset: () => void;
 }
 
+/**
+ * Manages review dialog open state and form values for creating or editing reviews.
+ */
 export function useReviewDialog(): UseReviewDialogResult {
   const [isOpen, setIsOpen] = useState(false);
   const [rating, setRating] = useState(0);

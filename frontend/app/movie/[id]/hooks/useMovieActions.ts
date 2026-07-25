@@ -1,7 +1,3 @@
-/**
- * useMovieActions Hook
- * Manages watched, watchlist, and liked state with optimistic updates
- */
 
 import { useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,6 +20,11 @@ export interface UseMovieActionsResult {
   setInitialState: (watchlist: string[], favorites: string[], watched: string[]) => void;
 }
 
+/**
+ * Hook for tracking the current user's movie action state.
+ * Handles watched, watchlist, and favorite toggles, and keeps UI state synced
+ * with the server response.
+ */
 export function useMovieActions(movieId: string): UseMovieActionsResult {
   const queryClient = useQueryClient();
 
@@ -52,9 +53,9 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
         !isWatched
       );
 
+      // If the API returns the updated list, keep local state in sync.
       if (Array.isArray(result)) {
         setIsWatched(result.includes(movieId));
-        // Invalidate stats caches when watched status changes
         queryClient.invalidateQueries({ queryKey: queryKeys.stats.current() });
         queryClient.invalidateQueries({ queryKey: queryKeys.wrapped.current() });
       }

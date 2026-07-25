@@ -1,11 +1,6 @@
-/**
- * useReviewsManager Hook
- * Manages review list state with SSE synchronization and deduplication
- */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
 import type { Review } from "@/lib/types";
 import * as reviewsApi from "../lib/reviewsApi";
 import { ReviewDeduplicator } from "../lib/reviewDeduplicator";
@@ -22,8 +17,11 @@ export interface UseReviewsManagerResult {
   reconcileReview: (tempId: string, serverReview: Review) => void;
 }
 
+/**
+ * Manages the movie review list with optimistic local updates and server-side sync.
+ * Keeps a reference to the latest reviews for the syncer subscription.
+ */
 export function useReviewsManager(movieId: string, userEmail: string | undefined): UseReviewsManagerResult {
-  const queryClient = useQueryClient();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const reviewsRef = useRef<Review[]>([]);
@@ -49,6 +47,7 @@ export function useReviewsManager(movieId: string, userEmail: string | undefined
     const syncer = getOrCreateSyncer(movieId);
     syncer.setCurrentReviews(reviewsRef.current);
 
+    // Subscribe to review updates from the shared syncer and deduplicate entries.
     const unsubscribe = syncer.subscribe((updatedReviews) => {
       setReviews(ReviewDeduplicator.deduplicate(updatedReviews));
     });

@@ -1,7 +1,3 @@
-/**
- * useMovieDetail Hook
- * Fetches and manages movie details with caching
- */
 
 import { useMemo } from "react";
 import React, { useEffect, useCallback } from "react";
@@ -26,6 +22,10 @@ export interface UseMovieDetailResult {
   refetch: () => Promise<void>;
 }
 
+/**
+ * Loads the primary movie detail record, similar movie recommendations,
+ * and the streaming availability for the current movie.
+ */
 export function useMovieDetail({ movieId, enabled = true }: UseMovieDetailOptions): UseMovieDetailResult {
   const movieQuery = usePrefetchAwareQuery<Movie | null>({
     queryKey: queryKeys.movie.detail(movieId),
@@ -47,6 +47,7 @@ export function useMovieDetail({ movieId, enabled = true }: UseMovieDetailOption
       return;
     }
 
+    // Avoid updating state after the component has unmounted or the movie id has changed.
     let cancelled = false;
 
     setStreamingLoading(true);

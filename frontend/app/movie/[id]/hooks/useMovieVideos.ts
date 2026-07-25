@@ -11,6 +11,11 @@ export interface MovieVideo {
   published_at?: string;
 }
 
+/**
+ * Loads a movie's video assets from TMDB for the trailer modal.
+ * Uses prefetch-aware React Query to avoid unnecessary loading when the
+ * movie id is not yet available or the modal is closed.
+ */
 export function useMovieVideos(movieId: string, enabled = true) {
   return usePrefetchAwareQuery<MovieVideo[]>({
     queryKey: queryKeys.movie.videos(movieId),
