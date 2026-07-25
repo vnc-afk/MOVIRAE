@@ -57,6 +57,8 @@ export function ReviewDialog({
                   size="icon"
                   onClick={() => onRatingChange(value)}
                   className="h-10 w-10"
+                  aria-label={`Rate ${value} out of 5 stars`}
+                  aria-pressed={rating >= value}
                 >
                   <Star className={rating >= value ? "h-4 w-4 fill-current" : "h-4 w-4"} />
                 </Button>
