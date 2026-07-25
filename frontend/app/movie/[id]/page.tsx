@@ -4,19 +4,17 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { use } from "react";
 import type { Review, WatchExperience } from "@/lib/types";
-import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
+import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId } from "@/lib/optimistic";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import { TrailerModal } from "@/components/TrailerModal";
 import { toast } from "sonner";
 
-// Feature module imports
 import {
   useMovieDetail,
   useMovieActions,
@@ -43,13 +41,17 @@ type MovieDetailPageProps = {
   }>;
 };
 
+/**
+ * Movie detail page.
+ * Coordinates detail loading, related recommendations, streaming availability,
+ * review creation/edit flows, watch actions, and watch experience persistence.
+ */
 export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const resolvedParams = use(params);
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const { addInFlightOp, removeInFlightOp, isInFlight } = useOptimisticOps();
 
-  // State management hooks
   const movieDetail = useMovieDetail({ movieId: resolvedParams.id });
   const movieActions = useMovieActions(resolvedParams.id);
   const reviewsManager = useReviewsManager(resolvedParams.id, session?.user?.email ?? undefined);
@@ -70,6 +72,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     setTrailerOpen(open);
 
     if (!open) {
+      // Remove the trailer query param from the URL when the modal closes,
+      // keeping page navigation state in sync with modal visibility.
       const searchParamsCopy = new URLSearchParams(searchParams.toString());
       searchParamsCopy.delete("trailer");
       const searchString = searchParamsCopy.toString();
@@ -79,7 +83,6 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     }
   };
 
-  // Initialize user movie state
   useEffect(() => {
     async function initializeState() {
       const state = await movieApi.fetchUserMovieState(resolvedParams.id);
@@ -87,6 +90,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       watchExperience.setInitialValue(state.watchExperience);
     }
 
+    // Hydrate movie action state only for authenticated users.
     if (session?.user?.email) {
       initializeState();
     } else {
@@ -95,7 +99,6 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     }
   }, [resolvedParams.id, session?.user?.email]);
 
-  // Handle review operations
   const handleSaveReview = async () => {
     if (!movieDetail.movie) return;
 
@@ -108,7 +111,9 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     reviewDialog.setSubmitting(true);
 
     if (!editing) {
-      // Optimistic create
+
+      // Create an optimistic review placeholder immediately while the API request
+      // completes. The temp review will be reconciled with the server response.
       const tempId = makeTempId("review");
       const op = { opId: generateOpId("review"), type: "create" as const, tempId, ts: Date.now() };
       const opId = `movie-review-${movieDetail.movie.id}`;
@@ -169,6 +174,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
         const serverReview = result.data?.value;
         if (serverReview) {
+          // Replace the optimistic placeholder with the server-provided review.
           reviewsManager.reconcileReview(tempId, serverReview);
         } else {
           await reviewsManager.refetch();
@@ -189,7 +195,6 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
       return;
     }
 
-    // Editing existing review
     if (!reviewsManager.currentUserReview) return;
 
     try {
@@ -218,6 +223,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   };
 
   const handleDeleteReview = async (reviewId: string) => {
+    // Confirm destructive review deletion before calling the API.
     if (!window.confirm("Delete this review?")) return;
 
     const result = await reviewsApi.deleteReview(reviewId);
@@ -253,7 +259,6 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
     }
   };
 
-  // Loading and error states
   if (movieDetail.isLoading) {
     return (
       <div className="container py-20 text-center">
@@ -277,7 +282,6 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
   return (
     <div className="pb-20 md:pb-0">
-      {/* Header with backdrop */}
       <div className="relative h-[80px] md:h-[180px] overflow-hidden">
         <img
           src={movie.poster}
@@ -295,9 +299,7 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         </div>
       </div>
 
-      {/* Main content */}
       <div className="container -mt-20 md:-mt-28 relative z-10">
-        {/* Hero section with poster and info */}
         <div className="flex flex-col md:flex-row gap-6 md:gap-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -345,10 +347,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           </motion.div>
         </div>
 
-        {/* Cast section */}
         <CastSection cast={movie.cast ?? []} />
 
-        {/* Reviews section */}
         <ReviewsSection
           reviews={reviewsManager.reviews}
           isLoading={reviewsManager.isLoading}
@@ -360,7 +360,6 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           onRefresh={reviewsManager.refetch}
         />
 
-        {/* Watch experience section */}
         <WatchExperienceSection
           movieTitle={movie.title}
           initialValue={watchExperience.watchExperience}
@@ -368,11 +367,9 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           onSave={handleSaveWatchExperience}
         />
 
-        {/* Similar movies section */}
         <SimilarMoviesSection movies={movieDetail.similar} />
       </div>
 
-      {/* Modals */}
       <TrailerModal open={trailerOpen} onOpenChange={handleTrailerOpenChange} title={movie.title} movieId={movie.id} />
 
       <ReviewDialog
