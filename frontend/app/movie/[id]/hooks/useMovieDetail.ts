@@ -3,6 +3,7 @@
  * Fetches and manages movie details with caching
  */
 
+import { useMemo } from "react";
 import React, { useEffect, useCallback } from "react";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
@@ -81,7 +82,7 @@ export function useMovieDetail({ movieId, enabled = true }: UseMovieDetailOption
 
   return {
     movie: movieQuery.data ?? null,
-    similar: similarQuery.data?.slice(0, 6) ?? [],
+    similar: useMemo(() => similarQuery.data?.slice(0, 6) ?? [], [similarQuery.data]),
     isLoading: movieQuery.isPending,
     error: movieQuery.error,
     streamingOn,

@@ -28,12 +28,10 @@ export function useReviewsManager(movieId: string, userEmail: string | undefined
   const [isLoading, setIsLoading] = useState(false);
   const reviewsRef = useRef<Review[]>([]);
 
-  // Update ref whenever reviews change
   useEffect(() => {
     reviewsRef.current = reviews;
   }, [reviews]);
 
-  // Fetch initial reviews
   useEffect(() => {
     async function loadReviews() {
       setIsLoading(true);
@@ -44,11 +42,9 @@ export function useReviewsManager(movieId: string, userEmail: string | undefined
         setIsLoading(false);
       }
     }
-
     loadReviews();
   }, [movieId]);
 
-  // Set up SSE syncer
   useEffect(() => {
     const syncer = getOrCreateSyncer(movieId);
     syncer.setCurrentReviews(reviewsRef.current);
@@ -65,6 +61,11 @@ export function useReviewsManager(movieId: string, userEmail: string | undefined
     };
   }, [movieId]);
 
+  useEffect(() => {
+    const syncer = getOrCreateSyncer(movieId);
+    syncer.setCurrentReviews(reviews);
+  }, [movieId, reviews]);
+
   const refetch = useCallback(async () => {
     const fetched = await reviewsApi.fetchMovieReviews(movieId);
     setReviews(fetched);
@@ -79,22 +80,14 @@ export function useReviewsManager(movieId: string, userEmail: string | undefined
   }, []);
 
   const updateReview = useCallback((reviewId: string, updates: Partial<Review>) => {
-    setReviews((prev) =>
-      prev.map((review) =>
-        review.id === reviewId ? { ...review, ...updates } : review
-      )
-    );
+    setReviews((prev) => prev.map((review) => (review.id === reviewId ? { ...review, ...updates } : review)));
   }, []);
 
   const reconcileReview = useCallback((tempId: string, serverReview: Review) => {
-    setReviews((prev) =>
-      ReviewDeduplicator.reconcileTemp(prev, tempId, serverReview)
-    );
+    setReviews((prev) => ReviewDeduplicator.reconcileTemp(prev, tempId, serverReview));
   }, []);
 
-  const currentUserReview = reviews.find(
-    (review) => review.user.email === userEmail
-  ) ?? null;
+  const currentUserReview = reviews.find((review) => review.user.email === userEmail) ?? null;
 
   return {
     reviews,

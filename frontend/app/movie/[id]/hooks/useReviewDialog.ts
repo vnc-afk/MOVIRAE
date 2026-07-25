@@ -37,6 +37,7 @@ export function useReviewDialog(): UseReviewDialogResult {
       setRating(0);
       setComment("");
     }
+    setSubmitting(false);
     setIsOpen(true);
   }, []);
 
