@@ -158,7 +158,7 @@ export interface SharedListComment {
 export interface NotificationItem {
   id: string;
   type: "follow" | "review_like" | "review_reply" | "discussion_created" | "discussion_like" | "discussion_reply" | "event_created" | "shared_list_like" | "shared_list_comment" | "group_invite" | "recommendation";
-  user: UserProfile;
+  user: UserProfile | null;
   message: string;
   date: string;
   read: boolean;
