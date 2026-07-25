@@ -5,6 +5,11 @@ import { addReview } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
+/**
+ * Create a new review for the current authenticated user.
+ * Validates the request payload and supports optimistic client
+ * reconciliation using the operation id header/body.
+ */
 export async function POST(request: Request) {
   try {
     const currentUser = await requireAuth(request);

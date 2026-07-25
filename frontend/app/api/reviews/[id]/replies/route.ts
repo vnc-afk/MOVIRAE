@@ -4,6 +4,10 @@ import { createReply } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
+/**
+ * Create a reply to an existing review.
+ * Validates the reply payload and rejects empty comments.
+ */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await requireAuth(request);

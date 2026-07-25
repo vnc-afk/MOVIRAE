@@ -4,6 +4,10 @@ import { toggleReplyLike } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
+/**
+ * Toggle a like on a reply.
+ * Uses optimistic operation ids to support client-side tracking.
+ */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; replyId: string }> }) {
   try {
     const currentUser = await requireAuth(request);

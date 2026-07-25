@@ -3,6 +3,11 @@ import { subscribeToReviewEvents } from "@/lib/review-events";
 
 export const runtime = "nodejs";
 
+/**
+ * Server-sent events endpoint for review lifecycle events.
+ * Keeps the connection alive with regular heartbeats and cleans up
+ * subscriptions when the client disconnects.
+ */
 export async function GET(_request: Request) {
   const encoder = new TextEncoder();
 
@@ -26,7 +31,6 @@ export async function GET(_request: Request) {
       });
     },
     cancel() {
-      // handled via abort listener
     },
   });
 

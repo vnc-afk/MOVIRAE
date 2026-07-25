@@ -4,6 +4,11 @@ import { getMovieReviews } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
+/**
+ * Get reviews for a specific TMDB movie.
+ * This endpoint optionally uses the current user context to shape
+ * the returned review metadata.
+ */
 export async function GET(_request: Request, { params }: { params: Promise<{ tmdbId: string }> }) {
   try {
     const { tmdbId } = await params;

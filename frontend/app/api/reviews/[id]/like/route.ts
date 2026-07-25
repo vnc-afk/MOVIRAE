@@ -4,6 +4,10 @@ import { toggleReviewLike } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
+/**
+ * Toggle a like for the given review.
+ * Authenticated users can like or unlike their own review actions.
+ */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await requireAuth(request);

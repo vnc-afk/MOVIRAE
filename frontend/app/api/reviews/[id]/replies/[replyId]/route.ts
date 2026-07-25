@@ -4,6 +4,10 @@ import { deleteReply } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
+/**
+ * Delete a reply from a review.
+ * Requires authentication and reply ownership validation.
+ */
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string; replyId: string }> }) {
   try {
     const currentUser = await requireAuth(request);

@@ -5,6 +5,10 @@ import { editReview, deleteReview } from "@/app/movie/lib/movie-service";
 
 export const runtime = "nodejs";
 
+/**
+ * Update an existing review by id.
+ * Requires authentication and ownership validation.
+ */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const currentUser = await requireAuth(request);
