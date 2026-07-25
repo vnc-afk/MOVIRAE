@@ -1,7 +1,3 @@
-/**
- * ReviewsSection Component
- * Displays list of reviews with loading state
- */
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReviewCard } from "@/components/ReviewCard";
@@ -18,6 +14,11 @@ interface ReviewsSectionProps {
   onRefresh: () => void;
 }
 
+/**
+ * Review feed state for the movie detail page.
+ * Shows loading placeholders, empty state, or review cards and forwards
+ * edit/delete actions to the parent page.
+ */
 export function ReviewsSection({
   reviews,
   isLoading,

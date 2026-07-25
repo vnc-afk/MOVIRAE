@@ -1,7 +1,3 @@
-/**
- * Movie Detail Feature Components
- * Re-export all components for clean imports
- */
 
 export { MovieHeader } from "./MovieHeader";
 export { MovieActions } from "./MovieActions";

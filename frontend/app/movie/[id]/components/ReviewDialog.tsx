@@ -1,7 +1,3 @@
-/**
- * ReviewDialog Component
- * Isolated dialog for creating/editing reviews
- */
 
 import { Star, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -22,6 +18,10 @@ interface ReviewDialogProps {
   isInFlight?: boolean;
 }
 
+/**
+ * Modal dialog used to create or edit a movie review.
+ * Disables submission while the form is in-flight or when the rating is missing.
+ */
 export function ReviewDialog({
   isOpen,
   movieTitle,

@@ -1,7 +1,3 @@
-/**
- * WatchExperienceSection Component
- * Displays watch experience form
- */
 
 import { HowYouWatched } from "@/components/HowYouWatched";
 import type { WatchExperience } from "@/lib/types";
@@ -13,6 +9,10 @@ interface WatchExperienceSectionProps {
   onSave: (experience: WatchExperience) => void;
 }
 
+/**
+ * Wraps the HowYouWatched component, exposing the user's watch experience form
+ * on the movie detail page and forwarding save events.
+ */
 export function WatchExperienceSection({
   movieTitle,
   initialValue,

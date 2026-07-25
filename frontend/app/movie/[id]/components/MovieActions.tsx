@@ -1,12 +1,11 @@
-/**
- * MovieActions Component
- * Displays action buttons (watched, watchlist, liked, review)
- */
 
 import { Eye, Heart, ListPlus, Play, Star, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Review } from "@/lib/types";
 
+/**
+ * Controls available movie actions shown on the detail page.
+ * Includes trailer playback, watched/watchlist/favorite toggles, and review entry.
+ */
 interface MovieActionsProps {
   movieId: string;
   isWatched: boolean;
@@ -24,7 +23,6 @@ interface MovieActionsProps {
 }
 
 export function MovieActions({
-  movieId,
   isWatched,
   isWatchlist,
   isLiked,

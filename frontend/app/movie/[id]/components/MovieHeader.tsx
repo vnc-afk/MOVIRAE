@@ -1,7 +1,3 @@
-/**
- * MovieHeader Component
- * Displays movie title, ratings, and basic info
- */
 
 import { motion } from "framer-motion";
 import type { Movie } from "@/lib/types";
@@ -12,6 +8,10 @@ interface MovieHeaderProps {
   poster: string;
 }
 
+/**
+ * Displays the top section of movie details including title, metadata,
+ * rating, synopsis, and tag chips.
+ */
 export function MovieHeader({ movie, poster }: MovieHeaderProps) {
   return (
     <>
