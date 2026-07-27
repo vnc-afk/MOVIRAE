@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useFilterSync,
   useFilterUpdater,
@@ -22,9 +22,6 @@ import type { Movie } from "@/lib/types";
 import type { FilterPreset } from "./lib/types";
 import type { FilterState } from "./lib/types";
 
-/**
- * The discover page experience, including search, filtering, pagination, and preset handling.
- */
 function DiscoverContent() {
   const [filters, setFilters, filterError] = useFilterSync();
   const updateFilter = useFilterUpdater(setFilters);
@@ -40,10 +37,17 @@ function DiscoverContent() {
   [updateFilter]
 );
 
+    const filtersRef = useRef(filters);
+    useEffect(() => {
+      filtersRef.current = filters;
+    }, [filters]);
+
+    const getCurrentFilters = useCallback(() => filtersRef.current, []);
+
   const debouncedQuery = useDebouncedValue(filters.query, TIMING_CONFIG.SEARCH_DEBOUNCE_MS);
   const debouncedFilters = useMemo(
-    () => ({ ...filters, query: debouncedQuery }),
-    [filters, debouncedQuery]
+    () => ({ query: debouncedQuery, genreId: filters.genreId, runtimeRange: filters.runtimeRange, sortBy: filters.sortBy }),
+    [debouncedQuery, filters.genreId, filters.runtimeRange, filters.sortBy]
   );
 
   const data = useDiscoverData(debouncedFilters);
@@ -177,7 +181,7 @@ function DiscoverContent() {
           isLoading={presets.isLoading}
           onApply={applyPreset}
           onSave={presets.save}
-          currentFilters={filters}
+          getCurrentFilters={getCurrentFilters}   
         />
 
         <SearchInput
