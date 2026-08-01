@@ -12,12 +12,13 @@ interface AdvancedFiltersProps {
 }
 
 /**
- * Shows collapsible advanced filter controls, currently exposing runtime filtering.
+ * Collapsible container for the discover runtime filter controls.
  */
 export const AdvancedFilters = memo(function AdvancedFilters({
   runtimeRange,
   onRuntimeChange,
 }: AdvancedFiltersProps) {
+
   const [isOpen, setIsOpen] = useState(false);
 
   return (

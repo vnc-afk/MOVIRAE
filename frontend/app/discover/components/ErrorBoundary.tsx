@@ -16,7 +16,7 @@ interface ErrorBoundaryState {
 }
 
 /**
- * Catches render-time errors in the discover tree and displays a fallback UI.
+ * Catches unexpected render-time discover errors and renders a recoverable fallback UI.
  */
 export class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
@@ -62,7 +62,7 @@ export class ErrorBoundary extends React.Component<
 }
 
 /**
- * Default fallback UI for discover errors, including retry and reset actions.
+ * Displays the default user-facing discover error view when the boundary is triggered.
  */
 function DefaultErrorUI({
   error,
@@ -124,7 +124,7 @@ function DefaultErrorUI({
 }
 
 /**
- * Displays a dismissible error banner for transient discover errors.
+ * Renders a dismissible alert banner for recoverable discover-page failures.
  */
 export function ErrorAlert({
   error,

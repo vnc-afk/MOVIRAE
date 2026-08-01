@@ -12,7 +12,7 @@ interface MovieGridProps {
 }
 
 /**
- * Loading skeleton shown while movie results are being fetched.
+ * Lightweight skeleton card used while discover results are being fetched.
  */
 const SkeletonCard = memo(({ index }: { index: number }) => (
   <motion.div
@@ -49,7 +49,7 @@ const SkeletonCard = memo(({ index }: { index: number }) => (
 SkeletonCard.displayName = "SkeletonCard";
 
 /**
- * Empty state shown when no movie results match the current filters.
+ * Empty-state view shown when the current filters produce no visible results.
  */
 const EmptyState = memo(() => (
   <motion.div
@@ -65,7 +65,7 @@ const EmptyState = memo(() => (
 EmptyState.displayName = "EmptyState";
 
 /**
- * Renders the current page of movie cards in a responsive grid.
+ * Renders the resolved movie list with the same layout for both normal and paginated views.
  */
 const MovieGridContent = memo(({ movies }: { movies: Movie[] }) => (
   <motion.div
@@ -88,8 +88,9 @@ const MovieGridContent = memo(({ movies }: { movies: Movie[] }) => (
 
 MovieGridContent.displayName = "MovieGridContent";
 
+
 /**
- * Movie grid wrapper that shows either a skeleton loader, empty state, or movie cards.
+ * Displays either a loading skeleton grid, an empty-state message, or the final movie catalog.
  */
 export const MovieGrid = memo(function MovieGrid({
   movies,

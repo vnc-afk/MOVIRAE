@@ -11,13 +11,14 @@ interface PaginationLoaderProps {
 }
 
 /**
- * Infinite-scroll pagination loader using an intersection observer sentinel.
+ * Infinite-scroll and manual-load trigger for fetching the next discover page.
  */
 export const PaginationLoader = memo(function PaginationLoader({
   isLoading,
   hasMore,
   onLoadMore,
 }: PaginationLoaderProps) {
+  
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const requestedRef = useRef(false);
 

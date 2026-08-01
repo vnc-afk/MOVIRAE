@@ -12,7 +12,7 @@ interface SortSelectorProps {
 }
 
 /**
- * Selects the sort order for movie results in discover.
+ * Selects the ordering strategy used to render the discovered movie list.
  */
 export const SortSelector = memo(function SortSelector({ value, onChange, disabled = false }: SortSelectorProps) {
   return (

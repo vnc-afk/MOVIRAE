@@ -1,8 +1,6 @@
 "use client";
 
-import { memo } from "react";
-
-import { useState } from "react";
+import { memo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Save, Sparkles } from "lucide-react";
 import type { FilterPreset, FilterState } from "../lib/types";
@@ -12,18 +10,17 @@ interface PresetManagerProps {
   isLoading: boolean;
   onApply: (preset: FilterPreset) => void;
   onSave: (name: string, filters: FilterState) => Promise<boolean>;
-  currentFilters: FilterState;
+  getCurrentFilters: () => FilterState;
 }
 
 /**
- * Displays saved filter presets and allows creating new ones.
+ * Allows users to load, apply, and save discover filter presets.
  */
 export const PresetManager = memo(function PresetManager({
   presets,
-  isLoading,
   onApply,
   onSave,
-  currentFilters,
+  getCurrentFilters,
 }: PresetManagerProps) {
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [presetName, setPresetName] = useState("");
@@ -33,7 +30,7 @@ export const PresetManager = memo(function PresetManager({
     if (!presetName.trim()) return;
 
     setIsSaving(true);
-    const success = await onSave(presetName, currentFilters);
+    const success = await onSave(presetName, getCurrentFilters());
     setIsSaving(false);
 
     if (success) {

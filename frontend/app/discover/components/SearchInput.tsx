@@ -12,7 +12,7 @@ interface SearchInputProps {
 }
 
 /**
- * Search input with built-in icon support for discover queries.
+ * Text input used for movie search queries in the discover page.
  */
 export const SearchInput = memo(function SearchInput({
   value,

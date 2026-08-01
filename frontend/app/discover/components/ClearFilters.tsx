@@ -9,7 +9,7 @@ interface ClearFiltersProps {
 }
 
 /**
- * Displays the current active filter count and a clear action.
+ * Displays the active filter summary and a reset action for the discover page.
  */
 export const ClearFilters = memo(function ClearFilters({
   activeCount,

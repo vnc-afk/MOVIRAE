@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Clock } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import type { FilterState } from "../lib/types";
@@ -10,9 +11,9 @@ interface RuntimeFilterProps {
 }
 
 /**
- * Provides a runtime slider for filtering movie durations.
+ * Provides a two-point runtime range selector for the discover filters.
  */
-export function RuntimeFilter({ value, onChange }: RuntimeFilterProps) {
+export const RuntimeFilter = memo(function RuntimeFilter({ value, onChange }: RuntimeFilterProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-1.5">
@@ -32,4 +33,4 @@ export function RuntimeFilter({ value, onChange }: RuntimeFilterProps) {
       </div>
     </div>
   );
-}
+});

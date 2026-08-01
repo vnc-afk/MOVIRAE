@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { SlidersHorizontal } from "lucide-react";
 
 /**
- * Page header for the discover experience.
+ * Renders the discover page title and supporting description.
  */
 export const DiscoverHeader = memo(function DiscoverHeader() {
   return (
