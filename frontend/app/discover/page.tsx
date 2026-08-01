@@ -23,19 +23,21 @@ import type { FilterPreset } from "./lib/types";
 import type { FilterState } from "./lib/types";
 
 function DiscoverContent() {
+  // Sync discover filters with the URL search params and keep an in-memory state copy.
+  // This enables the page to preserve state across refreshes and shareable URLs.
   const [filters, setFilters, filterError] = useFilterSync();
   const updateFilter = useFilterUpdater(setFilters);
 
   const handleQueryChange = useCallback((q: string) => updateFilter("query", q), [updateFilter]);
   const handleGenreChange = useCallback((genreId: string) => updateFilter("genreId", genreId), [updateFilter]);
   const handleRuntimeChange = useCallback(
-  (range: [number, number]) => updateFilter("runtimeRange", range),
-  [updateFilter]
+    (range: [number, number]) => updateFilter("runtimeRange", range),
+    [updateFilter]
   );
   const handleSortChange = useCallback(
-  (sortBy: FilterState["sortBy"]) => updateFilter("sortBy", sortBy),
-  [updateFilter]
-);
+    (sortBy: FilterState["sortBy"]) => updateFilter("sortBy", sortBy),
+    [updateFilter]
+  );
 
     const filtersRef = useRef(filters);
     useEffect(() => {
@@ -50,6 +52,7 @@ function DiscoverContent() {
     [debouncedQuery, filters.genreId, filters.runtimeRange, filters.sortBy]
   );
 
+  // Data hook handles genres, default trending seeds, and page-based search/genre fetches.
   const data = useDiscoverData(debouncedFilters);
   const { genres, baseMovies, isDefaultMode } = data;
   const { fetchPage, invalidateCache } = data;
@@ -70,6 +73,8 @@ function DiscoverContent() {
   // Build the visible movie pages from the current mode, applying runtime and sort filters.
   const visiblePages = useMemo(() => {
     const pages = isDefaultMode ? [baseMovies, ...pageMovies] : pageMovies;
+
+    // Apply runtime filtering and current sort order to the visible page list.
     return pages
       .map((page) => sortMovies(filterByRuntime(page, filters.runtimeRange), filters.sortBy))
       .filter((page) => page.length > 0);
@@ -94,6 +99,8 @@ function DiscoverContent() {
   }, [setFilters]);
 
   useEffect(() => {
+    // Whenever the query or selected genre changes, clear stale paginated data
+    // and revalidate discover seeds so the next page load starts fresh.
     resetPagination();
     setPageMovies([]);
     resetDedupe();
