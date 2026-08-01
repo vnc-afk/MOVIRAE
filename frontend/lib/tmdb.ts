@@ -2,9 +2,10 @@ import { cache } from "react";
 import type { Movie, CastMember } from "@/lib/types";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
-const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_REVALIDATE_SECONDS = 60;
 const TMDB_MEMORY_CACHE_TTL_MS = 60 * 1000;
+const MAX_CACHE_ENTRIES = 500;
 
 type TMDBRequestOptions = {
   suppressClientErrors?: boolean;
@@ -36,8 +37,20 @@ interface TMDBGenre {
 }
 
 const genreMap = new Map<number, string>();
+let genreMapInitPromise: Promise<void> | null = null;
 const movieDetailsCache = new Map<string, { expiresAt: number; value: Promise<Movie | null> }>();
 const tmdbJsonCache = new Map<string, { expiresAt: number; value: Promise<unknown> }>();
+
+async function ensureGenreMap(): Promise<void> {
+  if (genreMap.size > 0) return;
+  if (!genreMapInitPromise) {
+    genreMapInitPromise = initializeGenreMap().catch((error) => {
+      console.error("Failed to lazily initialize genre map:", error);
+      genreMapInitPromise = null;
+    });
+  }
+  await genreMapInitPromise;
+}
 
 function reportTmdbError(message: string, error: unknown, options?: TMDBRequestOptions) {
   if (
@@ -73,7 +86,16 @@ function getCachedValue<T>(cacheStore: Map<string, { expiresAt: number; value: P
   return cached.value;
 }
 
-function setCachedValue<T>(cacheStore: Map<string, { expiresAt: number; value: Promise<T> }>, key: string, value: Promise<T>, ttlMs = TMDB_MEMORY_CACHE_TTL_MS) {
+function setCachedValue<T>(
+  cacheStore: Map<string, { expiresAt: number; value: Promise<T> }>,
+  key: string,
+  value: Promise<T>,
+  ttlMs = TMDB_MEMORY_CACHE_TTL_MS
+) {
+  if (cacheStore.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = cacheStore.keys().next().value;
+    if (oldestKey !== undefined) cacheStore.delete(oldestKey);
+  }
   cacheStore.set(key, { expiresAt: Date.now() + ttlMs, value });
 }
 
@@ -178,6 +200,8 @@ export async function getTrendingMovies(page = 1, options?: TMDBRequestOptions):
     return [];
   }
 
+  await ensureGenreMap();
+
   try {
     const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
       `${TMDB_BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&page=${page}`,
@@ -203,6 +227,8 @@ export async function searchMovies(query: string, page = 1, options?: TMDBReques
     console.error("TMDB_API_KEY is not set");
     return [];
   }
+
+  await ensureGenreMap();
 
   try {
     const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
@@ -259,17 +285,11 @@ export async function getMovieDetails(movieId: string, options?: TMDBRequestOpti
   })();
 
   const trackedRequest = request.then((movie) => {
-    movieDetailsCache.set(normalizedMovieId, {
-      expiresAt: Date.now() + TMDB_MEMORY_CACHE_TTL_MS,
-      value: Promise.resolve(movie),
-    });
+    setCachedValue(movieDetailsCache, normalizedMovieId, Promise.resolve(movie), TMDB_MEMORY_CACHE_TTL_MS);
     return movie;
   });
 
-  movieDetailsCache.set(normalizedMovieId, {
-    expiresAt: Date.now() + TMDB_MEMORY_CACHE_TTL_MS,
-    value: trackedRequest,
-  });
+  setCachedValue(movieDetailsCache, normalizedMovieId, trackedRequest, TMDB_MEMORY_CACHE_TTL_MS);
 
   return trackedRequest;
 }
@@ -289,22 +309,22 @@ export async function getSimilarMovies(movieId: string, options?: TMDBRequestOpt
     return [];
   }
 
+  await ensureGenreMap();
+
   try {
     const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
-      `${TMDB_BASE_URL}/movie/${movieId}/similar?api_key=${TMDB_API_KEY}`
+      `${TMDB_BASE_URL}/movie/${movieId}/similar?api_key=${TMDB_API_KEY}`,
+      options?.signal
     );
 
     if (!data || !data.results) return [];
 
-    return Promise.all(
-      data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
-    );
+    return Promise.all(data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie)));
   } catch (error) {
     reportTmdbError("Failed to fetch similar movies:", error, options);
     return [];
   }
 }
-
 /**
  * Transform TMDB movie response to app Movie interface
  */
@@ -370,10 +390,12 @@ export async function getMoviesByGenre(
     return [];
   }
 
+  await ensureGenreMap();
+
   try {
     const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
-      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}`
-      , options?.signal
+      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}`,
+      options?.signal
     );
 
     if (!data || !data.results) return [];
