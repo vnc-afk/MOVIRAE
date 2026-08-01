@@ -22,6 +22,9 @@ import type { Movie } from "@/lib/types";
 import type { FilterPreset } from "./lib/types";
 import type { FilterState } from "./lib/types";
 
+/**
+ * Hosts the discover-page state orchestration and coordinates filters, pagination, and result rendering.
+ */
 function DiscoverContent() {
   // Sync discover filters with the URL search params and keep an in-memory state copy.
   // This enables the page to preserve state across refreshes and shareable URLs.
@@ -232,6 +235,9 @@ function DiscoverContent() {
   );
 }
 
+/**
+ * Entry point for the Smart Discover page.
+ */
 export default function Discover() {
   return (
     <ErrorBoundary>
