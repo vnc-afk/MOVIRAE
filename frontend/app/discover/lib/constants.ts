@@ -5,6 +5,8 @@ export const API_CONFIG = {
   RETRY_DELAY_MS: 1000, 
 } as const;
 
+// Common configuration used across the discover feature.
+
 export const PAGINATION_CONFIG = {
   INITIAL_PAGE: 1,
   DEFAULT_PAGE_SIZE: 20,
@@ -12,11 +14,15 @@ export const PAGINATION_CONFIG = {
   INTERSECTION_OBSERVER_MARGIN: "500px",
 } as const;
 
+// Pagination related constants used by the discover loader.
+
 export const FILTER_CONFIG = {
   MIN_RUNTIME: 0,
   MAX_RUNTIME: 200,
   RUNTIME_STEP: 5,
 } as const;
+
+// Default bounds for the advanced runtime filter.
 
 export const GRID_CONFIG = {
   MOBILE_COLS: 2,

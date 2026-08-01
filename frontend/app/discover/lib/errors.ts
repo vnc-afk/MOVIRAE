@@ -1,4 +1,7 @@
 
+/**
+ * Base error type for discover-feature failures that need structured metadata.
+ */
 export class DiscoverError extends Error {
   constructor(
     message: string,
@@ -8,7 +11,10 @@ export class DiscoverError extends Error {
   ) {
     super(message);
     this.name = "DiscoverError";
-    Error.captureStackTrace(this, this.constructor);
+    if (typeof Error.captureStackTrace === "function") {
+      Error.captureStackTrace(this, this.constructor);
+    }
+
   }
 
   toJSON() {
@@ -22,6 +28,9 @@ export class DiscoverError extends Error {
   }
 }
 
+/**
+ * Wraps TMDB API failures so the discover UI can surface provider-specific error details.
+ */
 export class TMDBError extends DiscoverError {
   constructor(
     message: string,
@@ -33,6 +42,9 @@ export class TMDBError extends DiscoverError {
   }
 }
 
+/**
+ * Represents invalid user input or malformed filter data in the discover flow.
+ */
 export class ValidationError extends DiscoverError {
   constructor(
     message: string,
@@ -43,6 +55,9 @@ export class ValidationError extends DiscoverError {
   }
 }
 
+/**
+ * Captures transport-level failures when a discover request cannot reach the backend.
+ */
 export class NetworkError extends DiscoverError {
   constructor(
     message: string,
@@ -55,6 +70,9 @@ export class NetworkError extends DiscoverError {
   }
 }
 
+/**
+ * Signals a failed save or restore operation for discover-side persisted state.
+ */
 export class PersistenceError extends DiscoverError {
   constructor(
     message: string,
@@ -65,6 +83,9 @@ export class PersistenceError extends DiscoverError {
   }
 }
 
+/**
+ * Marks a request that was intentionally cancelled during a newer discover fetch.
+ */
 export class AbortedError extends DiscoverError {
   constructor(message: string = "Request was cancelled") {
     super(message, "ABORTED", undefined, { cancelled: true });
@@ -72,6 +93,9 @@ export class AbortedError extends DiscoverError {
   }
 }
 
+/**
+ * Represents a discover request that exceeded the allowed timeout budget.
+ */
 export class TimeoutError extends DiscoverError {
   constructor(message: string = "Request timed out") {
     super(message, "TIMEOUT", undefined, { timeout: true });
@@ -79,10 +103,16 @@ export class TimeoutError extends DiscoverError {
   }
 }
 
+/**
+ * Type-guards whether an unknown value is a discover-domain error instance.
+ */
 export function isDiscoverError(error: unknown): error is DiscoverError {
   return error instanceof DiscoverError;
 }
 
+/**
+ * Identifies cancellation-style errors that should be treated as request aborts.
+ */
 export function isAbortError(error: unknown): error is DOMException {
   return (
     error instanceof DOMException &&
@@ -90,6 +120,9 @@ export function isAbortError(error: unknown): error is DOMException {
   );
 }
 
+/**
+ * Detects timeout-aware errors so timeout handling can be normalized consistently.
+ */
 export function isTimeoutError(error: unknown): error is DOMException {
   return (
     error instanceof DOMException &&
@@ -97,6 +130,12 @@ export function isTimeoutError(error: unknown): error is DOMException {
   );
 }
 
+/**
+ * Converts an unknown thrown value into a consistent discover error object.
+ *
+ * @param error - The raw thrown value from a request or validation path.
+ * @returns A discover-specific error with stable messaging and codes.
+ */
 export function normalizeError(error: unknown): DiscoverError {
   if (error instanceof DiscoverError) {
     return error;

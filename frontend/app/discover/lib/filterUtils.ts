@@ -4,6 +4,9 @@ import { FILTER_CONFIG } from "./constants";
 
 export type { FilterState };
 
+/**
+ * Default discover state used when the page first mounts or a reset is requested.
+ */
 export const DEFAULT_FILTERS: FilterState = {
   query: "",
   genreId: "",
@@ -77,7 +80,10 @@ function validateGenreId(genreId: string): string {
 }
 
 /**
- * Reads and validates discover filter state from URL search parameters.
+ * Reconstructs the discover filter state from the current URL search parameters.
+ *
+ * @param searchParams - URL parameter accessor used by Next.js route hooks.
+ * @returns A validated filter state object.
  */
 export function readFiltersFromSearchParams(
   searchParams: { get: (key: string) => string | null }
@@ -102,7 +108,11 @@ export function readFiltersFromSearchParams(
 }
 
 /**
- * Builds a URL with discover filter state encoded as query parameters.
+ * Serializes the current filter state back into a shareable URL pathname.
+ *
+ * @param pathname - Base route used to build the final URL.
+ * @param filters - Current filter state to encode.
+ * @returns A pathname with only non-default filters persisted.
  */
 export function buildFiltersUrl(pathname: string, filters: FilterState): string {
   const params = new URLSearchParams();
@@ -132,7 +142,7 @@ export function buildFiltersUrl(pathname: string, filters: FilterState): string 
 }
 
 /**
- * Compares filter values to avoid unnecessary state and URL updates.
+ * Compares two filter objects to determine whether the discover URL needs an update.
  */
 export function areFiltersEqual(
   left: FilterState,
@@ -148,7 +158,7 @@ export function areFiltersEqual(
 }
 
 /**
- * Determines which discover mode is active based on the current filters.
+ * Decides which discover data source should drive the current request flow.
  */
 export function getFilterMode(
   filters: FilterState
@@ -159,6 +169,9 @@ export function getFilterMode(
   return "default";
 }
 
+/**
+ * Counts how many non-default filter controls are currently affecting the results.
+ */
 export function countActiveFilters(filters: FilterState): number {
   return (
     (filters.genreId ? 1 : 0) +
@@ -169,6 +182,13 @@ export function countActiveFilters(filters: FilterState): number {
   );
 }
 
+/**
+ * Returns a new array sorted according to the selected discover sort mode.
+ *
+ * @param movies - Movie collection to order in place.
+ * @param sortBy - Selected sort mode.
+ * @returns A sorted copy of the provided records.
+ */
 export function sortMovies<T extends { rating?: number; year?: number; title?: string; runtime?: number }>(
   movies: readonly T[],
   sortBy: FilterState["sortBy"]
@@ -194,6 +214,9 @@ export function sortMovies<T extends { rating?: number; year?: number; title?: s
 }
 
 
+/**
+ * Keeps only movies whose runtime falls within the requested duration window.
+ */
 export function filterByRuntime<T extends { runtime?: number }>(
   movies: readonly T[],
   runtimeRange: [number, number]
@@ -205,6 +228,9 @@ export function filterByRuntime<T extends { runtime?: number }>(
   );
 }
 
+/**
+ * Removes repeated movie records while preserving the first occurrence for each unique ID.
+ */
 export function deduplicateMovies<T extends { id: string }>(
   movies: readonly T[]
 ): T[] {
