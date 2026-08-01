@@ -3,9 +3,22 @@ import { useMemo } from "react";
 import React, { useEffect, useCallback } from "react";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
-import { getMovieDetails, getSimilarMovies } from "@/lib/tmdb";
 import { getStreamingPlatforms } from "@/lib/watchmode";
 import type { Movie } from "@/lib/types";
+
+async function fetchMovieDetails(movieId: string): Promise<Movie | null> {
+  const response = await fetch(`/api/tmdb/movie/${movieId}`);
+  if (!response.ok) return null;
+  const data = await response.json().catch(() => null);
+  return (data as Movie | null) ?? null;
+}
+
+async function fetchSimilarMovies(movieId: string): Promise<Movie[]> {
+  const response = await fetch(`/api/tmdb/movie/${movieId}/similar`);
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => null);
+  return Array.isArray(data) ? data : [];
+}
 
 export interface UseMovieDetailOptions {
   movieId: string;
@@ -29,13 +42,13 @@ export interface UseMovieDetailResult {
 export function useMovieDetail({ movieId, enabled = true }: UseMovieDetailOptions): UseMovieDetailResult {
   const movieQuery = usePrefetchAwareQuery<Movie | null>({
     queryKey: queryKeys.movie.detail(movieId),
-    queryFn: () => getMovieDetails(movieId),
+    queryFn: () => fetchMovieDetails(movieId),
     enabled: enabled && Boolean(movieId),
   });
 
   const similarQuery = usePrefetchAwareQuery<Movie[]>({
     queryKey: queryKeys.movie.recommendations(movieId),
-    queryFn: () => getSimilarMovies(movieId),
+    queryFn: () => fetchSimilarMovies(movieId),
     enabled: enabled && Boolean(movieId),
   });
 
