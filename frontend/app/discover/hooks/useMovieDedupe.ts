@@ -4,7 +4,7 @@ import { useCallback, useRef } from "react";
 import type { Movie } from "@/lib/types";
 
 /**
- * Tracks already-rendered movie IDs so paginated results do not repeat items.
+ * Tracks seen movie IDs so paginated discover results can avoid rendering duplicate cards across fetches.
  */
 export function useMovieDedupe() {
   const seenIdsRef = useRef<Set<string>>(new Set());

@@ -9,7 +9,7 @@ type PageFetcher = (
 ) => Promise<{ results: any[]; pageSize: number }>;
 
 /**
- * Provides pagination state and load-next behavior for infinite scroll.
+ * Manages the discover page's paginated fetch flow, including request generation guards and end-of-results detection.
  */
 export function usePagination() {
   const [currentPage, setCurrentPage] = useState<number>(
@@ -38,8 +38,8 @@ export function usePagination() {
   }, [isFetching]);
 
   const reset = useCallback(() => {
+    // Resetting the pagination state invalidates the current request generation and starts the sequence over.
     requestGenerationRef.current += 1;
-    // Invalidate any in-flight page requests when pagination state resets.
     currentPageRef.current = PAGINATION_CONFIG.INITIAL_PAGE;
     hasMoreRef.current = true;
     isFetchingRef.current = false;
@@ -51,7 +51,7 @@ export function usePagination() {
     setError(null);
   }, []);
 
-const loadNext = useCallback(async (fetcher: PageFetcher) => {
+  const loadNext = useCallback(async (fetcher: PageFetcher) => {
   if (isFetchingRef.current || !hasMoreRef.current) return;
 
   const generation = requestGenerationRef.current;

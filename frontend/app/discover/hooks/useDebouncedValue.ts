@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 
 /**
- * Returns a debounced version of a value to reduce rapid updates.
+ * Delays the latest value update so lightweight search inputs do not trigger a request on every keystroke.
+ *
+ * @param value - Current value that should be debounced.
+ * @param delayMs - Time to wait before exposing the latest value.
+ * @returns The most recent stable value after the debounce window.
  */
 export function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value);

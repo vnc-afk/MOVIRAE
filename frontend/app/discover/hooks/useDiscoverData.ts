@@ -4,23 +4,56 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
-import {
-  getGenres,
-  getMoviesByGenre,
-  getTrendingMovies,
-  searchMovies,
-} from "@/lib/tmdb";
 import type { Movie } from "@/lib/types";
 import type { FilterState, GenreOption } from "../lib/types";
 import { getFilterMode } from "../lib/filterUtils";
 import { AbortedError, normalizeError } from "../lib/errors";
 import { API_CONFIG } from "../lib/constants";
 
+async function fetchGenres(signal?: AbortSignal): Promise<GenreOption[]> {
+  const response = await fetch("/api/tmdb/genres", { signal });
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => null);
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchTrending(page: number, signal?: AbortSignal): Promise<Movie[]> {
+  const response = await fetch(`/api/tmdb/trending?page=${page}`, { signal });
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => null);
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchSearch(query: string, page: number, signal?: AbortSignal): Promise<Movie[]> {
+  const response = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&page=${page}`, {
+    signal,
+  });
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => null);
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchByGenre(
+  genreId: number,
+  page: number,
+  signal?: AbortSignal
+): Promise<Movie[]> {
+  const response = await fetch(`/api/tmdb/discover?genreId=${genreId}&page=${page}`, {
+    signal,
+  });
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => null);
+  return Array.isArray(data) ? data : [];
+}
+
 interface MoviePage {
   movies: Movie[];
   pageSize: number;
 }
 
+/**
+ * Aggregates the discover page data sources and pagination fetcher used by the page shell.
+ */
 interface DiscoverDataState {
   genres: GenreOption[];
   baseMovies: Movie[];
@@ -34,9 +67,10 @@ interface DiscoverDataState {
 }
 
 /**
- * Loads discover metadata and exposes an abortable page fetcher for pagination.
+ * Loads the discover page's genre list and resolves the appropriate movie source for the active filter mode.
  *
- * This hook supports the default trending flow as well as search and genre filters.
+ * @param filters - Current discover filters that determine whether the page is in default, search, or genre mode.
+ * @returns A unified state object for the page to render and paginate results.
  */
 export function useDiscoverData(filters: FilterState): DiscoverDataState {
   const queryClient = useQueryClient();
@@ -51,17 +85,14 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
   const isSearchMode = mode === "search";
   const isGenreMode = mode === "genre";
 
-  // Load genres on component mount
   useEffect(() => {
     const loadGenres = async () => {
       setGenresLoading(true);
       setGenresError(null);
-      // Load the genre list once on mount; genre errors are surfaced but do not block movie fetching.
-
       try {
         const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
         const genreList = await Promise.race([
-          getGenres({ signal }),
+          fetchGenres(signal),
           new Promise<never>((_, reject) =>
             setTimeout(
               () => reject(new Error("Genres request timeout")),
@@ -88,13 +119,13 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
     loadGenres();
   }, []);
 
-  // Fetch trending movies (only in default mode)
+  // Trending data is only relevant when the user is not actively searching or filtering by genre.
   const trendingQuery = usePrefetchAwareQuery<Movie[]>({
     queryKey: queryKeys.discover.seeds(),
     queryFn: async () => {
       const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
       try {
-        return await getTrendingMovies(1, { signal });
+        return await fetchTrending(1, signal);
       } catch (err) {
         throw normalizeError(err);
       }
@@ -108,6 +139,7 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
   const fetchPage = useCallback(
     async (page: number, signal?: AbortSignal): Promise<MoviePage> => {
       if (abortControllerRef.current) {
+        // Cancel any in-flight request before starting the next page fetch so older results cannot race back in.
         abortControllerRef.current.abort(new DOMException("Request superseded", "AbortError"));
       }
 
@@ -118,13 +150,12 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
       let results: Movie[] = [];
 
       try {
-        // Select the appropriate movie source according to the active discover mode.
         if (isSearchMode) {
-          results = await searchMovies(trimmedQuery, page, { signal: mergedSignal });
+          results = await fetchSearch(trimmedQuery, page, mergedSignal);
         } else if (isGenreMode) {
-          results = await getMoviesByGenre(Number(filters.genreId), page, { signal: mergedSignal });
+          results = await fetchByGenre(Number(filters.genreId), page, mergedSignal);
         } else {
-          results = await getTrendingMovies(page, { signal: mergedSignal });
+          results = await fetchTrending(page, mergedSignal);
         }
 
         return { movies: results, pageSize: results.length };
@@ -149,7 +180,6 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
   );
 
   const invalidateCache = useCallback(() => {
-    // Invalidate trending seeds so default mode reloads fresh results after filter resets.
     queryClient.invalidateQueries({
       queryKey: queryKeys.discover.seeds(),
     });

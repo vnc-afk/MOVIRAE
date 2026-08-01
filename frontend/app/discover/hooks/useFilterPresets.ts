@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FilterPreset, FilterState } from "../lib/types";
 import { ValidationError, PersistenceError, normalizeError } from "../lib/errors";
-import { STORAGE_KEYS, API_CONFIG } from "../lib/constants";
+import { API_CONFIG } from "../lib/constants";
 
 /**
- * Manages saved filter presets including load, save, and delete operations.
+ * Manages user-saved discover presets, including network-backed load, save, and delete flows.
  */
 export function useFilterPresets() {
   const [presets, setPresets] = useState<FilterPreset[]>([]);
@@ -14,14 +14,15 @@ export function useFilterPresets() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Load saved filter presets from the user's backend storage on mount.
   useEffect(() => {
     loadPresets();
   }, []);
 
   const loadPresets = useCallback(async () => {
+    // Attempt to load saved filter presets, with retry logic for network/timeouts.
     setIsLoading(true);
     setError(null);
-    // Retry transient preset fetch failures before falling back to an empty list.
 
     let lastError: Error | null = null;
 
@@ -91,6 +92,7 @@ export function useFilterPresets() {
   }, []);
 
   function validatePresetName(name: string): string {
+    // Ensure preset names are non-empty, unique, and within length limits.
     const trimmed = name.trim();
 
     if (!trimmed) {
