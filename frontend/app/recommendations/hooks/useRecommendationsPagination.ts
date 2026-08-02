@@ -19,6 +19,9 @@ interface UseRecommendationsPaginationResult<T> {
   loadNext: () => Promise<boolean>;
 }
 
+/**
+ * Manages paginated recommendation fetching with stale-request protection and deduped results.
+ */
 export function useRecommendationsPagination<T>({
   initialItems,
   initialPage,
@@ -69,7 +72,7 @@ export function useRecommendationsPagination<T>({
       const results = await fetchPage(nextPage);
 
       if (requestId !== requestIdRef.current || !isMountedRef.current) {
-        // If this request is stale or the component unmounted, clear fetching state
+        // Ignore stale responses from older pagination requests so a later page load remains authoritative.
         isFetchingRef.current = false;
         setIsFetching(false);
         return false;

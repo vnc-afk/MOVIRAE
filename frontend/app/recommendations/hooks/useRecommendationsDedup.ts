@@ -6,6 +6,9 @@ interface HasId {
   id: string;
 }
 
+/**
+ * Tracks observed IDs so paginated recommendation lists can avoid repeating the same movie card.
+ */
 export function useRecommendationsDedup<T extends HasId>(initialItems: T[]) {
   const seenIdsRef = useRef<Set<string>>(new Set(initialItems.map((item) => item.id)));
 

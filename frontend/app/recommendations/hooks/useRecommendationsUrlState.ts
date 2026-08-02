@@ -5,6 +5,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RECOMMENDATIONS_CONFIG } from "../lib/constants";
 import type { RecommendationSectionKey } from "../lib/types";
 
+/**
+ * Normalizes the section query parameter into a supported recommendations bucket.
+ */
 function parseSectionKey(value: string | null): RecommendationSectionKey {
   if (value === "top-picks" || value === "similar" || value === "trending") {
     return value;
@@ -13,6 +16,9 @@ function parseSectionKey(value: string | null): RecommendationSectionKey {
   return RECOMMENDATIONS_CONFIG.DEFAULT_SECTION;
 }
 
+/**
+ * Keeps the selected recommendations section synchronized with the URL query string.
+ */
 export function useRecommendationsUrlState() {
   const router = useRouter();
   const pathname = usePathname();
