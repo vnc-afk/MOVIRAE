@@ -11,9 +11,12 @@ import {
 	fetchSimilarMoviesPage,
 	fetchTopPicksPage,
 	fetchTrendingNowPage,
-} from "./lib/recommendationsService";
+} from "./lib/recommendations-service";
 import type { RecommendationSectionConfig } from "./lib/types";
 
+/**
+ * Renders the recommendations landing page and coordinates the active section navigation.
+ */
 export default function Page() {
 	const { snapshot, isLoading, error, refetch } = useRecommendationsData();
 	const { activeSection, setActiveSection } = useRecommendationsUrlState();
@@ -22,7 +25,7 @@ export default function Page() {
 		() => [
 			{
 				key: "top-picks",
-				title: "Top Picks for You",
+				title: "Trending Picks",
 				icon: Star,
 				initialItems: snapshot.topPicks,
 				initialPage: 1,
@@ -31,7 +34,7 @@ export default function Page() {
 			},
 			{
 				key: "similar",
-				title: "Similar to Popular Movies",
+				title: "Based on Your Tastes",
 				icon: Clock,
 				initialItems: snapshot.similar,
 				initialPage: 1,
@@ -67,7 +70,7 @@ export default function Page() {
 						<h1 className="font-display text-2xl font-bold text-foreground">For You</h1>
 					</div>
 					<p className="text-sm text-muted-foreground">
-						Personalized picks based on your watch history & ratings.
+						Movies shaped by your ratings, watchlist, and favorites.
 					</p>
 				</motion.div>
 
@@ -99,7 +102,20 @@ export default function Page() {
 					</div>
 				) : null}
 
-				{isLoading ? null : (
+				{isLoading ? (
+					<div className="space-y-5">
+						<div className="h-5 w-40 rounded bg-secondary animate-pulse" />
+						<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+							{Array.from({ length: 4 }).map((_, index) => (
+								<div key={index} className="space-y-3">
+									<div className="aspect-[2/3] rounded-lg bg-secondary animate-pulse" />
+									<div className="h-4 w-3/4 rounded bg-secondary animate-pulse" />
+									<div className="h-3 w-1/2 rounded bg-secondary animate-pulse" />
+								</div>
+							))}
+						</div>
+					</div>
+				) : (
 					sections.map((section) => (
 						<RecommendationSection
 							key={`${section.key}-${snapshot.updatedAt}`}
