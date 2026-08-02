@@ -4,10 +4,12 @@ import { NotificationItem } from "./types";
  * Generate the navigation link for a notification based on its type and context
  */
 export function getNotificationLink(notification: NotificationItem): string {
+  const userId = notification.user?.id;
+
   switch (notification.type) {
     case "follow":
       // Link to the follower's profile
-      return `/profile/${notification.user.id}`;
+      return userId ? `/profile/${userId}` : "/";
 
     case "review_like":
     case "review_reply":

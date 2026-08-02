@@ -46,13 +46,14 @@ export const formatExactDate = (value: string) => {
  */
 export async function prefetchNotificationTargets(queryClient: QueryClient, notification: NotificationItem) {
   const tasks: Promise<unknown>[] = [];
+  const userId = notification.user?.id;
 
-  if (notification.user?.id) {
+  if (userId) {
     tasks.push(
       queryClient.prefetchQuery({
-        queryKey: queryKeys.profile.detail(notification.user.id),
+        queryKey: queryKeys.profile.detail(userId),
         queryFn: async () => {
-          const response = await fetch(`/api/users/${notification.user.id}`);
+          const response = await fetch(`/api/users/${userId}`);
           const json = await response.json().catch(() => null);
           return json?.value ?? json;
         },
