@@ -69,11 +69,13 @@ function DiscoverContent() {
 
   const [pageMovies, setPageMovies] = useState<Movie[][]>([]);
   const [dismissedErrors, setDismissedErrors] = useState<Set<string>>(new Set());
+  const [isHydrating, setIsHydrating] = useState(true);
 
   const trimmedQuery = debouncedQuery.trim();
-  const isLoading = isDefaultMode && baseMovies.length === 0 && pageMovies.length === 0;
+  const isLoading = isHydrating && (isDefaultMode ? baseMovies.length === 0 : pageMovies.length === 0);
+  const shouldDisableControls = isDefaultMode && isLoading;
 
-  // Build the visible movie pages from the current mode, applying runtime and sort filters.
+  // Build the visible movie pages from the  current mode, applying runtime and sort filters.
   const visiblePages = useMemo(() => {
     const pages = isDefaultMode ? [baseMovies, ...pageMovies] : pageMovies;
 
@@ -108,7 +110,14 @@ function DiscoverContent() {
     setPageMovies([]);
     resetDedupe();
     invalidateCache();
+    setIsHydrating(true);
   }, [trimmedQuery, filters.genreId, resetPagination, resetDedupe, invalidateCache]);
+
+  useEffect(() => {
+    if (isDefaultMode && baseMovies.length > 0) {
+      setIsHydrating(false);
+    }
+  }, [isDefaultMode, baseMovies.length]);
 
   useEffect(() => {
     if (isDefaultMode) return;
@@ -117,18 +126,24 @@ function DiscoverContent() {
       resetPagination();
       setPageMovies([]);
       resetDedupe();
+      setIsHydrating(true);
 
       try {
         const { movies } = await fetchPage(1);
         if (movies && movies.length > 0) {
           const unique = deduplicate(movies);
           setPageMovies([unique]);
+        } else {
+          setPageMovies([[]]);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
         }
         console.error("Failed to load first page:", err);
+        setPageMovies([[]]);
+      } finally {
+        setIsHydrating(false);
       }
     };
 
@@ -197,7 +212,7 @@ function DiscoverContent() {
         <SearchInput
           value={filters.query}
           onChange={handleQueryChange}
-          disabled={isLoading}
+          disabled={shouldDisableControls}
         />
 
         <GenreFilter
@@ -216,12 +231,12 @@ function DiscoverContent() {
             activeCount={activeFilterCount}
             movieCount={uniqueMovies.length}
             onClear={clearAllFilters}
-            isLoading={isLoading}
+            isLoading={shouldDisableControls}
           />
           <SortSelector
             value={filters.sortBy}
             onChange={handleSortChange}
-            disabled={isLoading}
+            disabled={shouldDisableControls}
           />
         </div>
 
