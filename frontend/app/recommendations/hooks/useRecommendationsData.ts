@@ -3,10 +3,13 @@
 import { useEffect } from "react";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
-import { fetchRecommendationsSnapshot } from "../lib/recommendationsService";
+import { fetchRecommendationsSnapshot } from "../lib/recommendations-service";
 import { RECOMMENDATIONS_CONFIG } from "../lib/constants";
 import type { RecommendationsSnapshot } from "../lib/types";
 
+/**
+ * Loads the recommendations snapshot and keeps it refreshed when review events are emitted.
+ */
 export function useRecommendationsData() {
   const recommendationsQuery = usePrefetchAwareQuery<RecommendationsSnapshot>({
     queryKey: queryKeys.recommendations.home(),
@@ -21,6 +24,7 @@ export function useRecommendationsData() {
 
     try {
       eventSource = new EventSource(RECOMMENDATIONS_CONFIG.REVIEW_EVENTS_PATH);
+      // Debounce review-updated events so the recommendations cache refreshes once per burst of activity.
       eventSource.addEventListener("review-updated", () => {
         if (refreshTimer) {
           clearTimeout(refreshTimer);
