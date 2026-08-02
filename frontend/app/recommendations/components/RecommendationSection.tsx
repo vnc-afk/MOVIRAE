@@ -14,6 +14,9 @@ interface RecommendationSectionProps {
   active: boolean;
 }
 
+/**
+ * Renders one recommendation carousel section and handles its infinite-scroll pagination behavior.
+ */
 export const RecommendationSection = memo(function RecommendationSection({ config, active }: RecommendationSectionProps) {
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
@@ -52,6 +55,8 @@ export const RecommendationSection = memo(function RecommendationSection({ confi
     if (!endSentinel || !hasMore || isFetching) {
       return;
     }
+
+    // Keep the next-page load in sync with the carousel's end sentinel so users can continue browsing naturally.
 
     const observer = new IntersectionObserver(
       (entries) => {
