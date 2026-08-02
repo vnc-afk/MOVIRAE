@@ -11,7 +11,7 @@ import { AbortedError, normalizeError } from "../lib/errors";
 import { API_CONFIG } from "../lib/constants";
 
 async function fetchGenres(signal?: AbortSignal): Promise<GenreOption[]> {
-  const response = await fetch("/api/tmdb/genres", { signal });
+  const response = await fetch("/api/tmdb/genre", { signal });
   if (!response.ok) return [];
   const data = await response.json().catch(() => null);
   return Array.isArray(data) ? data : [];
