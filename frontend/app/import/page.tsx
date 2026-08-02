@@ -4,7 +4,6 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Download, Upload, FileText, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getTrendingMovies } from "@/lib/tmdb";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
 
@@ -12,7 +11,14 @@ export default function ImportExport() {
   const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
   const trendingQuery = usePrefetchAwareQuery({
     queryKey: queryKeys.discover.seeds(),
-    queryFn: () => getTrendingMovies(),
+    queryFn: async () => {
+      const response = await fetch("/api/tmdb/trending?page=1");
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: true,
   });
 

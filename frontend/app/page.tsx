@@ -6,7 +6,6 @@ import Link from "next/link";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { MovieCard } from "@/components/MovieCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
-import { getTrendingMovies } from "@/lib/tmdb";
 import { queryKeys } from "@/lib/queryKeys";
 import type { ActivityItem, Movie } from "@/lib/types";
 import heroBackdrop from "@/assets/hero-backdrop.jpg";
@@ -14,7 +13,14 @@ import heroBackdrop from "@/assets/hero-backdrop.jpg";
 export default function Home() {
   const trendingQuery = usePrefetchAwareQuery<Movie[]>({
     queryKey: queryKeys.discover.seeds(),
-    queryFn: () => getTrendingMovies(),
+    queryFn: async () => {
+      const response = await fetch("/api/tmdb/trending?page=1");
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
     enabled: true,
   });
 
