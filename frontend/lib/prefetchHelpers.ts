@@ -1,6 +1,5 @@
 import { QueryClient, type QueryKey } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { getMovieDetails, getSimilarMovies, getTrendingMovies, getMoviesByGenre } from "@/lib/tmdb";
 import telemetry from "@/lib/prefetchTelemetry";
 
 type PrefetchStats = {
@@ -178,7 +177,13 @@ export function scheduleMovieDetailPrefetch(client: QueryClient, movieId: string
       token,
       client,
       queryKey: queryKeys.movie.detail(movieId),
-      queryFn: () => getMovieDetails(movieId, { suppressClientErrors: true }),
+      queryFn: async () => {
+        const response = await fetch(`/api/tmdb/movie/${movieId}`);
+        if (!response.ok) {
+          return null;
+        }
+        return await response.json();
+      },
       delayMs,
     });
   });
@@ -206,14 +211,30 @@ export function scheduleDiscoverSeedsPrefetch(client: QueryClient, token: string
     token,
     client,
     queryKey: queryKeys.discover.seeds(params),
-    queryFn: () => getTrendingMovies(1, { suppressClientErrors: true }),
+    queryFn: async () => {
+      const response = await fetch("/api/tmdb/trending?page=1");
+      if (!response.ok) {
+        return [];
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    },
     delayMs,
   });
 }
 
 export async function prefetchMovieDetail(client: QueryClient, movieId: string) {
   try {
-    await safePrefetchQuery(client, { queryKey: queryKeys.movie.detail(movieId), queryFn: () => getMovieDetails(movieId, { suppressClientErrors: true }) });
+    await safePrefetchQuery(client, {
+      queryKey: queryKeys.movie.detail(movieId),
+      queryFn: async () => {
+        const response = await fetch(`/api/tmdb/movie/${movieId}`);
+        if (!response.ok) {
+          return null;
+        }
+        return await response.json();
+      },
+    });
   } catch (e) {
     // best-effort
     console.error("prefetchMovieDetail failed", e);
@@ -223,8 +244,27 @@ export async function prefetchMovieDetail(client: QueryClient, movieId: string) 
 export async function prefetchMovieAndSimilar(client: QueryClient, movieId: string) {
   try {
     await Promise.all([
-      safePrefetchQuery(client, { queryKey: queryKeys.movie.detail(movieId), queryFn: () => getMovieDetails(movieId, { suppressClientErrors: true }) }),
-      safePrefetchQuery(client, { queryKey: queryKeys.movie.recommendations(movieId), queryFn: () => getSimilarMovies(movieId, { suppressClientErrors: true }) }),
+      safePrefetchQuery(client, {
+        queryKey: queryKeys.movie.detail(movieId),
+        queryFn: async () => {
+          const response = await fetch(`/api/tmdb/movie/${movieId}`);
+          if (!response.ok) {
+            return null;
+          }
+          return await response.json();
+        },
+      }),
+      safePrefetchQuery(client, {
+        queryKey: queryKeys.movie.recommendations(movieId),
+        queryFn: async () => {
+          const response = await fetch(`/api/tmdb/movie/${movieId}/similar`);
+          if (!response.ok) {
+            return [];
+          }
+          const data = await response.json();
+          return Array.isArray(data) ? data : [];
+        },
+      }),
     ]);
   } catch (e) {
     console.error("prefetchMovieAndSimilar failed", e);
@@ -234,7 +274,17 @@ export async function prefetchMovieAndSimilar(client: QueryClient, movieId: stri
 export async function prefetchDiscoverSeeds(client: QueryClient, params?: string) {
   try {
     // Simple heuristic: prefetch trending movies and cache under discover seeds key
-    await safePrefetchQuery(client, { queryKey: queryKeys.discover.seeds(params), queryFn: () => getTrendingMovies(1, { suppressClientErrors: true }) });
+    await safePrefetchQuery(client, {
+      queryKey: queryKeys.discover.seeds(params),
+      queryFn: async () => {
+        const response = await fetch("/api/tmdb/trending?page=1");
+        if (!response.ok) {
+          return [];
+        }
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      },
+    });
   } catch (e) {
     console.error("prefetchDiscoverSeeds failed", e);
   }
@@ -242,7 +292,17 @@ export async function prefetchDiscoverSeeds(client: QueryClient, params?: string
 
 export async function prefetchMoviesByGenre(client: QueryClient, genreId: number) {
   try {
-    await safePrefetchQuery(client, { queryKey: queryKeys.movie.list({ genreId }), queryFn: () => getMoviesByGenre(genreId, 1, { suppressClientErrors: true }) });
+    await safePrefetchQuery(client, {
+      queryKey: queryKeys.movie.list({ genreId }),
+      queryFn: async () => {
+        const response = await fetch(`/api/tmdb/discover?genreId=${genreId}&page=1`);
+        if (!response.ok) {
+          return [];
+        }
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      },
+    });
   } catch (e) {
     console.error("prefetchMoviesByGenre failed", e);
   }
