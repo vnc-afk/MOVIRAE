@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import { fetchRecommendationsSnapshot } from "../lib/recommendations-service";
 import { RECOMMENDATIONS_CONFIG } from "../lib/constants";
 import type { RecommendationsSnapshot } from "../lib/types";
+
+
+const EMPTY_SNAPSHOT: RecommendationsSnapshot = {
+  topPicks: [],
+  trending: [],
+  similar: [],
+  updatedAt: 0,
+};
 
 /**
  * Loads the recommendations snapshot and keeps it refreshed when review events are emitted.
@@ -17,6 +25,11 @@ export function useRecommendationsData() {
     enabled: true,
     retry: RECOMMENDATIONS_CONFIG.API_RETRY_ATTEMPTS,
   });
+
+  const refetchRef = useRef(recommendationsQuery.refetch);
+  useEffect(() => {
+    refetchRef.current = recommendationsQuery.refetch;
+  }, [recommendationsQuery.refetch]);
 
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -32,7 +45,7 @@ export function useRecommendationsData() {
 
         refreshTimer = setTimeout(
           () => {
-            void recommendationsQuery.refetch();
+            void refetchRef.current();
           },
           RECOMMENDATIONS_CONFIG.REVIEW_REFRESH_DEBOUNCE_MS
         );
@@ -47,16 +60,10 @@ export function useRecommendationsData() {
       }
       eventSource?.close();
     };
-  }, [recommendationsQuery]);
+  }, []);
 
   return {
-    snapshot:
-      recommendationsQuery.data ?? {
-        topPicks: [],
-        trending: [],
-        similar: [],
-        updatedAt: Date.now(),
-      },
+    snapshot: recommendationsQuery.data ?? EMPTY_SNAPSHOT,
     isLoading: recommendationsQuery.isPending,
     error: recommendationsQuery.error,
     refetch: recommendationsQuery.refetch,

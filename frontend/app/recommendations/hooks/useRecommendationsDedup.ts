@@ -1,20 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 interface HasId {
   id: string;
+}
+
+function getItemsSignature<T extends HasId>(items: T[]): string {
+  return items.map((item) => item.id).join(",");
 }
 
 /**
  * Tracks observed IDs so paginated recommendation lists can avoid repeating the same movie card.
  */
 export function useRecommendationsDedup<T extends HasId>(initialItems: T[]) {
+  const initialSignature = useMemo(() => getItemsSignature(initialItems), [initialItems]);
+  const signatureRef = useRef(initialSignature);
   const seenIdsRef = useRef<Set<string>>(new Set(initialItems.map((item) => item.id)));
 
   useEffect(() => {
+
+    if (signatureRef.current === initialSignature) {
+      return;
+    }
+    signatureRef.current = initialSignature;
     seenIdsRef.current = new Set(initialItems.map((item) => item.id));
-  }, [initialItems]);
+  }, [initialItems, initialSignature]);
 
   const dedupe = useCallback((items: T[]) => {
     return items.filter((item) => {
