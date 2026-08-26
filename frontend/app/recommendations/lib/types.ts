@@ -17,14 +17,12 @@ export interface RecommendationsSnapshot {
 }
 
 /**
- * Describes a single recommendations section, including its paginated fetcher and initial seed data.
+ * Describes a single recommendations section rendered from the snapshot payload.
  */
 export interface RecommendationSectionConfig {
   key: RecommendationSectionKey;
   title: string;
   icon: LucideIcon;
   initialItems: Movie[];
-  initialPage: number;
-  fetchPage: (page: number) => Promise<Movie[]>;
   priority?: boolean;
 }
