@@ -1,13 +1,11 @@
 "use client";
 
 import { memo, useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { MovieCard } from "@/components/MovieCard";
 import { Button } from "@/components/ui/button";
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel";
 import type { RecommendationSectionConfig } from "../lib/types";
-import { useRecommendationsDedup } from "../hooks/useRecommendationsDedup";
-import { useRecommendationsPagination } from "../hooks/useRecommendationsPagination";
 
 interface RecommendationSectionProps {
   config: RecommendationSectionConfig;
@@ -21,15 +19,8 @@ export const RecommendationSection = memo(function RecommendationSection({ confi
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
-  const [endSentinel, setEndSentinel] = useState<HTMLDivElement | null>(null);
-
-  const { dedupe } = useRecommendationsDedup(config.initialItems);
-  const { items, hasMore, isFetching, loadNext } = useRecommendationsPagination({
-    initialItems: config.initialItems,
-    initialPage: config.initialPage,
-    fetchPage: config.fetchPage,
-    dedupe,
-  });
+  const [isAnimating, setIsAnimating] = useState(false);
+  const items = config.initialItems;
 
   useEffect(() => {
     if (!carouselApi) {
@@ -51,47 +42,35 @@ export const RecommendationSection = memo(function RecommendationSection({ confi
     };
   }, [carouselApi]);
 
-  useEffect(() => {
-    if (!endSentinel || !hasMore || isFetching) {
+  const handleNext = useCallback(() => {
+    if (!carouselApi || isAnimating) {
       return;
     }
 
-    // Keep the next-page load in sync with the carousel's end sentinel so users can continue browsing naturally.
+    setIsAnimating(true);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            void loadNext();
-          }
-        }
-      },
-      { root: null, rootMargin: "200px" }
-    );
-
-    observer.observe(endSentinel);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [endSentinel, hasMore, isFetching, loadNext]);
-
-  const handleNext = useCallback(async () => {
-    if (carouselApi?.canScrollNext()) {
+    if (carouselApi.canScrollNext()) {
       carouselApi.scrollNext();
+    } else {
+      carouselApi.scrollTo(0);
+    }
+
+    window.setTimeout(() => setIsAnimating(false), 350);
+  }, [carouselApi, isAnimating]);
+
+  const handlePrev = useCallback(() => {
+    if (!carouselApi || isAnimating) {
       return;
     }
 
-    const loaded = await loadNext();
-    if (loaded) {
-      window.requestAnimationFrame(() => {
-        carouselApi?.scrollNext();
-      });
-    }
-  }, [carouselApi, loadNext]);
+    setIsAnimating(true);
+    carouselApi.scrollPrev();
+    window.setTimeout(() => setIsAnimating(false), 350);
+  }, [carouselApi, isAnimating]);
 
-  const nextButtonDisabled = !canScrollNext && !hasMore;
-  const previousButtonDisabled = !canScrollPrev || isFetching;
+  const showEndNote = items.length > 0 && !canScrollNext;
+  const previousButtonDisabled = !canScrollPrev || isAnimating;
+  const nextButtonDisabled = (!canScrollNext && items.length <= 1) || isAnimating;
 
   return (
     <section id={config.key} className={active ? "space-y-5" : "space-y-5 opacity-90"}>
@@ -112,17 +91,37 @@ export const RecommendationSection = memo(function RecommendationSection({ confi
               </CarouselItem>
             ))}
 
-            {isFetching ? (
+            {showEndNote ? (
               <CarouselItem className="pl-4 basis-[70%] sm:basis-[46%] md:basis-[32%] lg:basis-[23%]">
-                <div className="bg-secondary aspect-[2/3] rounded-lg animate-pulse" />
-                <div className="mt-3 space-y-2">
-                  <div className="bg-secondary h-4 w-5/6 rounded animate-pulse" />
-                  <div className="bg-secondary h-3 w-2/5 rounded animate-pulse" />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isAnimating || !carouselApi) {
+                      return;
+                    }
+
+                    setIsAnimating(true);
+                    carouselApi.scrollTo(0);
+                    window.setTimeout(() => setIsAnimating(false), 350);
+                  }}
+                  className="group block w-full overflow-hidden rounded-xl border border-dashed border-border bg-muted/30 p-3 text-left shadow-sm transition hover:border-primary/60 hover:bg-muted/50"
+                >
+                  <div className="aspect-[2/3] rounded-lg bg-gradient-to-br from-muted via-muted/80 to-background/90 p-4">
+                    <div className="flex h-full flex-col items-center justify-center text-center">
+                      <div className="mb-2 rounded-full bg-background/70 p-2 text-primary">
+                        <ArrowRight className="h-4 w-4 rotate-180" />
+                      </div>
+                      <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                        End of list
+                      </p>
+                      <p className="mt-2 text-sm text-foreground/90">
+                        You’ve seen all the picks here.
+                      </p>
+                    </div>
+                  </div>
+                </button>
               </CarouselItem>
             ) : null}
-
-            <div ref={setEndSentinel} className="w-px shrink-0" aria-hidden="true" />
           </CarouselContent>
         </Carousel>
 
@@ -130,7 +129,7 @@ export const RecommendationSection = memo(function RecommendationSection({ confi
           type="button"
           size="icon"
           variant="outline"
-          onClick={() => carouselApi?.scrollPrev()}
+          onClick={handlePrev}
           disabled={previousButtonDisabled}
           className="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full shadow-sm"
         >
@@ -143,10 +142,10 @@ export const RecommendationSection = memo(function RecommendationSection({ confi
           size="icon"
           variant="outline"
           onClick={handleNext}
-          disabled={nextButtonDisabled || isFetching}
+          disabled={nextButtonDisabled}
           className="absolute right-0 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full shadow-sm"
         >
-          {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+          <ArrowRight className="h-4 w-4" />
           <span className="sr-only">Next movies</span>
         </Button>
       </div>
