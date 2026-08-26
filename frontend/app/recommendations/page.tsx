@@ -7,11 +7,6 @@ import { Button } from "@/components/ui/button";
 import { RecommendationSection } from "./components/RecommendationSection";
 import { useRecommendationsData } from "./hooks/useRecommendationsData";
 import { useRecommendationsUrlState } from "./hooks/useRecommendationsUrlState";
-import {
-	fetchSimilarMoviesPage,
-	fetchTopPicksPage,
-	fetchTrendingNowPage,
-} from "./lib/recommendations-service";
 import type { RecommendationSectionConfig } from "./lib/types";
 
 /**
@@ -28,8 +23,6 @@ export default function Page() {
 				title: "Trending Picks",
 				icon: Star,
 				initialItems: snapshot.topPicks,
-				initialPage: 1,
-				fetchPage: fetchTopPicksPage,
 				priority: true,
 			},
 			{
@@ -37,16 +30,12 @@ export default function Page() {
 				title: "Based on Your Tastes",
 				icon: Clock,
 				initialItems: snapshot.similar,
-				initialPage: 1,
-				fetchPage: fetchSimilarMoviesPage,
 			},
 			{
 				key: "trending",
 				title: "Trending Now",
 				icon: TrendingUp,
 				initialItems: snapshot.trending,
-				initialPage: 2,
-				fetchPage: fetchTrendingNowPage,
 			},
 		],
 		[snapshot.similar, snapshot.topPicks, snapshot.trending]
@@ -118,7 +107,7 @@ export default function Page() {
 				) : (
 					sections.map((section) => (
 						<RecommendationSection
-							key={`${section.key}-${snapshot.updatedAt}`}
+							key={section.key}
 							config={section}
 							active={activeSection === section.key}
 						/>
