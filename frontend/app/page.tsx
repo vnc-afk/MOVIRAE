@@ -27,7 +27,7 @@ export default function Home() {
   const activityQuery = usePrefetchAwareQuery<ActivityItem[]>({
     queryKey: queryKeys.home.activityFeed(),
     queryFn: async () => {
-      const response = await fetch("/api/data/home-activity-feed");
+      const response = await fetch("/api/activity/home");
       const data = await response.json();
       return Array.isArray(data?.value) ? data.value : [];
     },
