@@ -23,9 +23,9 @@ export const MOVIE_DETAIL_CONSTANTS = {
 } as const;
 
 export const MOVIE_ACTION_KEYS = {
-  WATCHLIST: "user-watchlist-current",
-  FAVORITES: "user-favorites-current",
-  WATCHED: "user-watched-current",
+  WATCHLIST: "watchlist",
+  FAVORITES: "favorites",
+  WATCHED: "watched",
 } as const;
 
 export const REVIEW_SORT_OPTIONS = ["recent", "rating", "helpful"] as const;

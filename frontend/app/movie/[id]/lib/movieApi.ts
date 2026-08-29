@@ -6,9 +6,9 @@
 export async function fetchUserMovieState(movieId: string) {
   try {
     const responses = await Promise.all([
-      fetch("/api/data/user-watchlist-current"),
-      fetch("/api/data/user-favorites-current"),
-      fetch("/api/data/user-watched-current"),
+      fetch("/api/watchlist"),
+      fetch("/api/favorites"),
+      fetch("/api/watched"),
       fetch(`/api/watch-experiences/${movieId}`),
     ]);
 
@@ -45,12 +45,12 @@ export async function fetchUserMovieState(movieId: string) {
  * Toggle a movie action for the current user and return the updated movie id list.
  */
 export async function updateMovieAction(
-  key: "user-watchlist-current" | "user-favorites-current" | "user-watched-current",
+  resource: "watchlist" | "favorites" | "watched",
   movieId: string,
   active: boolean
 ): Promise<string[] | null> {
   try {
-    const response = await fetch(`/api/data/${key}`, {
+    const response = await fetch(`/api/${resource}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ movieId, active }),
