@@ -57,7 +57,7 @@ export default function CompareWatchlists() {
   const currentWatchlistQuery = usePrefetchAwareQuery<Movie[]>({
     queryKey: queryKeys.compare.watchlist("current"),
     queryFn: async () => {
-      const response = await fetch("/api/data/user-watchlist-current");
+      const response = await fetch("/api/watchlist");
       const data = await response.json();
       const ids = Array.isArray(data.value) ? data.value : [];
       return getMovieDetailsBatch(ids);
@@ -69,7 +69,7 @@ export default function CompareWatchlists() {
     queryKey: queryKeys.compare.watchlist(selectedUser?.id ?? ""),
     queryFn: async () => {
       if (!selectedUser?.id) return [];
-      const response = await fetch(`/api/data/user-watchlist-${selectedUser.id}`);
+      const response = await fetch(`/api/watchlist?userId=${selectedUser.id}`);
       const data = await response.json();
       const ids = Array.isArray(data.value) ? data.value : [];
       return getMovieDetailsBatch(ids);
