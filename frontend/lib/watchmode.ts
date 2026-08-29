@@ -4,8 +4,9 @@
  */
 
 const WATCHMODE_BASE_URL = "https://api.watchmode.com/v1";
-const WATCHMODE_API_KEY = process.env.NEXT_PUBLIC_WATCHMODE_API_KEY;
-const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+const WATCHMODE_API_KEY = process.env.
+WATCHMODE_API_KEY;
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
 interface WatchModeSource {
   source_id: number;
