@@ -39,7 +39,7 @@ export const MovieCard = memo(function MovieCard({
   const watchlistQuery = useQuery<string[]>({
     queryKey: watchlistQueryKey,
     queryFn: async () => {
-      const response = await fetch("/api/data/user-watchlist-current");
+      const response = await fetch("/api/watchlist");
       const json = await response.json().catch(() => null);
       return Array.isArray(json?.value) ? json.value : [];
     },
@@ -52,7 +52,7 @@ export const MovieCard = memo(function MovieCard({
   const watchedQuery = useQuery<string[]>({
     queryKey: watchedQueryKey,
     queryFn: async () => {
-      const response = await fetch("/api/data/user-watched-current");
+      const response = await fetch("/api/watched");
       const json = await response.json().catch(() => null);
       return Array.isArray(json?.value) ? json.value : [];
     },
@@ -78,7 +78,8 @@ export const MovieCard = memo(function MovieCard({
 
     setLoading((prev) => ({ ...prev, [loadingKey]: true }));
     try {
-      const response = await fetch(`/api/data/${key}`, {
+      const resourcePath = key === "user-watchlist-current" ? "/api/watchlist" : key === "user-watched-current" ? "/api/watched" : "/api/favorites";
+      const response = await fetch(resourcePath, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ movieId: movie.id, active: !currentState }),
