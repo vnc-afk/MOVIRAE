@@ -39,7 +39,6 @@ export function useWrappedFormatters() {
       getPeakWeekday: Processors.getPeakWeekday,
       getMaxValue: Processors.getMaxValue,
       getSummaryTitle: Processors.getSummaryTitle,
-      generateBadges: Processors.generateBadges,
       processWrappedStats: Processors.processWrappedStats,
       transformMoodDataForRadar: Processors.transformMoodDataForRadar,
     }),
