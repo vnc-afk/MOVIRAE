@@ -11,7 +11,6 @@ import { MovieCard } from "@/components/MovieCard";
 import { StarRating } from "@/components/StarRating";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Movie, UserProfile } from "@/lib/types";
-import { getMovieDetailsBatch, getMovieDetails } from "@/lib/tmdb";
 import { queryKeys } from "@/lib/queryKeys";
 import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
@@ -46,6 +45,19 @@ const emptyProfileSnapshot: ProfileSnapshot = {
   reviewMovies: {} as Record<string, Movie | null>,
 };
 
+async function getMovieDetailsBatch(movieIds: string[]): Promise<Movie[]> {
+  const uniqueIds = Array.from(new Set(movieIds.map((id) => id.trim()).filter(Boolean)));
+  const results = await Promise.all(
+    uniqueIds.map(async (movieId) => {
+      const response = await fetch(`/api/tmdb/movie/${encodeURIComponent(movieId)}`);
+      if (!response.ok) return null;
+      return (await response.json()) as Movie | null;
+    })
+  );
+
+  return results.filter((movie): movie is Movie => movie !== null);
+}
+
 export default function ProfilePage() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
@@ -54,8 +66,8 @@ export default function ProfilePage() {
     queryFn: async () => {
       const [usersResponse, reviewsResponse, watchlistResponse] = await Promise.all([
         fetch("/api/users").then((response) => response.json()),
-        fetch("/api/data/user-reviews-current").then((response) => response.json()),
-        fetch("/api/data/user-watchlist-current").then((response) => response.json()),
+        fetch("/api/reviews/me").then((response) => response.json()),
+        fetch("/api/watchlist").then((response) => response.json()),
       ]);
 
       const users = Array.isArray(usersResponse.value) ? usersResponse.value : [];
