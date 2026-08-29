@@ -30,7 +30,7 @@ export function useFilterPresets() {
       for (let attempt = 0; attempt <= API_CONFIG.RETRY_ATTEMPTS; attempt++) {
         try {
           const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
-          const response = await fetch("/api/data/user-filter-presets", { signal });
+          const response = await fetch("/api/filter-presets", { signal });
 
           if (!response.ok) {
             throw new PersistenceError(
@@ -134,7 +134,7 @@ export function useFilterPresets() {
         const nextPresets = [...presets, newPreset];
 
         const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
-        const response = await fetch("/api/data/user-filter-presets", {
+        const response = await fetch("/api/filter-presets", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(nextPresets),
@@ -171,7 +171,7 @@ export function useFilterPresets() {
         const nextPresets = presets.filter((p) => p.id !== presetId);
         
         const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
-        const response = await fetch("/api/data/user-filter-presets", {
+        const response = await fetch("/api/filter-presets", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(nextPresets),
