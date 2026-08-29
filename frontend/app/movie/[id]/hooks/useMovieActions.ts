@@ -48,7 +48,7 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
     setLoading((prev) => ({ ...prev, watched: true }));
     try {
       const result = await movieApi.updateMovieAction(
-        "user-watched-current",
+        "watched",
         movieId,
         !isWatched
       );
@@ -68,7 +68,7 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
     setLoading((prev) => ({ ...prev, watchlist: true }));
     try {
       const result = await movieApi.updateMovieAction(
-        "user-watchlist-current",
+        "watchlist",
         movieId,
         !isWatchlist
       );
@@ -85,7 +85,7 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
     setLoading((prev) => ({ ...prev, liked: true }));
     try {
       const result = await movieApi.updateMovieAction(
-        "user-favorites-current",
+        "favorites",
         movieId,
         !isLiked
       );
