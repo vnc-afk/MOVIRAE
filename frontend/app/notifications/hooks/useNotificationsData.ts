@@ -29,7 +29,7 @@ interface NotificationsDataResult {
 }
 
 async function fetchNotificationsPage(offset: number) {
-  const response = await fetch(`/api/data/user-notifications?limit=${PAGE_LIMIT}&offset=${offset}`);
+  const response = await fetch(`/api/notifications?limit=${PAGE_LIMIT}&offset=${offset}`);
   if (!response.ok) {
     throw new Error(`Failed to load notifications (status ${response.status})`);
   }
@@ -38,7 +38,7 @@ async function fetchNotificationsPage(offset: number) {
 }
 
 async function fetchMessagesPage(offset: number) {
-  const response = await fetch(`/api/data/user-messages?limit=${PAGE_LIMIT}&offset=${offset}`);
+  const response = await fetch(`/api/messages/list?limit=${PAGE_LIMIT}&offset=${offset}`);
   if (!response.ok) {
     throw new Error(`Failed to load messages (status ${response.status})`);
   }
