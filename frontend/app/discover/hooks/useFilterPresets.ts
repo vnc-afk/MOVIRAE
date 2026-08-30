@@ -128,6 +128,10 @@ export function useFilterPresets() {
             genreId: filters.genreId,
             minRuntime: filters.runtimeRange[0],
             maxRuntime: filters.runtimeRange[1],
+            moods: filters.moods,
+            tags: filters.tags,
+            languages: filters.languages,
+            countries: filters.countries,
           },
         };
 

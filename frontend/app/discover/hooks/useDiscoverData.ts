@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import type { Movie } from "@/lib/types";
-import type { FilterState, GenreOption } from "../lib/types";
+import type { FilterState, GenreOption, DiscoverMetadata } from "../lib/types";
 import { getFilterMode } from "../lib/filterUtils";
 import { AbortedError, normalizeError } from "../lib/errors";
 import { API_CONFIG } from "../lib/constants";
@@ -15,6 +15,50 @@ async function fetchGenres(signal?: AbortSignal): Promise<GenreOption[]> {
   if (!response.ok) return [];
   const data = await response.json().catch(() => null);
   return Array.isArray(data) ? data : [];
+}
+
+async function fetchMetadata(signal?: AbortSignal): Promise<DiscoverMetadata> {
+  const response = await fetch("/api/discover/metadata", { signal });
+  if (!response.ok) {
+    return {
+      native: {
+        genres: [],
+        languages: [],
+        countries: [],
+      },
+      derived: {
+        moods: [],
+        tags: [],
+      },
+    };
+  }
+
+  const data = await response.json().catch(() => null);
+  if (!data || typeof data !== "object") {
+    return {
+      native: {
+        genres: [],
+        languages: [],
+        countries: [],
+      },
+      derived: {
+        moods: [],
+        tags: [],
+      },
+    };
+  }
+
+  return {
+    native: {
+      genres: Array.isArray(data.native?.genres) ? data.native.genres : [],
+      languages: Array.isArray(data.native?.languages) ? data.native.languages : [],
+      countries: Array.isArray(data.native?.countries) ? data.native.countries : [],
+    },
+    derived: {
+      moods: Array.isArray(data.derived?.moods) ? data.derived.moods : [],
+      tags: Array.isArray(data.derived?.tags) ? data.derived.tags : [],
+    },
+  };
 }
 
 async function fetchTrending(page: number, signal?: AbortSignal): Promise<Movie[]> {
@@ -56,8 +100,10 @@ interface MoviePage {
  */
 interface DiscoverDataState {
   genres: GenreOption[];
+  metadata: DiscoverMetadata;
   baseMovies: Movie[];
   genresLoading: boolean;
+  metadataLoading: boolean;
   isDefaultMode: boolean;
   isSearchMode: boolean;
   isGenreMode: boolean;
@@ -75,8 +121,21 @@ interface DiscoverDataState {
 export function useDiscoverData(filters: FilterState): DiscoverDataState {
   const queryClient = useQueryClient();
   const [genres, setGenres] = useState<GenreOption[]>([]);
+  const [metadata, setMetadata] = useState<DiscoverMetadata>({
+    native: {
+      genres: [],
+      languages: [],
+      countries: [],
+    },
+    derived: {
+      moods: [],
+      tags: [],
+    },
+  });
   const [genresLoading, setGenresLoading] = useState(true);
+  const [metadataLoading, setMetadataLoading] = useState(true);
   const [genresError, setGenresError] = useState<Error | null>(null);
+  const [metadataError, setMetadataError] = useState<Error | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const mode = useMemo(() => getFilterMode(filters), [filters]);
@@ -116,7 +175,41 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
       }
     };
 
+    const loadMetadata = async () => {
+      setMetadataLoading(true);
+      setMetadataError(null);
+      try {
+        const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
+        const nextMetadata = await Promise.race([
+          fetchMetadata(signal),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Metadata request timeout")),
+              API_CONFIG.TIMEOUT_MS
+            )
+          ),
+        ]);
+        setMetadata(nextMetadata);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          console.warn("Metadata request was cancelled");
+          setMetadataError(new AbortedError("Metadata request cancelled"));
+        } else {
+          const error = normalizeError(err);
+          setMetadataError(error);
+          console.error("Failed to load discover metadata:", error);
+        }
+        setMetadata({
+          native: { genres: [], languages: [], countries: [] },
+          derived: { moods: [], tags: [] },
+        });
+      } finally {
+        setMetadataLoading(false);
+      }
+    };
+
     loadGenres();
+    loadMetadata();
   }, []);
 
   // Trending data is only relevant when the user is not actively searching or filtering by genre.
@@ -197,12 +290,14 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
 
   return {
     genres,
+    metadata,
     baseMovies,
     genresLoading,
+    metadataLoading,
     isDefaultMode,
     isSearchMode,
     isGenreMode,
-    error: genresError || trendingQuery.error || null,
+    error: genresError || metadataError || trendingQuery.error || null,
     fetchPage,
     invalidateCache,
   };
