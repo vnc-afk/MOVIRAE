@@ -3,7 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function GroupDetailLoading() {
   return (
     <div className="pb-20 md:pb-0">
-      <div className="cinema-gradient py-12">
+      <div className="py-12">
         <div className="container">
           <div className="space-y-4">
             <Skeleton className="h-10 w-72 rounded-full" />
