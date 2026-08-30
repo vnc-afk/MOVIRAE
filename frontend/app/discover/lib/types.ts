@@ -8,6 +8,22 @@ export interface FilterState {
   genreId: string;
   runtimeRange: [number, number];
   sortBy: "rating" | "year" | "title" | "runtime";
+  moods: string[];
+  tags: string[];
+  languages: string[];
+  countries: string[];
+}
+
+export interface DiscoverMetadata {
+  native: {
+    genres: string[];
+    languages: string[];
+    countries: string[];
+  };
+  derived: {
+    moods: string[];
+    tags: string[];
+  };
 }
 
 /**
@@ -28,6 +44,10 @@ export interface FilterPreset {
     genreId?: string;
     minRuntime?: number;
     maxRuntime?: number;
+    moods?: string[];
+    tags?: string[];
+    languages?: string[];
+    countries?: string[];
   };
 }
 

@@ -12,6 +12,10 @@ export const DEFAULT_FILTERS: FilterState = {
   genreId: "",
   runtimeRange: [FILTER_CONFIG.MIN_RUNTIME, FILTER_CONFIG.MAX_RUNTIME],
   sortBy: "rating",
+  moods: [],
+  tags: [],
+  languages: [],
+  countries: [],
 };
 
 function validateRuntimeRange(
@@ -85,6 +89,14 @@ function validateGenreId(genreId: string): string {
  * @param searchParams - URL parameter accessor used by Next.js route hooks.
  * @returns A validated filter state object.
  */
+function parseMultiValueParam(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
 export function readFiltersFromSearchParams(
   searchParams: { get: (key: string) => string | null }
 ): FilterState {
@@ -93,6 +105,10 @@ export function readFiltersFromSearchParams(
   const minRuntime = Number(searchParams.get("min") ?? DEFAULT_FILTERS.runtimeRange[0]);
   const maxRuntime = Number(searchParams.get("max") ?? DEFAULT_FILTERS.runtimeRange[1]);
   const sortBy = searchParams.get("sort");
+  const moods = parseMultiValueParam(searchParams.get("moods"));
+  const tags = parseMultiValueParam(searchParams.get("tags"));
+  const languages = parseMultiValueParam(searchParams.get("languages"));
+  const countries = parseMultiValueParam(searchParams.get("countries"));
 
   const runtimeRange = validateRuntimeRange(minRuntime, maxRuntime);
   const validatedSortBy = sortBy
@@ -104,6 +120,10 @@ export function readFiltersFromSearchParams(
     genreId,
     runtimeRange,
     sortBy: validatedSortBy,
+    moods,
+    tags,
+    languages,
+    countries,
   };
 }
 
@@ -137,6 +157,22 @@ export function buildFiltersUrl(pathname: string, filters: FilterState): string 
     params.set("sort", filters.sortBy);
   }
 
+  if (filters.moods.length) {
+    params.set("moods", filters.moods.join(","));
+  }
+
+  if (filters.tags.length) {
+    params.set("tags", filters.tags.join(","));
+  }
+
+  if (filters.languages.length) {
+    params.set("languages", filters.languages.join(","));
+  }
+
+  if (filters.countries.length) {
+    params.set("countries", filters.countries.join(","));
+  }
+
   const search = params.toString();
   return search ? `${pathname}?${search}` : pathname;
 }
@@ -153,7 +189,11 @@ export function areFiltersEqual(
     left.genreId === right.genreId &&
     left.sortBy === right.sortBy &&
     left.runtimeRange[0] === right.runtimeRange[0] &&
-    left.runtimeRange[1] === right.runtimeRange[1]
+    left.runtimeRange[1] === right.runtimeRange[1] &&
+    JSON.stringify(left.moods) === JSON.stringify(right.moods) &&
+    JSON.stringify(left.tags) === JSON.stringify(right.tags) &&
+    JSON.stringify(left.languages) === JSON.stringify(right.languages) &&
+    JSON.stringify(left.countries) === JSON.stringify(right.countries)
   );
 }
 
@@ -178,7 +218,11 @@ export function countActiveFilters(filters: FilterState): number {
     (filters.runtimeRange[0] > FILTER_CONFIG.MIN_RUNTIME ||
     filters.runtimeRange[1] < FILTER_CONFIG.MAX_RUNTIME
       ? 1
-      : 0)
+      : 0) +
+    (filters.moods.length ? 1 : 0) +
+    (filters.tags.length ? 1 : 0) +
+    (filters.languages.length ? 1 : 0) +
+    (filters.countries.length ? 1 : 0)
   );
 }
 
