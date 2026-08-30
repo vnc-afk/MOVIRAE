@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function Loading() {
+export function StatsLoading() {
   return (
     <div className="container py-8 space-y-8">
       <div className="space-y-3">
@@ -21,3 +21,5 @@ export default function Loading() {
     </div>
   );
 }
+
+export default StatsLoading;

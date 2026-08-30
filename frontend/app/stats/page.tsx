@@ -6,6 +6,7 @@ import { StatsSummaryGrid } from "./components/StatsSummaryGrid";
 import { StatsCharts } from "./components/StatsCharts";
 import { StatsErrorState } from "./components/StatsErrorState";
 import { useStatsData } from "./hooks/useStatsData";
+import { StatsLoading } from "./loading";
 import type { UserStats } from "@/lib/types";
 
 const EMPTY_STATS: UserStats = {
@@ -30,7 +31,7 @@ export default function Page() {
 	const userStats = useMemo<UserStats>(() => data ?? EMPTY_STATS, [data]);
 
 	if (isLoading) {
-		return null;
+		return <StatsLoading />;
 	}
 
 	if (error) {
