@@ -11,7 +11,7 @@ import {
   useDebouncedValue, 
 } from "./hooks";
 import {
-  DiscoverHeader, SearchInput, PresetManager, GenreFilter, AdvancedFilters,
+  DiscoverHeader, SearchInput, PresetManager, GenreFilter, MetadataChipFilter, AdvancedFilters,
   SortSelector, MovieGrid, PaginationLoader, ClearFilters, ErrorBoundary, ErrorAlert,
 } from "./components";
 import {
@@ -41,6 +41,21 @@ function DiscoverContent() {
     (sortBy: FilterState["sortBy"]) => updateFilter("sortBy", sortBy),
     [updateFilter]
   );
+  const handleToggleFilterArray = useCallback(
+    <K extends "moods" | "tags" | "languages" | "countries">(
+      key: K,
+      value: string
+    ) => {
+      setFilters((current) => {
+        const selected = current[key] ?? [];
+        const next = selected.includes(value)
+          ? selected.filter((entry) => entry !== value)
+          : [...selected, value];
+        return { ...current, [key]: next };
+      });
+    },
+    [setFilters]
+  );
 
     const filtersRef = useRef(filters);
     useEffect(() => {
@@ -51,13 +66,22 @@ function DiscoverContent() {
 
   const debouncedQuery = useDebouncedValue(filters.query, TIMING_CONFIG.SEARCH_DEBOUNCE_MS);
   const debouncedFilters = useMemo(
-    () => ({ query: debouncedQuery, genreId: filters.genreId, runtimeRange: filters.runtimeRange, sortBy: filters.sortBy }),
-    [debouncedQuery, filters.genreId, filters.runtimeRange, filters.sortBy]
+    () => ({
+      query: debouncedQuery,
+      genreId: filters.genreId,
+      runtimeRange: filters.runtimeRange,
+      sortBy: filters.sortBy,
+      moods: filters.moods,
+      tags: filters.tags,
+      languages: filters.languages,
+      countries: filters.countries,
+    }),
+    [debouncedQuery, filters.genreId, filters.moods, filters.runtimeRange, filters.sortBy, filters.tags, filters.languages, filters.countries]
   );
 
   // Data hook handles genres, default trending seeds, and page-based search/genre fetches.
   const data = useDiscoverData(debouncedFilters);
-  const { genres, baseMovies, isDefaultMode } = data;
+  const { genres, metadata, baseMovies, isDefaultMode } = data;
   const { fetchPage, invalidateCache } = data;
 
   const pagination = usePagination();
@@ -79,11 +103,57 @@ function DiscoverContent() {
   const visiblePages = useMemo(() => {
     const pages = isDefaultMode ? [baseMovies, ...pageMovies] : pageMovies;
 
-    // Apply runtime filtering and current sort order to the visible page list.
     return pages
-      .map((page) => sortMovies(filterByRuntime(page, filters.runtimeRange), filters.sortBy))
+      .map((page) => {
+        const runtimeFiltered = filterByRuntime(page, filters.runtimeRange);
+        const advancedFiltered = runtimeFiltered.filter((movie) => {
+          const selectedMoods = filters.moods;
+          const selectedTags = filters.tags;
+          const selectedLanguages = filters.languages;
+          const selectedCountries = filters.countries;
+
+          const moodMatch =
+            selectedMoods.length === 0 ||
+            selectedMoods.some((entry) =>
+              movie.moods?.some((mood) => mood.toLowerCase() === entry.toLowerCase())
+            );
+
+          const tagMatch =
+            selectedTags.length === 0 ||
+            selectedTags.some((entry) =>
+              movie.tags?.some((tag) => tag.replace(/^#/, "").toLowerCase() === entry.replace(/^#/, "").toLowerCase())
+            );
+
+          const languageMatch =
+            selectedLanguages.length === 0 ||
+            selectedLanguages.some((entry) =>
+              movie.language?.toLowerCase() === entry.toLowerCase()
+            );
+
+          const countryMatch =
+            selectedCountries.length === 0 ||
+            selectedCountries.some((entry) => {
+              const normalizedEntry = entry.toLowerCase();
+              const normalizedCountry = movie.country?.toLowerCase();
+              const countryAliases: Record<string, string[]> = {
+                usa: ["us", "usa"],
+                uk: ["gb", "uk"],
+                japan: ["jp", "japan"],
+                australia: ["au", "australia"],
+                france: ["fr", "france"],
+                "south korea": ["kr", "south korea", "korea"],
+              };
+              const aliases = countryAliases[normalizedEntry] ?? [normalizedEntry];
+              return aliases.includes(normalizedCountry ?? "");
+            });
+
+          return moodMatch && tagMatch && languageMatch && countryMatch;
+        });
+
+        return sortMovies(advancedFiltered, filters.sortBy);
+      })
       .filter((page) => page.length > 0);
-  }, [baseMovies, filters.runtimeRange, filters.sortBy, isDefaultMode, pageMovies]);
+  }, [baseMovies, filters, isDefaultMode, pageMovies]);
 
   const uniqueMovies = useMemo(() => deduplicateMovies(visiblePages.flat()), [visiblePages]);
   const activeFilterCount = countActiveFilters(filters);
@@ -96,12 +166,16 @@ function DiscoverContent() {
       ...DEFAULT_FILTERS,
       genreId: preset.filters.genreId || "",
       runtimeRange: [preset.filters.minRuntime || 0, preset.filters.maxRuntime || 200],
+      moods: preset.filters.moods || [],
+      tags: preset.filters.tags || [],
+      languages: preset.filters.languages || [],
+      countries: preset.filters.countries || [],
     });
   }, [setFilters]);
 
   const clearAllFilters = useCallback(() => {
-    setFilters(DEFAULT_FILTERS);
-  }, [setFilters]);
+    setFilters({ ...DEFAULT_FILTERS, query: filters.query });
+  }, [filters.query, setFilters]);
 
   useEffect(() => {
     // Whenever the query or selected genre changes, clear stale paginated data
@@ -221,9 +295,29 @@ function DiscoverContent() {
           onGenreChange={handleGenreChange}
         />
 
+        <div className="space-y-4">
+          <MetadataChipFilter
+            label="Mood / Vibe"
+            options={metadata.derived.moods}
+            selectedValues={filters.moods}
+            onToggle={(value) => handleToggleFilterArray("moods", value)}
+          />
+          <MetadataChipFilter
+            label="Tags"
+            options={metadata.derived.tags}
+            selectedValues={filters.tags}
+            onToggle={(value) => handleToggleFilterArray("tags", value)}
+          />
+        </div>
+
         <AdvancedFilters
           runtimeRange={filters.runtimeRange}
           onRuntimeChange={handleRuntimeChange}
+          metadata={metadata}
+          languages={filters.languages}
+          countries={filters.countries}
+          onToggleLanguage={(value) => handleToggleFilterArray("languages", value)}
+          onToggleCountry={(value) => handleToggleFilterArray("countries", value)}
         />
 
         <div className="flex items-center justify-between gap-4 flex-wrap">
