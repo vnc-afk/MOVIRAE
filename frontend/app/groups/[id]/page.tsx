@@ -92,8 +92,10 @@ export default function GroupDetailPage() {
 
   // Load the group payload once the page mounts so the detail view is populated immediately.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (loadState === "loading") {
+      load();
+    }
+  }, [load, loadState]);
 
   // Seed discussions from the group detail payload so the tab renders immediately.
   useEffect(() => {

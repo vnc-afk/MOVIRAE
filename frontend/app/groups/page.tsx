@@ -41,10 +41,10 @@ export default function GroupsPage() {
 
   // Refresh the list once the initial loading state settles so the UI stays in sync.
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading && groups.length === 0 && !error) {
       refetch();
     }
-  }, [isLoading, refetch]);
+  }, [error, groups.length, isLoading, refetch]);
 
   // Handle membership errors with user feedback
   const handleMembershipError = useCallback((error: GroupsError) => {
