@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import type { Movie } from "@/lib/types";
 import type { FilterState, GenreOption, DiscoverMetadata } from "../lib/types";
 import { getFilterMode } from "../lib/filterUtils";
@@ -213,7 +212,7 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
   }, []);
 
   // Trending data is only relevant when the user is not actively searching or filtering by genre.
-  const trendingQuery = usePrefetchAwareQuery<Movie[]>({
+  const trendingQuery = useQuery<Movie[]>({
     queryKey: queryKeys.discover.seeds(),
     queryFn: async () => {
       const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);

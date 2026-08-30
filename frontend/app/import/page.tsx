@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Download, Upload, FileText, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
 
 export default function ImportExport() {
   const [importStatus, setImportStatus] = useState<"idle" | "success" | "error">("idle");
-  const trendingQuery = usePrefetchAwareQuery({
+  const trendingQuery = useQuery({
     queryKey: queryKeys.discover.seeds(),
     queryFn: async () => {
       const response = await fetch("/api/tmdb/trending?page=1");

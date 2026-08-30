@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { forwardRef, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { scheduleMovieDetailPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { cn } from "@/lib/utils";
 
 interface NavLinkCompatProps extends Omit<React.ComponentPropsWithoutRef<"a">, "href"> {
@@ -30,17 +29,22 @@ const NavLink = forwardRef<HTMLAnchorElement, NavLinkCompatProps>(
           const m = href.match(/^\/movie\/([^/?#]+)/);
           const movieId = m?.[1];
           if (movieId) {
-            scheduleMovieDetailPrefetch(queryClient, movieId, tokenRef.current, 150);
+            void queryClient.prefetchQuery({
+              queryKey: ["movie", "detail", movieId],
+              queryFn: async () => {
+                const response = await fetch(`/api/tmdb/movie/${movieId}`);
+                if (!response.ok) return null;
+                return response.json();
+              },
+            });
           }
         }
       } catch (err) {
-        // best-effort
         console.debug("NavLink prefetch failed", err);
       }
     };
 
     const handleMouseLeave = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
-      cancelScheduledPrefetch(tokenRef.current);
       // preserve any provided onMouseLeave
       // @ts-ignore
       props.onMouseLeave?.(e);

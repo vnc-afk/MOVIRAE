@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeftRight, Check, X } from "lucide-react";
 import { getMovieDetailsBatch } from "@/lib/tmdb";
 import type { Movie, UserProfile } from "@/lib/types";
@@ -14,7 +14,7 @@ export default function CompareWatchlists() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const usersQuery = usePrefetchAwareQuery<UserProfile[]>({
+  const usersQuery = useQuery<UserProfile[]>({
     queryKey: queryKeys.compare.users(),
     queryFn: async () => {
       const response = await fetch("/api/users");
@@ -54,7 +54,7 @@ export default function CompareWatchlists() {
     router.push(pathname);
   };
 
-  const currentWatchlistQuery = usePrefetchAwareQuery<Movie[]>({
+  const currentWatchlistQuery = useQuery<Movie[]>({
     queryKey: queryKeys.compare.watchlist("current"),
     queryFn: async () => {
       const response = await fetch("/api/watchlist");
@@ -65,7 +65,7 @@ export default function CompareWatchlists() {
     enabled: true,
   });
 
-  const selectedWatchlistQuery = usePrefetchAwareQuery<Movie[]>({
+  const selectedWatchlistQuery = useQuery<Movie[]>({
     queryKey: queryKeys.compare.watchlist(selectedUser?.id ?? ""),
     queryFn: async () => {
       if (!selectedUser?.id) return [];

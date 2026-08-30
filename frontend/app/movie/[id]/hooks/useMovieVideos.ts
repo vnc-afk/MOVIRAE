@@ -1,4 +1,4 @@
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 
 export interface MovieVideo {
@@ -17,7 +17,7 @@ export interface MovieVideo {
  * movie id is not yet available or the modal is closed.
  */
 export function useMovieVideos(movieId: string, enabled = true) {
-  return usePrefetchAwareQuery<MovieVideo[]>({
+  return useQuery<MovieVideo[]>({
     queryKey: queryKeys.movie.videos(movieId),
     queryFn: async () => {
       const res = await fetch(`/api/tmdb/videos/${movieId}`);

@@ -1,9 +1,9 @@
 
 import { useMemo } from "react";
 import React, { useEffect, useCallback } from "react";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { getStreamingPlatforms } from "@/lib/watchmode";
+import { getStreamingPlatforms } from "@/lib/features/streaming/watchmode";
 import type { Movie } from "@/lib/types";
 
 async function fetchMovieDetails(movieId: string): Promise<Movie | null> {
@@ -40,13 +40,13 @@ export interface UseMovieDetailResult {
  * and the streaming availability for the current movie.
  */
 export function useMovieDetail({ movieId, enabled = true }: UseMovieDetailOptions): UseMovieDetailResult {
-  const movieQuery = usePrefetchAwareQuery<Movie | null>({
+  const movieQuery = useQuery<Movie | null>({
     queryKey: queryKeys.movie.detail(movieId),
     queryFn: () => fetchMovieDetails(movieId),
     enabled: enabled && Boolean(movieId),
   });
 
-  const similarQuery = usePrefetchAwareQuery<Movie[]>({
+  const similarQuery = useQuery<Movie[]>({
     queryKey: queryKeys.movie.recommendations(movieId),
     queryFn: () => fetchSimilarMovies(movieId),
     enabled: enabled && Boolean(movieId),

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
@@ -12,8 +12,6 @@ import { StarRating } from "@/components/StarRating";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Movie, UserProfile } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 
 interface ReviewSummary {
   movieId: string;
@@ -61,7 +59,7 @@ async function getMovieDetailsBatch(movieIds: string[]): Promise<Movie[]> {
 export default function ProfilePage() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const profileQuery = usePrefetchAwareQuery<ProfileSnapshot>({
+  const profileQuery = useQuery<ProfileSnapshot>({
     queryKey: queryKeys.profile.current(),
     queryFn: async () => {
       const [usersResponse, reviewsResponse, watchlistResponse] = await Promise.all([
@@ -108,8 +106,8 @@ export default function ProfilePage() {
     }
 
     try {
-      applyEntityUpdate(queryClient, [queryKeys.profile.current()], () => profile);
-      applyEntityUpdate(queryClient, [queryKeys.profile.detail(profile.user!.id)], () => profile);
+      queryClient.setQueryData([queryKeys.profile.current()], profile);
+      queryClient.setQueryData([queryKeys.profile.detail(profile.user!.id)], profile);
     } catch {
       /* best-effort */
     }

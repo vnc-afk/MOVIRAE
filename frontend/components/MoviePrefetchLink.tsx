@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { scheduleMovieDetailPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 
 type MoviePrefetchLinkProps = React.ComponentPropsWithoutRef<typeof Link> & {
   movieId: string;
@@ -19,12 +18,16 @@ export function MoviePrefetchLink({ movieId, prefetchDelayMs = 150, onMouseEnter
       {...props}
       onMouseEnter={(event) => {
         onMouseEnter?.(event);
-        scheduleMovieDetailPrefetch(queryClient, movieId, tokenRef.current, prefetchDelayMs);
+        void queryClient.prefetchQuery({
+          queryKey: ["movie", "detail", movieId],
+          queryFn: async () => {
+            const response = await fetch(`/api/tmdb/movie/${movieId}`);
+            if (!response.ok) return null;
+            return response.json();
+          },
+        });
       }}
-      onMouseLeave={(event) => {
-        onMouseLeave?.(event);
-        cancelScheduledPrefetch(tokenRef.current);
-      }}
+      onMouseLeave={onMouseLeave}
     />
   );
 }

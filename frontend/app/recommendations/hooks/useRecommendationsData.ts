@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { fetchRecommendationsSnapshot } from "../lib/recommendations-service";
 import { RECOMMENDATIONS_CONFIG } from "../lib/constants";
@@ -19,7 +19,7 @@ const EMPTY_SNAPSHOT: RecommendationsSnapshot = {
  * Loads the recommendations snapshot and keeps it refreshed when review events are emitted.
  */
 export function useRecommendationsData() {
-  const recommendationsQuery = usePrefetchAwareQuery<RecommendationsSnapshot>({
+  const recommendationsQuery = useQuery<RecommendationsSnapshot>({
     queryKey: queryKeys.recommendations.home(),
     queryFn: fetchRecommendationsSnapshot,
     enabled: true,

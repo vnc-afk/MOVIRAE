@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
@@ -10,7 +11,6 @@ import { Users, UserPlus, Heart } from "lucide-react";
 import { FollowButton } from "@/components/FollowButton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import type { UserProfile } from "@/lib/types";
 
@@ -51,7 +51,7 @@ export default function PublicProfilePage() {
   const router = useRouter();
   const userId = Array.isArray(params.userId) ? params.userId[0] : params.userId;
   const { data: session } = useSession();
-  const profileQuery = usePrefetchAwareQuery<PublicProfileSnapshot>({
+  const profileQuery = useQuery<PublicProfileSnapshot>({
     queryKey: queryKeys.profile.detail(userId),
     queryFn: async () => {
       const [profileResponse, followersResponse, followingResponse] = await Promise.all([

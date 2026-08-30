@@ -12,8 +12,8 @@
  */
 
 import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import type { UserStats } from "@/lib/types";
 import { WRAPPED_CONFIG } from "../lib/constants";
@@ -37,7 +37,7 @@ export function useWrappedData(options: UseWrappedDataOptions = {}) {
   );
 
   // Main query
-  const query = usePrefetchAwareQuery<UserStats | null>({
+  const query = useQuery<UserStats | null>({
     queryKey: wrappedQueryKey,
     queryFn: async () => {
       try {

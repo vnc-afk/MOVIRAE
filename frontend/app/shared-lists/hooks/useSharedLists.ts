@@ -1,14 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import type { Group, SharedList } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { SharedListsSnapshot, SharedListsResponse, NewListFormState } from "../lib/types";
 import { constructUserProfile } from "../lib/shared-lists-utils";
 
@@ -22,6 +20,14 @@ const EMPTY_SNAPSHOT: SharedListsSnapshot = {
 };
 
 const SHARED_LISTS_KEY = [queryKeys.sharedLists.all()] as const;
+
+const applyEntityUpdate = <T>(
+  queryClient: QueryClient,
+  key: readonly unknown[],
+  updater: (current: T | undefined) => T | undefined
+) => {
+  queryClient.setQueryData<T>(key, updater);
+};
 
 /*
   Helper to parse responses from the server that sometimes return an empty body.
@@ -42,7 +48,7 @@ async function parseResponsePayload(response: Response) {
 }
 
 export function useSharedListsSnapshot() {
-  const query = usePrefetchAwareQuery<SharedListsSnapshot>({
+  const query = useQuery<SharedListsSnapshot>({
     queryKey: SHARED_LISTS_KEY,
     queryFn: async () => {
       const listsResponse = await fetch("/api/shared-lists?page=1", { cache: "no-store" });
@@ -89,7 +95,7 @@ export function useLoadSharedLists() {
     const snapshot = queryClient.getQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY);
 
     // Update the react-query cache with newly loaded lists while preserving groups and other metadata.
-    applyEntityUpdate(queryClient, SHARED_LISTS_KEY, () => ({
+    queryClient.setQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY, () => ({
       lists: nextLists,
       groups: snapshot?.groups ?? [],
       currentUser:
@@ -132,7 +138,7 @@ export function useLoadGroups() {
       setHasLoaded(true);
 
       // Merge groups into the central snapshot cache so consumers don't need a separate query.
-      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+      queryClient.setQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return { ...current, groups: nextGroups };
       });
@@ -170,7 +176,7 @@ export function useLoadMoreSharedLists(snapshot: SharedListsSnapshot) {
       const additionalLists = Array.isArray(payload?.value) ? payload.value : [];
 
       // Merge new lists while preserving existing ones (avoid duplicates by ID).
-      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+      queryClient.setQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
 
         const existingIds = new Set(current.lists.map((l) => l.id));
@@ -216,7 +222,7 @@ export function useSharedListsEvents() {
           const targetListId = serverList?.id ?? serverListId;
           if (!targetListId) return;
 
-          applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+          queryClient.setQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
             if (!current) return current;
             return { ...current, lists: current.lists.filter((list: any) => list.id !== targetListId) };
           });

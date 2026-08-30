@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import useEventSource from "@/hooks/use-event-source";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
-import { appendNotificationToSnapshot, buildConversationSummaries, fetchMessagingSnapshot, getCurrentUserFromSnapshot, type MessagingSnapshot } from "@/lib/messaging";
+import { appendNotificationToSnapshot, buildConversationSummaries, fetchMessagingSnapshot, getCurrentUserFromSnapshot, type MessagingSnapshot } from "@/lib/features/messages/service";
 import { queryKeys } from "@/lib/queryKeys";
 import type { NotificationItem } from "@/lib/types";
 import { useNavbarDataActions } from "./NavbarContext";
@@ -18,7 +17,7 @@ export default function NavbarData() {
   const sessionIdOrEmail = _user.id ?? _user.email ?? null;
   const notificationsKey = useMemo(() => queryKeys.notifications.all(sessionIdOrEmail), [sessionIdOrEmail]);
 
-  const notificationsQuery = usePrefetchAwareQuery<MessagingSnapshot>({
+  const notificationsQuery = useQuery<MessagingSnapshot>({
     queryKey: notificationsKey,
     queryFn: fetchMessagingSnapshot,
     enabled: true,

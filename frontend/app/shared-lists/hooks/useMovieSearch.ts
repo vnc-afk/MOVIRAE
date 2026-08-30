@@ -4,11 +4,18 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { searchMovies } from "@/lib/tmdb";
 import { generateOpId, attachOpToBody, attachOpToHeaders } from "@/lib/optimistic";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Movie } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { SharedListsSnapshot, MovieSearchState } from "../lib/types";
+
+const applyEntityUpdate = <T>(
+  queryClient: QueryClient,
+  key: readonly unknown[],
+  updater: (current: T | undefined) => T | undefined
+) => {
+  queryClient.setQueryData<T>(key, updater);
+};
 
 export function useMovieSearch(selectedListId: string | null) {
   const [query, setQuery] = useState("");
@@ -75,7 +82,7 @@ export function useAddMovieToList(snapshot: SharedListsSnapshot) {
     const optimisticMovie = movieSearchResults.find((movie) => movie.id === movieId);
 
     if (optimisticMovie) {
-      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      queryClient.setQueryData<SharedListsSnapshot>([queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return {
           ...current,
@@ -139,7 +146,7 @@ export function useRemoveMovieFromList(snapshot: SharedListsSnapshot) {
 
   const removeMovieFromList = async (listId: string, movieId: string) => {
     const previousLists = snapshot.lists;
-    applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+queryClient.setQueryData<SharedListsSnapshot>([queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
       if (!current) return current;
       return {
         ...current,

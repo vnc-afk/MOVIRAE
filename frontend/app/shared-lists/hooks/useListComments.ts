@@ -7,7 +7,6 @@ import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import { useQueryClient } from "@tanstack/react-query";
 import type { SharedList } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
-import { applyEntityUpdate } from "@/lib/cacheHelpers";
 import { SharedListsSnapshot } from "../lib/types";
 import { appendReplyToComments } from "../lib/shared-lists-utils";
 
@@ -103,7 +102,7 @@ export function useAddComment(snapshot: SharedListsSnapshot) {
     };
 
     // Insert optimistic comment into cache. On failure we'll roll back to `previousLists`.
-    applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+    queryClient.setQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
       if (!current) return current;
 
       return {
@@ -145,7 +144,7 @@ export function useAddComment(snapshot: SharedListsSnapshot) {
 
       // Replace snapshot lists with server canonical lists returned by the API.
       const nextLists = Array.isArray(payload?.value) ? payload.value : [];
-      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+      queryClient.setQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return { ...current, lists: nextLists };
       });
@@ -153,7 +152,7 @@ export function useAddComment(snapshot: SharedListsSnapshot) {
       toast.success(parentId ? "Reply posted" : "Comment posted");
     } catch (error) {
       // Rollback optimistic update on failure.
-      applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
+      queryClient.setQueryData<SharedListsSnapshot>(SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return { ...current, lists: previousLists };
       });
@@ -189,7 +188,7 @@ export function useLoadListComments() {
 
       loadedListIds.add(listId);
 
-      applyEntityUpdate(queryClient, [queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
+      queryClient.setQueryData<SharedListsSnapshot>([queryKeys.sharedLists.all()], (current: SharedListsSnapshot | undefined) => {
         if (!current) return current;
         return {
           ...current,
