@@ -31,7 +31,8 @@ function isGroupsError(err: unknown): err is GroupsError {
  */
 export function useGroupsList() {
   const queryClient = useQueryClient();
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedSnapshot = queryClient.getQueryData<GroupsSnapshot>(queryKeys.group.list());
+  const [isLoading, setIsLoading] = useState(!cachedSnapshot);
   const [error, setError] = useState<GroupsError | null>(null);
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);

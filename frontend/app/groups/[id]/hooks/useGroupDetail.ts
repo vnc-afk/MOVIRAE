@@ -4,14 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import { fetchJsonValue, makeOptimisticTempId,  parseApiResponse, ApiRequestError } from "../../lib/groupUtils";
-import type { GroupDetailRecord, Discussion, DiscussionReply, GroupEventRecord, LoadState } from "../../lib/types";
+import type { GroupDetailRecord, GroupDetailResponse, Discussion, DiscussionReply, GroupEventRecord, LoadState } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
 
 export function useGroupDetail(groupId: string) {
   const queryClient = useQueryClient();
-  const [group, setGroup] = useState<GroupDetailRecord | null>(null);
-  const [loadState, setLoadState] = useState<LoadState>("loading");
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const cachedData = queryClient.getQueryData<GroupDetailResponse | GroupDetailRecord>(
+    queryKeys.group.detail(groupId)
+  );
+  const cachedGroup: GroupDetailRecord | null = cachedData && "value" in cachedData
+    ? (cachedData.value as GroupDetailRecord | null | undefined) ?? null
+    : (cachedData as GroupDetailRecord | undefined) ?? null;
+  const cachedCurrentUser = cachedData && "value" in cachedData
+    ? cachedData.currentUser ?? null
+    : null;
+  const [group, setGroup] = useState<GroupDetailRecord | null>(cachedGroup);
+  const [loadState, setLoadState] = useState<LoadState>(cachedGroup ? "ready" : "loading");
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(cachedCurrentUser);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
