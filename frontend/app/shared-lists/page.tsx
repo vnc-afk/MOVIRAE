@@ -25,7 +25,7 @@ export default function SharedListsPage() {
   const pathname = usePathname();
 
   // Load data
-  const { snapshot: baseSnapshot } = useSharedListsSnapshot();
+  const { snapshot: baseSnapshot, isLoading } = useSharedListsSnapshot();
   const { groups, loadGroups } = useLoadGroups();
   const snapshot = useMemo(() => ({ ...baseSnapshot, groups }), [baseSnapshot, groups]);
   const { lists, currentUser } = snapshot;
@@ -134,6 +134,7 @@ export default function SharedListsPage() {
   return (
     <SharedListsView
       lists={snapshot.lists}
+      isLoading={isLoading}
       groups={snapshot.groups}
       currentUser={snapshot.currentUser}
       selectedList={selectedList}

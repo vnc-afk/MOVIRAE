@@ -38,6 +38,7 @@ import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
 
 type SharedListsViewProps = {
   lists: SharedList[];
+  isLoading: boolean;
   groups: Group[];
   currentUser: UserProfile | null;
   selectedList: SharedList | null;
@@ -77,6 +78,7 @@ type SharedListsViewProps = {
 
 export function SharedListsView({
   lists,
+  isLoading,
   groups,
   currentUser,
   selectedList,
@@ -203,7 +205,13 @@ export function SharedListsView({
 
           <AnimatePresence mode="wait">
             <TabsContent value={tab} className="mt-6">
-              {displayLists.length > 0 ? (
+              {isLoading && displayLists.length === 0 ? (
+                <div className="grid gap-5 md:grid-cols-2" role="status" aria-label="Loading shared lists">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className="h-52 animate-pulse rounded-xl bg-muted" />
+                  ))}
+                </div>
+              ) : displayLists.length > 0 ? (
                 <div className="grid md:grid-cols-2 gap-5">
                   <AnimatePresence>
                     {displayLists.map((list, i) => {
