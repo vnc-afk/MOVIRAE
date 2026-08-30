@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { useQuery } from "@tanstack/react-query";
 import { MovieCard } from "@/components/MovieCard";
 import { ActivityFeed } from "@/components/ActivityFeed";
 import { queryKeys } from "@/lib/queryKeys";
@@ -11,7 +11,7 @@ import type { ActivityItem, Movie } from "@/lib/types";
 import heroBackdrop from "@/assets/hero-backdrop.jpg";
 
 export default function Home() {
-  const trendingQuery = usePrefetchAwareQuery<Movie[]>({
+  const trendingQuery = useQuery<Movie[]>({
     queryKey: queryKeys.discover.seeds(),
     queryFn: async () => {
       const response = await fetch("/api/tmdb/trending?page=1");
@@ -24,7 +24,7 @@ export default function Home() {
     enabled: true,
   });
 
-  const activityQuery = usePrefetchAwareQuery<ActivityItem[]>({
+  const activityQuery = useQuery<ActivityItem[]>({
     queryKey: queryKeys.home.activityFeed(),
     queryFn: async () => {
       const response = await fetch("/api/activity/home");

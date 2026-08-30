@@ -35,27 +35,6 @@ export function Providers({ children }: ProvidersProps) {
       })
   );
 
-  // subscribe to query cache to mark when a query becomes observed (possible navigation/view)
-  useEffect(() => {
-    try {
-      // lazy require to avoid SSR issues
-      const telemetry = require("@/lib/prefetchTelemetry").default;
-
-      // start periodic flush of telemetry (client-only)
-      try {
-        telemetry.startAutoFlush?.();
-      } catch {}
-
-      return () => {
-        try {
-          telemetry.stopAutoFlush?.();
-        } catch {}
-      };
-    } catch {
-      // best-effort
-    }
-  }, [queryClient]);
-
   useEffect(() => {
     initializeGenreMap();
   }, []);
