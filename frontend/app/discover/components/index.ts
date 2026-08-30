@@ -3,6 +3,7 @@ export { DiscoverHeader } from "./DiscoverHeader";
 export { SearchInput } from "./SearchInput";
 export { PresetManager } from "./PresetManager";
 export { GenreFilter } from "./GenreFilter";
+export { MetadataChipFilter } from "./MetadataChipFilter";
 export { AdvancedFilters } from "./AdvancedFilters";
 export { RuntimeFilter } from "./RuntimeFilter";
 export { SortSelector } from "./SortSelector";
