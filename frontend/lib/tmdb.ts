@@ -36,10 +36,65 @@ interface TMDBGenre {
   name: string;
 }
 
+interface TMDBLanguage {
+  iso_639_1: string | null;
+  english_name: string;
+  name: string;
+}
+
+interface TMDBCountry {
+  iso_3166_1: string;
+  english_name: string;
+  native_name: string;
+}
+
 const genreMap = new Map<number, string>();
 let genreMapInitPromise: Promise<void> | null = null;
 const movieDetailsCache = new Map<string, { expiresAt: number; value: Promise<Movie | null> }>();
 const tmdbJsonCache = new Map<string, { expiresAt: number; value: Promise<unknown> }>();
+
+const moodByGenre: Record<string, string[]> = {
+  Action: ["Intense", "Thrilling"],
+  Adventure: ["Thrilling"],
+  Animation: ["Fun", "Uplifting"],
+  Comedy: ["Fun", "Uplifting"],
+  Crime: ["Dark", "Thrilling"],
+  Documentary: ["Thought-Provoking"],
+  Drama: ["Emotional", "Thought-Provoking"],
+  Family: ["Uplifting", "Fun"],
+  Fantasy: ["Thrilling", "Uplifting"],
+  History: ["Thought-Provoking"],
+  Horror: ["Dark", "Intense"],
+  Music: ["Fun", "Romantic"],
+  Mystery: ["Thrilling", "Dark"],
+  Romance: ["Romantic", "Relaxing"],
+  "Science Fiction": ["Thrilling", "Intense"],
+  Thriller: ["Thrilling", "Dark"],
+  War: ["Intense", "Thought-Provoking"],
+  Western: ["Thrilling", "Intense"],
+};
+
+const tagByGenre: Record<string, string[]> = {
+  Action: ["#action-packed", "#gripping"],
+  Adventure: ["#action-packed", "#mind-bending"],
+  Animation: ["#visually-stunning", "#feel-good"],
+  Comedy: ["#feel-good", "#emotional"],
+  Crime: ["#dark", "#gripping"],
+  Documentary: ["#thought-provoking"],
+  Drama: ["#emotional", "#slow-burn", "#thought-provoking"],
+  Family: ["#feel-good", "#visually-stunning"],
+  Fantasy: ["#mind-bending", "#visually-stunning"],
+  History: ["#slow-burn", "#thought-provoking"],
+  Horror: ["#dark", "#gripping", "#atmospheric"],
+  Music: ["#feel-good", "#atmospheric"],
+  Mystery: ["#mind-bending", "#gripping"],
+  Romance: ["#emotional", "#feel-good"],
+  "Science Fiction": ["#mind-bending", "#visually-stunning"],
+  Thriller: ["#gripping", "#dark", "#atmospheric"],
+  War: ["#dark", "#intense", "#slow-burn"],
+  Western: ["#atmospheric", "#gripping"],
+};
+
 
 async function ensureGenreMap(): Promise<void> {
   if (genreMap.size > 0) return;
@@ -181,6 +236,96 @@ export async function getGenres(options?: TMDBRequestOptions): Promise<TMDBGenre
   } catch (error) {
     console.error("Failed to fetch genres:", error);
     return [];
+  }
+}
+
+export async function getDiscoverMetadata(
+  options?: TMDBRequestOptions
+): Promise<{
+  native: { genres: string[]; languages: string[]; countries: string[] };
+  derived: { moods: string[]; tags: string[] };
+}> {
+  if (!TMDB_API_KEY) {
+    return {
+      native: { genres: [], languages: [], countries: [] },
+      derived: { moods: [], tags: [] },
+    };
+  }
+
+  const fallbackGenreNames = ["Action", "Comedy", "Drama", "Horror", "Romance", "Thriller"];
+
+  try {
+    const [genresResult, languagesResult, countriesResult] = await Promise.all([
+      fetchTmdbJson<{ genres?: TMDBGenre[] }>(
+        `${TMDB_BASE_URL}/genre/movie/list?api_key=${TMDB_API_KEY}`,
+        options?.signal
+      ),
+      fetchTmdbJson<TMDBLanguage[]>(
+        `${TMDB_BASE_URL}/configuration/languages?api_key=${TMDB_API_KEY}`,
+        options?.signal
+      ),
+      fetchTmdbJson<TMDBCountry[]>(
+        `${TMDB_BASE_URL}/configuration/countries?api_key=${TMDB_API_KEY}`,
+        options?.signal
+      ),
+    ]);
+
+    const genreNames = Array.isArray(genresResult?.genres)
+      ? genresResult.genres.map((genre) => genre.name)
+      : fallbackGenreNames;
+
+    const languages = Array.from(
+      new Set(
+        (Array.isArray(languagesResult) ? languagesResult : [])
+          .map((language) => language.english_name || language.name)
+          .filter(Boolean)
+      )
+    );
+
+    const countries = Array.from(
+      new Set(
+        (Array.isArray(countriesResult) ? countriesResult : [])
+          .map((country) => country.english_name || country.native_name || country.iso_3166_1)
+          .filter(Boolean)
+      )
+    );
+
+    const moodValues = Array.from(
+      new Set(
+        genreNames.flatMap((genre) => moodByGenre[genre] ?? [])
+      )
+    );
+
+    const tagValues = Array.from(
+      new Set(
+        genreNames.flatMap((genre) => tagByGenre[genre] ?? [])
+      )
+    );
+
+    return {
+      native: {
+        genres: genreNames,
+        languages: languages.length > 0 ? languages : ["English", "Japanese", "French", "Spanish"],
+        countries: countries.length > 0 ? countries : ["USA", "UK", "Japan", "Australia"],
+      },
+      derived: {
+        moods: moodValues.length > 0 ? moodValues : ["Thrilling", "Relaxing", "Romantic", "Dark", "Uplifting"],
+        tags: tagValues.length > 0 ? tagValues : ["#atmospheric", "#dark", "#gripping", "#feel-good", "#emotional", "#visually-stunning", "#mind-bending", "#slow-burn", "#action-packed"],
+      },
+    };
+  } catch (error) {
+    reportTmdbError("Failed to fetch discover metadata:", error, options);
+    return {
+      native: {
+        genres: fallbackGenreNames,
+        languages: ["English", "Japanese", "French", "Spanish"],
+        countries: ["USA", "UK", "Japan", "Australia"],
+      },
+      derived: {
+        moods: ["Thrilling", "Relaxing", "Romantic", "Dark", "Uplifting"],
+        tags: ["#atmospheric", "#dark", "#gripping", "#feel-good", "#emotional", "#visually-stunning", "#mind-bending", "#slow-burn", "#action-packed"],
+      },
+    };
   }
 }
 
@@ -355,6 +500,13 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
 
   const year = new Date(tmdbMovie.release_date).getFullYear() || new Date().getFullYear();
 
+  // Derive tags from genres
+  const derivedTags = Array.from(
+    new Set(
+      movieGenres.flatMap((genre) => tagByGenre[genre.name] ?? [])
+    )
+  );
+
   return {
     id: String(tmdbMovie.id),
     title: tmdbMovie.title,
@@ -368,7 +520,7 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
     director,
     cast,
     reviews: [], // Reviews will be empty from API, user-generated reviews can be stored separately
-    tags: movieGenres.map((genre) => genre.name),
+    tags: derivedTags,
     streamingOn: [], // WatchMode will provide this
     runtime: tmdbMovie.runtime || 0,
     language: tmdbMovie.spoken_languages?.[0]?.name || "Unknown",
