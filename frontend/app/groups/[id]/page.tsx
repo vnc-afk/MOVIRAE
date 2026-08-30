@@ -23,6 +23,7 @@ import {
   WatchlistTab,
   MembersTab,
 } from "./components";
+import { GroupDetailLoading } from "./loading";
 import { isGroupAdmin } from "../lib/groupUtils";
 
 /**
@@ -180,11 +181,7 @@ export default function GroupDetailPage() {
 
   // Render loading state
   if (loadState === "loading") {
-    return (
-      <div className="container py-20 text-center">
-        <p className="text-muted-foreground">Loading group...</p>
-      </div>
-    );
+    return <GroupDetailLoading />;
   }
 
   // Render error state

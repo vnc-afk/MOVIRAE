@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-export default function Loading() {
+export function GroupDetailLoading() {
   return (
     <div className="pb-20 md:pb-0">
       <div className="cinema-gradient py-12">
@@ -30,3 +30,5 @@ export default function Loading() {
     </div>
   );
 }
+
+export default GroupDetailLoading;
