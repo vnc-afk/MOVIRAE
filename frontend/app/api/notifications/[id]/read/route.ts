@@ -1,5 +1,5 @@
 import { apiInternalError, apiNotFound, apiSuccess, apiUnauthorized, apiForbidden } from "@/app/notifications/lib/api-response";
-import { requireAuth } from "@/app/notifications/lib/api-utils";
+import { requireAuth, ApiError } from "@/app/notifications/lib/api-utils";
 import { markNotificationRead } from "@/app/notifications/lib/notification-service";
 
 export const runtime = "nodejs";
@@ -19,16 +19,13 @@ export async function PATCH(
     const { id } = await params;
 
     const result = await markNotificationRead(id, currentUser);
-    if ("error" in result) {
-      if (result.error === "not-found") return apiNotFound("Notification");
-      if (result.error === "unauthorized") return apiForbidden();
-      return apiInternalError("Failed to mark notification as read");
-    }
-
-    return apiSuccess(result.value);
+    return apiSuccess(result);
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return apiUnauthorized();
+    if (error instanceof ApiError) {
+      if (error.code === "NOT_FOUND") return apiNotFound("Notification");
+      if (error.code === "FORBIDDEN") return apiForbidden();
+      if (error.code === "UNAUTHORIZED") return apiUnauthorized();
+      return apiInternalError(error.message);
     }
 
     console.error("/api/notifications/[id]/read PATCH error:", error);

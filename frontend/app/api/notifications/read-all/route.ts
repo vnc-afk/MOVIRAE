@@ -1,5 +1,5 @@
 import { apiInternalError, apiSuccess, apiUnauthorized } from "@/app/notifications/lib/api-response";
-import { requireAuth } from "@/app/notifications/lib/api-utils";
+import { requireAuth, ApiError } from "@/app/notifications/lib/api-utils";
 import { markAllNotificationsRead } from "@/app/notifications/lib/notification-service";
 
 export const runtime = "nodejs";
@@ -14,16 +14,10 @@ export async function PATCH(request: Request) {
   try {
     const currentUser = await requireAuth(request);
     const result = await markAllNotificationsRead(currentUser);
-
-    if ("error" in result) {
-      if (result.error === "unauthorized") return apiUnauthorized();
-      return apiInternalError("Failed to mark notifications as read");
-    }
-
-    return apiSuccess(result.value);
+    return apiSuccess(result);
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return apiUnauthorized();
+    if (error instanceof ApiError) {
+      return apiInternalError(error.message);
     }
     console.error("/api/notifications/read-all PATCH error:", error);
     return apiInternalError("Failed to mark notifications as read");
