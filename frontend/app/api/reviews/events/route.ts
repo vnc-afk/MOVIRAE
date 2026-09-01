@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { subscribeToReviewEvents } from "@/lib/review-events";
+import { subscribeToReviewEvents } from "@/lib/features/reviews/events";
 
 export const runtime = "nodejs";
 
