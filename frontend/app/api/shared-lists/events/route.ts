@@ -1,7 +1,7 @@
 import { subscribeToSharedListEvents } from "@/app/shared-lists/lib/events";
 import type { SharedListEvent } from "@/app/shared-lists/lib/events";
 import { getCurrentUser } from "@/app/shared-lists/lib/api-utils";
-import { getSharedListForView } from "@/app/shared-lists/lib/shared-lists-service";
+import { getSharedListForView } from "@/app/shared-lists/lib/service";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
       // Guarded send: only forward events to this client if they are allowed to see them.
       const guardedSend = async (event: SharedListEvent) => {
-        if (event.action === "deleted") {
+        if (event.type === "deleted") {
           send(event);
           return;
         }

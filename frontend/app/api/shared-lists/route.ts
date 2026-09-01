@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createSharedList, fetchSharedLists } from "@/lib/shared-lists";
+import { createSharedList, fetchSharedLists } from "@/app/shared-lists/lib/service";
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
 import { getCurrentUser, getOpId, parseRequestJson, requireAuth } from "@/app/shared-lists/lib/api-utils";
 
