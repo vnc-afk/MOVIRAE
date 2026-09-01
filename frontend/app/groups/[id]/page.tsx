@@ -24,7 +24,6 @@ import {
   MembersTab,
 } from "./components";
 import { GroupDetailLoading } from "./loading";
-import { isGroupAdmin } from "../lib/groupUtils";
 
 /**
  * Renders the group detail experience with discussion, watchlist, member, and event tabs.
@@ -176,8 +175,8 @@ export default function GroupDetailPage() {
     );
   }, []);
 
-  // Check if user is admin
-  const isAdmin = currentUser && group ? isGroupAdmin(currentUser, group) : false;
+  // Check if user is admin (is the group creator)
+  const isAdmin = currentUser && group ? currentUser.id === group.creatorId : false;
 
   // Render loading state
   if (loadState === "loading") {
