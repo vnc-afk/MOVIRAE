@@ -401,24 +401,6 @@ Key entities:
 ✅ Environment variable management  
 ✅ OAuth 2.0 compliance  
 
-## 🤝 Contributing
-
-We welcome contributions! Please feel free to submit pull requests or open issues for bugs and feature requests.
-
-### Development Workflow
-1. Create a feature branch from `main`
-2. Make your changes with clear commit messages
-3. Test your changes thoroughly
-4. Submit a pull request with a description
-
-## 📝 License
-
-[Add your license information here]
-
-## 🙋 Support
-
-For questions or support, please [add contact information or support channel]
-
 ## 🚢 Deployment
 
 ### Production-Ready Features
@@ -430,41 +412,5 @@ For questions or support, please [add contact information or support channel]
 ✅ **Performance Optimizing** - Image optimization, code splitting, caching  
 ✅ **Security** - CORS headers, CSRF protection, secure cookies  
 ✅ **Monitoring Ready** - Structured logging for debugging  
-
-### Deployment Options
-
-#### Vercel (Recommended)
-```bash
-# One-click deployment from GitHub
-# Automatic deployments on push
-# Built-in analytics and error tracking
-```
-- Environment variables configured in Vercel dashboard
-- PostgreSQL via Neon
-- Deploy preview on every pull request
-
-#### Docker
-```dockerfile
-# Containerized deployment for any cloud
-# Compatible with AWS, GCP, Azure, DigitalOcean, etc.
-```
-
-#### Self-Hosted
-```bash
-# Traditional Node.js server deployment
-# Docker support for consistency
-# Nginx reverse proxy configuration included
-```
-
-### Environment Setup Checklist
-
-- [ ] Database: PostgreSQL with connection pooling (Neon recommended)
-- [ ] APIs: TMDB key, WatchMode key, Google OAuth credentials
-- [ ] Auth: NextAuth secret, NEXTAUTH_URL set correctly
-- [ ] Monitoring: Error tracking (optional, Sentry recommended)
-- [ ] Email: SMTP configured for notifications (optional)
-- [ ] CDN: Static asset delivery (Vercel/CloudFront)
-
----
 
 **Happy movie watching! 🍿🎬**
