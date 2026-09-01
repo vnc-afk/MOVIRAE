@@ -118,43 +118,6 @@ export interface ActivityItem {
   date: string;
 }
 
-export interface Group {
-  id: string;
-  name: string;
-  description: string;
-  memberCount: number;
-  avatar: string;
-  creatorId: string;
-  members: UserProfile[];
-  sharedList: Movie[];
-}
-
-export interface SharedList {
-  id: string;
-  name: string;
-  description: string;
-  visibility: "public" | "private" | "group";
-  owner: UserProfile;
-  collaborators: UserProfile[];
-  movies: Movie[];
-  likes: number;
-  likedByMe?: boolean;
-  comments: number;
-  commentItems?: SharedListComment[];
-  createdAt: string;
-  groupId?: string;
-  groupName?: string;
-}
-
-export interface SharedListComment {
-  id: string;
-  user: UserProfile;
-  body: string;
-  date: string;
-  parentId?: string | null;
-  replies: SharedListComment[];
-}
-
 export interface NotificationItem {
   id: string;
   type: "follow" | "review_like" | "review_reply" | "discussion_created" | "discussion_like" | "discussion_reply" | "event_created" | "shared_list_like" | "shared_list_comment" | "group_invite" | "recommendation";
