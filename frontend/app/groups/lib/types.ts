@@ -1,4 +1,15 @@
-import type { Group, UserProfile, Movie } from "@/lib/types";
+import type { UserProfile, Movie } from "@/lib/types";
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  memberCount: number;
+  avatar: string;
+  creatorId: string;
+  members: UserProfile[];
+  sharedList: Movie[];
+}
 
 export interface GroupRecord extends Group {
   joined?: boolean;
