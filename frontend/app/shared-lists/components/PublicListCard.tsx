@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MoviePrefetchLink } from "@/components/MoviePrefetchLink";
-import type { SharedList } from "@/lib/types";
+import type { SharedList } from "@/app/shared-lists/lib/types";
 import { formatRelativeDate, getSafeImageSrc } from "../lib/shared-lists-utils";
 
 type PublicListCardProps = {

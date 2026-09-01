@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Film, Loader2, Send } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
-import type { SharedList } from "@/lib/types";
+import type { SharedList } from "@/app/shared-lists/lib/types";
 import { formatExactDate, formatRelativeDate, getSafeImageSrc } from "../lib/shared-lists-utils";
 
 type SharedListComment = NonNullable<SharedList["commentItems"]>[number];

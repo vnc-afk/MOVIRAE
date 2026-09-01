@@ -34,7 +34,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
+import type { SharedList } from "@/app/shared-lists/lib/types";
+import type { Movie, UserProfile } from "@/lib/types";
+import type { Group } from "@/app/groups/lib/types";
 
 type SharedListsViewProps = {
   lists: SharedList[];

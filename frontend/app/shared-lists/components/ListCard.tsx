@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoviePrefetchLink } from "@/components/MoviePrefetchLink";
-import type { SharedList, UserProfile } from "@/lib/types";
+import type { SharedList } from "@/app/shared-lists/lib/types";
+import type { UserProfile } from "@/lib/types";
 import { formatRelativeDate, getSafeImageSrc } from "../lib/shared-lists-utils";
 
 type ListCardProps = {

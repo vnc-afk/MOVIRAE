@@ -9,7 +9,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MoviePrefetchLink } from "@/components/MoviePrefetchLink";
 import { Film, Heart, MessageCircle, Loader2, Search, Send, Trash2, Users, MessageSquareReply } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
-import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
+import type { SharedList } from "@/app/shared-lists/lib/types";
+import type { Movie, UserProfile } from "@/lib/types";
+import type { Group } from "@/app/groups/lib/types";
 import { formatExactDate, formatRelativeDate, getSafeImageSrc } from "../lib/shared-lists-utils";
 import { CommentNode } from "./CommentNode";
 
