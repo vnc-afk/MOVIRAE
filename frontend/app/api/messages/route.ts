@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
-import { buildUserProfile } from "@/lib/user-profiles";
-import { getConversationKey } from "@/lib/messaging";
-import { publishMessageEvent } from "@/lib/group-events";
+import { buildUserProfile } from "@/lib/features/profiles/service";
+import { getConversationKey } from "@/lib/features/messages/service";
+import { publishMessageEvent } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";
 

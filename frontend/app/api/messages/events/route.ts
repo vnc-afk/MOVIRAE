@@ -1,4 +1,4 @@
-import { subscribeToMessageEvents } from "@/lib/group-events";
+import { subscribeToMessageEvents } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";
 

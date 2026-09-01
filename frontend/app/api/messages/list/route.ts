@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
-import { getMessageThreadReadState } from "@/lib/message-threads";
+import { getMessageThreadReadState } from "@/lib/features/messages/threads";
 
 export const runtime = "nodejs";
 
