@@ -12,7 +12,7 @@ import {
   apiInternalError,
 } from "@/app/groups/lib/api-response";
 import { updateEventRsvpSchema } from "@/app/groups/lib/api-schemas";
-import { publishGroupEvent } from "@/lib/group-events";
+import { publishGroupEvent } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";
 

@@ -10,9 +10,9 @@ import {
   apiInternalError,
 } from "@/app/groups/lib/api-response";
 import { createDiscussionSchema } from "@/app/groups/lib/api-schemas";
-import { fetchGroupDiscussions } from "@/lib/group-discussions";
+import { fetchGroupDiscussions } from "@/app/groups/lib/discussions";
 import { prisma } from "@/lib/prisma";
-import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events";
+import { publishGroupEvent, publishNotificationEvent } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";
 

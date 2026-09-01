@@ -9,8 +9,8 @@ import {
   apiValidationError,
   apiInternalError,
 } from "@/app/groups/lib/api-response";
-import { addDiscussionReply } from "@/lib/group-discussions";
-import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events";
+import { addDiscussionReply } from "@/app/groups/lib/discussions";
+import { publishGroupEvent, publishNotificationEvent } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";
 

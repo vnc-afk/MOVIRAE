@@ -1,5 +1,5 @@
-import { subscribeToGroupEvents } from "@/lib/group-events";
-import type { GroupEvent } from "@/lib/group-events";
+import { subscribeToGroupEvents } from "@/app/groups/lib/events";
+import type { GroupEvent } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";
 

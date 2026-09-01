@@ -8,8 +8,8 @@ import {
   apiNotFound,
   apiInternalError,
 } from "@/app/groups/lib/api-response";
-import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events";
-import { toggleDiscussionLike } from "@/lib/group-discussions";
+import { publishGroupEvent, publishNotificationEvent } from "@/app/groups/lib/events";
+import { toggleDiscussionLike } from "@/app/groups/lib/discussions";
 
 export const runtime = "nodejs";
 

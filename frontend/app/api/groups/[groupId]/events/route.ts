@@ -31,7 +31,7 @@ import {
   createEventSchema,
   eventsListQuerySchema,
 } from "@/app/groups/lib/api-schemas";
-import { publishGroupEvent, publishNotificationEvent } from "@/lib/group-events";
+import { publishGroupEvent, publishNotificationEvent } from "@/app/groups/lib/events";
 
 const logger = {
   info: console.info,

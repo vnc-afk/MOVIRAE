@@ -9,8 +9,8 @@ import {
   apiForbidden,
   apiInternalError,
 } from "@/app/groups/lib/api-response";
-import { fetchGroupDetail } from "@/lib/group-discussions";
-import { publishGroupEvent } from "@/lib/group-events";
+import { fetchGroupDetail } from "@/app/groups/lib/discussions";
+import { publishGroupEvent } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";
 
