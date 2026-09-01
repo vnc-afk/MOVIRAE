@@ -1,7 +1,7 @@
 import { apiBadRequest, apiInternalError, apiNotFound, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
 import { requireAuth, parseRequestJson } from "@/app/movie/lib/api-utils";
 import { getWatchExperience, parseWatchExperiencePayload, saveWatchExperience } from "@/app/movie/lib/movie-service";
-import { refreshUserStatsSnapshot } from "@/lib/aggregations";
+import { refreshUserStatsSnapshot } from "@/app/stats/lib/user-stats";
 
 export const runtime = "nodejs";
 
