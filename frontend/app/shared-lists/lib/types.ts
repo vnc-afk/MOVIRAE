@@ -1,10 +1,38 @@
-import type { Group, Movie, SharedList, UserProfile } from "@/lib/types";
+import type { Movie, UserProfile } from "@/lib/types";
+import type { Group } from "@/app/groups/lib/types";
 
 /*
   Shared types used by the shared-lists UI layer.
   - Keep these lightweight and focused on the client-side snapshot + small pieces of UI state.
   - `SharedListsSnapshot` represents the shape stored in the react-query cache.
 */
+
+export interface SharedList {
+  id: string;
+  name: string;
+  description: string;
+  visibility: "public" | "private" | "group";
+  owner: UserProfile;
+  collaborators: UserProfile[];
+  movies: Movie[];
+  likes: number;
+  likedByMe?: boolean;
+  comments: number;
+  commentItems?: SharedListComment[];
+  createdAt: string;
+  groupId?: string;
+  groupName?: string;
+}
+
+export interface SharedListComment {
+  id: string;
+  user: UserProfile;
+  body: string;
+  date: string;
+  parentId?: string | null;
+  replies: SharedListComment[];
+}
+
 export type SharedListsSnapshot = {
   lists: SharedList[];
   groups: Group[];
@@ -20,8 +48,6 @@ export type SharedListsResponse = {
   hasMore?: boolean;
   nextPage?: number | null;
 };
-
-export type SharedListComment = NonNullable<SharedList["commentItems"]>[number];
 
 export type MovieSearchState = {
   query: string;
