@@ -135,56 +135,43 @@ export function apiError(
 }
 
 // ============================================================================
-// Specific Error Responses
+// Convenience Wrappers for Common Errors
 // ============================================================================
 
-export function apiBadRequest(
-  message: string = "Invalid request",
-  details?: Record<string, unknown>
-) {
-  return apiError("BAD_REQUEST", message, 400, details);
+export function apiBadRequest(message: string = "Bad request") {
+  return apiError("BAD_REQUEST", message, 400);
 }
 
-export function apiUnauthorized(message: string = "Authentication required") {
+export function apiUnauthorized(message: string = "Unauthorized") {
   return apiError("UNAUTHORIZED", message, 401);
 }
 
-export function apiForbidden(message: string = "You don't have permission") {
+export function apiForbidden(message: string = "Forbidden") {
   return apiError("FORBIDDEN", message, 403);
 }
 
-export function apiNotFound(
-  resource: string = "Resource",
-  details?: Record<string, unknown>
-) {
-  return apiError("NOT_FOUND", `${resource} not found`, 404, details);
+export function apiNotFound(message: string = "Not found") {
+  return apiError("NOT_FOUND", message, 404);
 }
 
-export function apiConflict(message: string = "Resource already exists") {
+export function apiConflict(message: string = "Conflict") {
   return apiError("CONFLICT", message, 409);
 }
 
-export function apiValidationError(
-  message: string = "Validation failed",
-  details?: Record<string, unknown>
-) {
+export function apiValidationError(message: string = "Validation error", details?: Record<string, unknown>) {
   return apiError("VALIDATION_ERROR", message, 400, details);
+}
+
+export function apiNotImplemented(message: string = "Not implemented") {
+  return apiError("NOT_IMPLEMENTED", message, 501);
+}
+
+export function apiServiceUnavailable(message: string = "Service unavailable") {
+  return apiError("SERVICE_UNAVAILABLE", message, 503);
 }
 
 export function apiInternalError(message: string = "Internal server error") {
   return apiError("INTERNAL_ERROR", message, 500);
-}
-
-export function apiNotImplemented() {
-  return apiError("NOT_IMPLEMENTED", "This endpoint is not implemented", 501);
-}
-
-export function apiServiceUnavailable() {
-  return apiError(
-    "SERVICE_UNAVAILABLE",
-    "Service is temporarily unavailable",
-    503
-  );
 }
 
 // ============================================================================
@@ -208,16 +195,6 @@ export function apiPaginated<T>(
   pagination: PaginationMeta
 ): NextResponse<ApiResponseSuccess<T[]>> {
   return apiSuccess(items, 200, { pagination });
-}
-
-/**
- * Return list with metadata
- */
-export function apiList<T>(
-  items: T[],
-  metadata?: Record<string, unknown>
-): NextResponse<ApiResponseSuccess<T[]>> {
-  return apiSuccess(items, 200, metadata);
 }
 
 // ============================================================================
@@ -267,27 +244,3 @@ export function handleApiRoute<P extends Record<string, unknown>>(
   };
 }
 
-// ============================================================================
-// Response Helpers for Common Patterns
-// ============================================================================
-
-/**
- * Return list of items
- */
-export function apiItems<T>(items: T[]): NextResponse<ApiResponseSuccess<T[]>> {
-  return apiSuccess(items);
-}
-
-/**
- * Return single item
- */
-export function apiItem<T>(item: T): NextResponse<ApiResponseSuccess<T>> {
-  return apiSuccess(item);
-}
-
-/**
- * Return empty success (for operations that don't return data)
- */
-export function apiOk(): NextResponse<ApiResponseSuccess<null>> {
-  return apiSuccess(null);
-}
