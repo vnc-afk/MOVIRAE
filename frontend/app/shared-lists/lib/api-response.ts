@@ -60,20 +60,40 @@ export function apiError(
   );
 }
 
-export function apiBadRequest(message = "Invalid request", details?: Record<string, unknown>) {
-  return apiError("BAD_REQUEST", message, 400, details);
+// ============================================================================
+// Convenience Wrappers for Common Errors
+// ============================================================================
+
+export function apiBadRequest(message = "Bad request") {
+  return apiError("BAD_REQUEST", message, 400);
 }
 
-export function apiUnauthorized(message = "Authentication required") {
+export function apiUnauthorized(message = "Unauthorized") {
   return apiError("UNAUTHORIZED", message, 401);
 }
 
-export function apiForbidden(message = "You don't have permission") {
+export function apiForbidden(message = "Forbidden") {
   return apiError("FORBIDDEN", message, 403);
 }
 
-export function apiNotFound(resource = "Resource", details?: Record<string, unknown>) {
-  return apiError("NOT_FOUND", `${resource} not found`, 404, details);
+export function apiNotFound(message = "Not found") {
+  return apiError("NOT_FOUND", message, 404);
+}
+
+export function apiConflict(message = "Conflict") {
+  return apiError("CONFLICT", message, 409);
+}
+
+export function apiValidationError(message = "Validation error", details?: Record<string, unknown>) {
+  return apiError("VALIDATION_ERROR", message, 400, details);
+}
+
+export function apiNotImplemented(message = "Not implemented") {
+  return apiError("NOT_IMPLEMENTED", message, 501);
+}
+
+export function apiServiceUnavailable(message = "Service unavailable") {
+  return apiError("SERVICE_UNAVAILABLE", message, 503);
 }
 
 export function apiInternalError(message = "Internal server error") {
