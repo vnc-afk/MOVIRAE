@@ -1,8 +1,33 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
-import { getSharedListForView} from "@/lib/shared-lists";
+import { getSharedListForView } from "@/app/shared-lists/lib/service";
 import type { CurrentUser } from "./api-utils";
+
+/**
+ * Check if user can edit a shared list (owner or explicit collaborator)
+ */
+async function canEditSharedList(listId: string, userId: string): Promise<boolean> {
+  const list = await prisma.sharedList.findUnique({
+    where: { id: listId },
+    select: { ownerId: true, collaborators: { select: { userId: true } } },
+  });
+
+  if (!list) return false;
+  if (list.ownerId === userId) return true;
+  return list.collaborators.some((c) => c.userId === userId);
+}
+
+/**
+ * Check if user is the owner of a shared list
+ */
+async function isSharedListOwner(listId: string, userId: string): Promise<boolean> {
+  const list = await prisma.sharedList.findUnique({
+    where: { id: listId },
+    select: { ownerId: true },
+  });
+  return list?.ownerId === userId;
+}
 
 /*
   Server-side helpers for shared lists API routes.
@@ -13,7 +38,7 @@ import type { CurrentUser } from "./api-utils";
     `getSharedListForView` whenever applicable.
 */
 
-export { getSharedListForView, getSharedListAccessInfo, getSharedListDetail } from "@/lib/shared-lists";
+export { getSharedListForView, getSharedListAccessInfo, getSharedListDetail } from "@/app/shared-lists/lib/service";
 
 export async function addSharedListComment(
   listId: string,
@@ -111,29 +136,19 @@ export async function addSharedListMovie(
   | { value: any }
   | { error: "unauthorized" | "movie-not-found" | "not-found" }
 > {
-  // Verify list exists and load collaborators to check edit permissions.
-  const list = await prisma.sharedList.findUnique({
-    where: { id: listId },
-    include: { collaborators: true },
-  });
-
-  if (!list) {
-    return { error: "not-found" };
-  }
-
-  // Determine whether the current user can modify the list (owner or explicit collaborator).
-  const isEditor = list.ownerId === currentUser.id || list.collaborators.some((collaborator) => collaborator.userId === currentUser.id);
-  if (!isEditor) {
+  // Check if list exists and user can edit it
+  const hasAccess = await canEditSharedList(listId, currentUser.id);
+  if (!hasAccess) {
     return { error: "unauthorized" };
   }
 
-  // Fetch fresh movie metadata from TMDb before adding/updating the list entry.
+  // Fetch fresh movie metadata from TMDb before adding/updating the list entry
   const movie = await getMovieDetails(movieId);
   if (!movie) {
     return { error: "movie-not-found" };
   }
 
-  // Position new movie at the end of the list by counting existing entries.
+  // Position new movie at the end of the list by counting existing entries
   const existingCount = await prisma.sharedListMovie.count({
     where: { sharedListId: listId },
   });
@@ -147,7 +162,6 @@ export async function addSharedListMovie(
       metadata: movie as unknown as Prisma.InputJsonValue,
     },
     update: {
-      // Update stored metadata to keep list items reasonably in-sync with TMDb.
       metadata: movie as unknown as Prisma.InputJsonValue,
     },
   });
@@ -168,22 +182,13 @@ export async function removeSharedListMovie(
   | { value: any }
   | { error: "unauthorized" | "movie-not-found" | "not-found" }
 > {
-  // Verify list exists and user's permission to modify it.
-  const list = await prisma.sharedList.findUnique({
-    where: { id: listId },
-    include: { collaborators: true },
-  });
-
-  if (!list) {
-    return { error: "not-found" };
-  }
-
-  const isEditor = list.ownerId === currentUser.id || list.collaborators.some((collaborator) => collaborator.userId === currentUser.id);
-  if (!isEditor) {
+  // Check if user can edit the list
+  const hasAccess = await canEditSharedList(listId, currentUser.id);
+  if (!hasAccess) {
     return { error: "unauthorized" };
   }
 
-  // Delete any matching movie rows (should be 0 or 1). We use deleteMany for idempotency.
+  // Delete any matching movie rows (should be 0 or 1). We use deleteMany for idempotency
   const result = await prisma.sharedListMovie.deleteMany({
     where: { sharedListId: listId, tmdbId: movieId },
   });
@@ -204,13 +209,9 @@ export async function deleteSharedList(
   listId: string,
   currentUser: CurrentUser
 ): Promise<{ value: any } | { error: "unauthorized" | "not-found" }> {
-  // Only the owner may fully delete a list.
-  const list = await prisma.sharedList.findUnique({ where: { id: listId } });
-  if (!list) {
-    return { error: "not-found" };
-  }
-
-  if (list.ownerId !== currentUser.id) {
+  // Only the owner may fully delete a list
+  const isOwner = await isSharedListOwner(listId, currentUser.id);
+  if (!isOwner) {
     return { error: "unauthorized" };
   }
 
