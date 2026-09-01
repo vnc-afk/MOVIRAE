@@ -1,5 +1,6 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import type { GroupRecord, Discussion, GroupEventRecord } from "./types";
+import { isGroupAdmin } from "./utils";
 
 const inFlightJsonRequests = new Map<string, Promise<FetchResult<unknown>>>();
 
@@ -187,10 +188,6 @@ export function makeOptimisticTempId(prefix = "temp"): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/**
- * Checks whether the current user is the creator of the group.
- */
-export function isGroupAdmin(currentUser: any, group: GroupRecord): boolean {
-  if (!currentUser || !group) return false;
-  return currentUser.id === group.creatorId;
-}
+// Re-export from utils.ts for backward compatibility
+export { isGroupAdmin, isGroupAdminByStatus, checkAndPromoteGroupAdmin } from "./utils";
+
