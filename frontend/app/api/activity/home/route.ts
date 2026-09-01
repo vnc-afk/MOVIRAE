@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getHomeActivityFeedSnapshot } from "@/lib/aggregations";
+import { getHomeActivityFeedSnapshot } from "@/lib/features/activity/feed";
 
 export const runtime = "nodejs";
 

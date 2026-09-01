@@ -1,6 +1,6 @@
 import { apiInternalError, apiSuccess, apiUnauthorized } from "@/app/wrapped/lib/api-response";
 import { requireAuth } from "@/app/wrapped/lib/api-utils";
-import { getUserStatsSnapshot } from "@/lib/aggregations";
+import { getUserStatsSnapshot } from "@/app/stats/lib/user-stats";
 
 export const runtime = "nodejs";
 
