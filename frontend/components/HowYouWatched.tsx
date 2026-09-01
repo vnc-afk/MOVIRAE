@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Monitor, Users, Heart, Popcorn, Clapperboard, Check } from "lucide-react";
 import type { Mood, WatchContext, WatchExperience, WatchPlatform } from "@/lib/types";
-import { WATCH_CONTEXTS, WATCH_MOODS, WATCH_PLATFORMS } from "../lib/watch-options";
+import { WATCH_CONTEXTS, WATCH_MOODS, WATCH_PLATFORMS } from "@/lib/features/watch/options";
 
 const platforms: { value: WatchPlatform; icon: ReactNode; label: string }[] = [
   { value: WATCH_PLATFORMS[0], icon: <Clapperboard className="h-4 w-4" />, label: "Cinema" },

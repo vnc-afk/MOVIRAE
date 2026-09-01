@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { memo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { scheduleMovieDetailPrefetch, scheduleMovieTrailerPrefetch, cancelScheduledPrefetch } from "@/lib/prefetchHelpers";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -130,12 +129,23 @@ export const MovieCard = memo(function MovieCard({
         href={`/movie/${movie.id}`}
         className="group block min-w-0"
         onMouseEnter={() => {
-          scheduleMovieDetailPrefetch(queryClient, movie.id, prefetchTokenRef.current, 150);
-          scheduleMovieTrailerPrefetch(queryClient, movie.id, videoPrefetchTokenRef.current, 150);
-        }}
-        onMouseLeave={() => {
-          cancelScheduledPrefetch(prefetchTokenRef.current);
-          cancelScheduledPrefetch(videoPrefetchTokenRef.current);
+          void queryClient.prefetchQuery({
+            queryKey: ["movie", "detail", movie.id],
+            queryFn: async () => {
+              const response = await fetch(`/api/tmdb/movie/${movie.id}`);
+              if (!response.ok) return null;
+              return response.json();
+            },
+          });
+          void queryClient.prefetchQuery({
+            queryKey: ["movie", "videos", movie.id],
+            queryFn: async () => {
+              const response = await fetch(`/api/tmdb/videos/${movie.id}`);
+              if (!response.ok) return [];
+              const data = await response.json();
+              return Array.isArray(data) ? data : [];
+            },
+          });
         }}
       >
         <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-secondary poster-shadow">

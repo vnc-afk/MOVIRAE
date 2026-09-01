@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { UserCircle2 } from "lucide-react";
-import type { ConversationSummary } from "@/lib/messaging";
+import type { ConversationSummary } from "@/lib/features/messages/service";
 
 type Props = {
   conversation: ConversationSummary;

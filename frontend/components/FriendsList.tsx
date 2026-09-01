@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
-import { fetchFriends, fetchMessageThread } from "@/lib/messaging";
-import { safePrefetchQuery } from "@/lib/prefetchHelpers";
+import { fetchFriends, fetchMessageThread } from "@/lib/features/messages/service";
 import type { UserProfile } from "@/lib/types";
 
 type FriendsListProps = {
@@ -17,7 +15,7 @@ export function FriendsList({ onMessage }: FriendsListProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  const friendsQuery = usePrefetchAwareQuery<UserProfile[]>({
+  const friendsQuery = useQuery<UserProfile[]>({
     queryKey: queryKeys.messaging.friends(),
     queryFn: fetchFriends,
     enabled: true,
@@ -30,7 +28,7 @@ export function FriendsList({ onMessage }: FriendsListProps) {
   const loading = friendsQuery.isPending;
 
   const prefetchThread = (friendId: string) => {
-    void safePrefetchQuery(queryClient, {
+    void queryClient.prefetchQuery({
       queryKey: queryKeys.messaging.thread(friendId),
       queryFn: () => fetchMessageThread(friendId),
     });
