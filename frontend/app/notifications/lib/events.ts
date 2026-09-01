@@ -1,2 +1,2 @@
-export { publishNotificationEvent, subscribeToNotifications } from "@/lib/group-events";
-export type { NotificationEvent } from "@/lib/group-events";
+export { publishNotificationEvent, subscribeToNotifications } from "@/app/groups/lib/events";
+export type { NotificationEvent } from "@/app/groups/lib/events";
