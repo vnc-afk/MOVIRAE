@@ -2,7 +2,6 @@ import { format, formatDistanceToNowStrict } from "date-fns";
 import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import type { NotificationItem } from "@/lib/types";
-import prefetchHelpers from "@/lib/prefetchHelpers";
 
 /**
  * Merges paginated results into a single deduplicated list.
@@ -63,7 +62,14 @@ export async function prefetchNotificationTargets(queryClient: QueryClient, noti
 
   if (notification.movieId) {
     tasks.push(
-      prefetchHelpers.scheduleMovieDetailPrefetch(queryClient, notification.movieId, `notif-movie-${notification.movieId}`)
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.movie.detail(notification.movieId),
+        queryFn: async () => {
+          const response = await fetch(`/api/tmdb/movie/${notification.movieId}`);
+          if (!response.ok) return null;
+          return response.json();
+        },
+      })
     );
   }
 

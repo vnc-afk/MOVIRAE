@@ -1,5 +1,5 @@
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
 import type { User } from "@prisma/client";
 
@@ -15,6 +15,31 @@ export type CurrentUser = Pick<
   | "bio"
 >;
 
+export const USER_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  username: true,
+  displayName: true,
+  avatar: true,
+  image: true,
+  bio: true,
+  emailVerified: true,
+  passwordHash: true,
+} as const;
+
+export class ApiError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+    public statusCode: number = 500,
+    public details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -23,45 +48,23 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   return prisma.user.findUnique({
     where: { email: session.user.email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      username: true,
-      displayName: true,
-      avatar: true,
-      image: true,
-      bio: true,
-      emailVerified: true,
-      passwordHash: true,
-    },
+    select: USER_SELECT,
   });
 }
 
 export async function requireAuth(request: Request): Promise<CurrentUser> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
-    throw new Error("UNAUTHORIZED");
+    throw new ApiError("UNAUTHORIZED", "Authentication required", 401);
   }
 
   const user = await prisma.user.findUnique({
     where: { email: session.user.email },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      username: true,
-      displayName: true,
-      avatar: true,
-      image: true,
-      bio: true,
-      emailVerified: true,
-      passwordHash: true,
-    },
+    select: USER_SELECT,
   });
 
   if (!user) {
-    throw new Error("USER_NOT_FOUND");
+    throw new ApiError("USER_NOT_FOUND", "User not found", 404);
   }
 
   return user;

@@ -76,6 +76,39 @@ export function apiNotFound(resource = "Resource", details?: Record<string, unkn
   return apiError("NOT_FOUND", `${resource} not found`, 404, details);
 }
 
+export function apiConflict(message = "Conflict", details?: Record<string, unknown>) {
+  return apiError("CONFLICT", message, 409, details);
+}
+
+export function apiValidationError(message = "Validation failed", details?: Record<string, unknown>) {
+  return apiError("VALIDATION_ERROR", message, 400, details);
+}
+
+export function apiNotImplemented(message = "Not implemented") {
+  return apiError("NOT_IMPLEMENTED", message, 501);
+}
+
+export function apiServiceUnavailable(message = "Service unavailable") {
+  return apiError("SERVICE_UNAVAILABLE", message, 503);
+}
+
+export function apiNoContent() {
+  return new NextResponse(null, { status: 204 });
+}
+
+export function apiPaginated<T>(
+  data: T[],
+  hasMore: boolean,
+  cursor?: string,
+  meta?: Record<string, unknown>
+) {
+  return apiSuccess(data, 200, {
+    hasMore,
+    ...(cursor ? { cursor } : {}),
+    ...meta,
+  });
+}
+
 export function apiInternalError(message = "Internal server error") {
   return apiError("INTERNAL_ERROR", message, 500);
 }
