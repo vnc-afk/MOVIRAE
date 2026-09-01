@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
-import { canReviewMovie, serializeReview } from "@/lib/reviews";
-import { publishReviewEvent } from "@/lib/review-events";
-import { refreshHomeActivityFeedSnapshot, refreshUserStatsSnapshot } from "@/lib/aggregations";
+import { canReviewMovie, serializeReview } from "@/lib/features/reviews/service";
+import { publishReviewEvent } from "@/lib/features/reviews/events";
+import { refreshHomeActivityFeedSnapshot } from "@/lib/features/activity/feed";
+import { refreshUserStatsSnapshot } from "@/app/stats/lib/user-stats";
 import type { CurrentUser } from "./api-utils";
 
 export async function addReview(
@@ -166,7 +167,7 @@ export async function toggleReviewLike(
           },
         });
         try {
-          const { publishNotificationEvent } = await import("@/lib/group-events");
+          const { publishNotificationEvent } = await import("@/app/groups/lib/events");
           publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
         } catch (e) {
           console.warn("publishNotificationEvent failed:", e);
@@ -261,7 +262,7 @@ export async function createReply(
       },
     });
     try {
-      const { publishNotificationEvent } = await import("@/lib/group-events");
+      const { publishNotificationEvent } = await import("@/app/groups/lib/events");
       publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
     } catch (e) {
       console.warn("publishNotificationEvent failed:", e);
@@ -338,7 +339,7 @@ export async function getMovieReviews(
 }
 
 // Watch-experience helpers: thin wrappers over existing lib functions
-import { getUserWatchExperience as _getUserWatchExperience, parseWatchExperiencePayload as _parseWatchExperiencePayload, saveUserWatchExperience as _saveUserWatchExperience, getWatchExperienceStats as _getWatchExperienceStats } from "@/lib/watch-experiences";
+import { getUserWatchExperience as _getUserWatchExperience, parseWatchExperiencePayload as _parseWatchExperiencePayload, saveUserWatchExperience as _saveUserWatchExperience, getWatchExperienceStats as _getWatchExperienceStats } from "@/lib/features/watch/experiences";
 
 export async function getWatchExperience(userId: string, tmdbId: string) {
   return await _getUserWatchExperience(userId, tmdbId);
