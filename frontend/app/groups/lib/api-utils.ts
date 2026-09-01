@@ -8,11 +8,29 @@
  */
 
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
-import type { UserProfile } from "@/lib/types";
 
-export { buildUserProfile } from "@/lib/user-profiles";
+export { buildUserProfile } from "@/lib/features/profiles/service";
+
+// ============================================================================
+// Shared Prisma Selects
+// ============================================================================
+
+/**
+ * Standard user fields for profile selection
+ * Used across discussions, events, and group member serialization
+ */
+export const USER_SELECT_PROFILE = {
+  id: true,
+  email: true,
+  name: true,
+  username: true,
+  displayName: true,
+  avatar: true,
+  image: true,
+  bio: true,
+} as const;
 
 export async function getCurrentUser() {
   const session = await getServerSession(authOptions);
@@ -50,9 +68,11 @@ export async function requireAuth(request: Request) {
       id: true,
       email: true,
       name: true,
+      username: true,
       displayName: true,
       avatar: true,
       image: true,
+      bio: true,
     },
   });
 
@@ -72,6 +92,25 @@ export async function requireAuth(request: Request) {
  */
 export function serializeDate(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Check if user is an admin of a group
+ */
+export async function isGroupAdminUser(userId: string, groupId: string): Promise<boolean> {
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { creatorId: true },
+  });
+
+  if (!group) return false;
+  if (group.creatorId === userId) return true;
+
+  const adminRecord = await prisma.groupAdmin.findUnique({
+    where: { groupId_userId: { groupId, userId } },
+  });
+
+  return !!adminRecord;
 }
 
 /**
@@ -182,146 +221,6 @@ export function parseSort(
   }
 
   return { sortBy, order };
-}
-
-// ============================================================================
-// Validation Helpers
-// ============================================================================
-
-/**
- * Validate a string field
- */
-export function validateStringField(
-  value: unknown,
-  fieldName: string,
-  options: {
-    required?: boolean;
-    minLength?: number;
-    maxLength?: number;
-    pattern?: RegExp;
-  } = {}
-): { valid: boolean; error?: string } {
-  const {
-    required = true,
-    minLength,
-    maxLength,
-    pattern,
-  } = options;
-
-  if (typeof value !== "string") {
-    return { valid: false, error: `${fieldName} must be a string` };
-  }
-
-  const trimmed = value.trim();
-
-  if (required && !trimmed) {
-    return { valid: false, error: `${fieldName} is required` };
-  }
-
-  if (!required && !trimmed) {
-    return { valid: true };
-  }
-
-  if (minLength && trimmed.length < minLength) {
-    return {
-      valid: false,
-      error: `${fieldName} must be at least ${minLength} characters`,
-    };
-  }
-
-  if (maxLength && trimmed.length > maxLength) {
-    return {
-      valid: false,
-      error: `${fieldName} must be less than ${maxLength} characters`,
-    };
-  }
-
-  if (pattern && !pattern.test(trimmed)) {
-    return { valid: false, error: `${fieldName} has invalid format` };
-  }
-
-  return { valid: true };
-}
-
-/**
- * Validate a date field
- */
-export function validateDateField(
-  value: unknown,
-  fieldName: string,
-  options: {
-    required?: boolean;
-    minDate?: Date;
-    maxDate?: Date;
-  } = {}
-): { valid: boolean; error?: string; date?: Date } {
-  const { required = true, minDate, maxDate } = options;
-
-  if (typeof value !== "string") {
-    return { valid: false, error: `${fieldName} must be a string` };
-  }
-
-  if (!value && !required) {
-    return { valid: true };
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return { valid: false, error: `${fieldName} must be a valid date` };
-  }
-
-  if (minDate && date < minDate) {
-    return {
-      valid: false,
-      error: `${fieldName} must be on or after ${minDate.toISOString().split('T')[0]}`,
-    };
-  }
-
-  if (maxDate && date > maxDate) {
-    return {
-      valid: false,
-      error: `${fieldName} must be on or before ${maxDate.toISOString().split('T')[0]}`,
-    };
-  }
-
-  return { valid: true, date };
-}
-
-// ============================================================================
-// Type Guards
-// ============================================================================
-
-/**
- * Check if user is a group admin
- */
-export async function isGroupAdminUser(
-  userId: string,
-  groupId: string
-): Promise<boolean> {
-  const admin = await prisma.groupAdmin.findUnique({
-    where: {
-      groupId_userId: { groupId, userId },
-    },
-  });
-
-  return !!admin;
-}
-
-/**
- * Check if user is a group member
- */
-export async function isGroupMemberUser(
-  userId: string,
-  groupId: string
-): Promise<boolean> {
-  const member = await prisma.groupMember.findUnique({
-    where: {
-      groupId_userId: { groupId, userId },
-    },
-  });
-
-  return !!member;
 }
 
 // ============================================================================
