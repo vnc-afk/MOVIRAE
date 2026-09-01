@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId } from "@/lib/optimistic";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import { useQueryClient } from "@tanstack/react-query";
-import type { SharedList } from "@/lib/types";
+import type { SharedList } from "@/app/shared-lists/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { SharedListsSnapshot } from "../lib/types";
 import { appendReplyToComments } from "../lib/shared-lists-utils";

@@ -5,7 +5,8 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
-import type { Group, SharedList } from "@/lib/types";
+import type { SharedList } from "@/app/shared-lists/lib/types";
+import type { Group } from "@/app/groups/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
 import { SharedListsSnapshot, SharedListsResponse, NewListFormState } from "../lib/types";
 import { constructUserProfile } from "../lib/shared-lists-utils";
