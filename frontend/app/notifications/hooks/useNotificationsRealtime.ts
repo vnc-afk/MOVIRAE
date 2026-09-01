@@ -2,8 +2,8 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import useEventSource from "@/hooks/use-event-source";
-import { appendNotificationToSnapshot } from "@/lib/messaging";
-import type { MessagingSnapshot } from "@/lib/messaging";
+import { appendNotificationToSnapshot } from "@/lib/features/messages/service";
+import type { MessagingSnapshot } from "@/lib/features/messages/service";
 import type { NotificationItem, UserProfile } from "@/lib/types";
 
 interface UseNotificationsRealtimeOptions {

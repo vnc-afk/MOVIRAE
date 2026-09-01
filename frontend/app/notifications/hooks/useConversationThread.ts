@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
+import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { fetchMessageThread } from "@/lib/messaging";
-import type { MessageThreadSnapshot } from "@/lib/messaging";
+import { fetchMessageThread } from "@/lib/features/messages/service";
+import type { MessageThreadSnapshot } from "@/lib/features/messages/service";
 
 interface ConversationThreadResult {
   threadQueryKey: readonly unknown[];
@@ -34,7 +34,7 @@ export function useConversationThread(
     [activeConversationPartnerId]
   );
 
-  const threadQuery = usePrefetchAwareQuery<MessageThreadSnapshot>({
+  const threadQuery = useQuery<MessageThreadSnapshot>({
     queryKey: threadQueryKey,
     queryFn: async () => fetchMessageThread(activeConversationPartnerId as string),
     enabled: enabled && Boolean(activeConversationPartnerId),

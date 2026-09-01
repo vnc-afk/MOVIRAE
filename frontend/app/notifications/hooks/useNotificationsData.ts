@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { usePrefetchAwareQuery } from "@/lib/usePrefetchAwareQuery";
 import { queryKeys } from "@/lib/queryKeys";
 import type { Message, NotificationItem, UserProfile } from "@/lib/types";
-import type { MessagingSnapshot } from "@/lib/messaging";
+import type { MessagingSnapshot } from "@/lib/features/messages/service";
 import { usePaginatedApi } from "./usePaginatedApi";
 import { useSnapshotDedup } from "./useSnapshotDedup";
 import { PAGE_LIMIT } from "../lib/constants";
@@ -83,7 +82,7 @@ export function useNotificationsData(
     fetchPage: fetchMessagesPage,
   });
 
-  const usersQuery = usePrefetchAwareQuery<UserProfile[]>({
+  const usersQuery = useQuery<UserProfile[]>({
     queryKey: ["users"],
     queryFn: fetchUsers,
     enabled: true,
