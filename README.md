@@ -2,6 +2,8 @@
 
 > **A full-stack social platform for cinephiles** — featuring real-time collaboration, optimistic UI patterns, and seamless third-party API integration.
 
+🌐 **[Live Demo: movirae.vercel.app](https://movirae.vercel.app/)** | Try it now!
+
 ## 🎯 Project Overview
 
 MOVIRAE is a **production-ready social network** built with modern full-stack technologies. It demonstrates:
@@ -139,7 +141,13 @@ User Action (e.g., Like Review)
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### 🌐 Try the Live Demo
+
+👉 **[Visit movirae.vercel.app](https://movirae.vercel.app/)** to see the application in action!
+
+### Installation
+
+#### Prerequisites
 - Node.js 18+ and npm/yarn
 - PostgreSQL database
 - TMDB API key (get one at [themoviedb.org](https://www.themoviedb.org/))
