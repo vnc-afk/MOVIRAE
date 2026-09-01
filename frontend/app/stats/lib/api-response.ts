@@ -25,20 +25,32 @@ export function apiError(code: string, message: string, statusCode?: number) {
   );
 }
 
-export function apiBadRequest(message = "Invalid request") {
+// ============================================================================
+// Convenience Wrappers for Common Errors
+// ============================================================================
+
+export function apiBadRequest(message = "Bad request") {
   return apiError("BAD_REQUEST", message, 400);
 }
 
-export function apiUnauthorized(message = "Authentication required") {
+export function apiUnauthorized(message = "Unauthorized") {
   return apiError("UNAUTHORIZED", message, 401);
 }
 
-export function apiForbidden(message = "You don't have permission") {
+export function apiForbidden(message = "Forbidden") {
   return apiError("FORBIDDEN", message, 403);
 }
 
-export function apiNotFound(resource = "Resource") {
-  return apiError("NOT_FOUND", `${resource} not found`, 404);
+export function apiNotFound(message = "Not found") {
+  return apiError("NOT_FOUND", message, 404);
+}
+
+export function apiConflict(message = "Conflict") {
+  return apiError("CONFLICT", message, 409);
+}
+
+export function apiValidationError(message = "Validation error") {
+  return apiError("VALIDATION_ERROR", message, 400);
 }
 
 export function apiInternalError(message = "Internal server error") {
