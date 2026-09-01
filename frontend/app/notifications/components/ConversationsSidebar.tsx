@@ -5,7 +5,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { MessageCircle } from "lucide-react";
 import FriendsList from "@/components/FriendsList";
 import ConversationListItem from "@/components/ConversationListItem";
-import type { ConversationSummary } from "@/lib/messaging";
+import type { ConversationSummary } from "@/lib/features/messages/service";
 
 interface ConversationsSidebarProps {
   conversations: ConversationSummary[];

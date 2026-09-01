@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ChevronLeft, MessageCircle, Send } from "lucide-react";
-import type { ConversationSummary, MessageThreadSnapshot } from "@/lib/messaging";
+import type { ConversationSummary, MessageThreadSnapshot } from "@/lib/features/messages/service";
 import type { UserProfile } from "@/lib/types";
 import { formatExactDate, formatRelativeDate } from "../lib/utils";
 import NoConversationSelected from "./NoConversationSelected";
