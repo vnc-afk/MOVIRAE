@@ -1,5 +1,7 @@
 import { formatDistanceToNowStrict, format } from "date-fns";
-import { Group, SharedList, UserProfile } from "@/lib/types";
+import type { SharedList } from "./types";
+import type { UserProfile } from "@/lib/types";
+import type { Group } from "@/app/groups/lib/types";
 
 export function formatRelativeDate(value: string): string {
   const parsed = new Date(value);
