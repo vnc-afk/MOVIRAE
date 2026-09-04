@@ -1,5 +1,5 @@
 
-import type { Review } from "@/lib/types";
+import type { Review, ReviewTone } from "@/lib/types";
 
 /**
  * Normalize API responses and surface a standard ok/error result shape.
@@ -37,13 +37,15 @@ export async function createReview(
   tmdbId: string,
   rating: number,
   comment: string,
+  tone: ReviewTone | null,
+  isSpoiler: boolean,
   headers: Record<string, string>
 ): Promise<{ success: boolean; data?: { value: Review; opId?: string }; error?: string }> {
   try {
     const response = await fetch("/api/reviews", {
       method: "POST",
       headers,
-      body: JSON.stringify({ tmdbId, rating, comment }),
+      body: JSON.stringify({ tmdbId, rating, comment, tone, isSpoiler }),
     });
 
     const result = await parseApiResponse<{ value: Review; opId?: string }>(response);
@@ -71,13 +73,15 @@ export async function updateReview(
   reviewId: string,
   tmdbId: string,
   rating: number,
-  comment: string
+  comment: string,
+  tone: ReviewTone | null,
+  isSpoiler: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(`/api/reviews/${reviewId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tmdbId, rating, comment }),
+      body: JSON.stringify({ tmdbId, rating, comment, tone, isSpoiler }),
     });
 
     const result = await parseApiResponse(response);

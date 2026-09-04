@@ -8,11 +8,11 @@ import { refreshUserStatsSnapshot } from "@/app/stats/lib/user-stats";
 import type { CurrentUser } from "./api-utils";
 
 export async function addReview(
-  payload: { tmdbId: string; rating: number; comment?: string | null; opId?: string | undefined },
+  payload: { tmdbId: string; rating: number; comment?: string | null; tone?: string | null; isSpoiler?: boolean; opId?: string | undefined },
   currentUser: CurrentUser
 ): Promise<{ value: any; opId?: string } | { error: "unauthorized" | "conflict" | "not-found" | "validation" }>
 {
-  const { tmdbId, rating, comment, opId } = payload;
+  const { tmdbId, rating, comment, tone, isSpoiler, opId } = payload;
 
   const watched = await canReviewMovie(currentUser.id, tmdbId);
   if (!watched) {
@@ -28,10 +28,13 @@ export async function addReview(
       tmdbId,
       rating,
       comment: comment || null,
+      tone: tone || null,
+      isSpoiler: Boolean(isSpoiler),
     },
     include: {
       user: true,
       likesRecords: true,
+      helpfulRecords: true,
       replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
     },
   });
@@ -51,7 +54,7 @@ export async function addReview(
 
 export async function editReview(
   reviewId: string,
-  payload: { rating: number; comment?: string | null },
+  payload: { rating: number; comment?: string | null; tone?: string | null; isSpoiler?: boolean },
   currentUser: CurrentUser
 ): Promise<{ value: any } | { error: "unauthorized" | "not-found" | "validation" }> {
   const existing = await prisma.review.findUnique({ where: { id: reviewId } });
@@ -63,10 +66,13 @@ export async function editReview(
     data: {
       rating: payload.rating,
       comment: payload.comment || null,
+      tone: payload.tone || null,
+      isSpoiler: Boolean(payload.isSpoiler),
     },
     include: {
       user: true,
       likesRecords: true,
+      helpfulRecords: true,
       replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
     },
   });
@@ -167,7 +173,7 @@ export async function toggleReviewLike(
           },
         });
         try {
-          const { publishNotificationEvent } = await import("@/app/groups/lib/events");
+          const { publishNotificationEvent } = await import("@/app/notifications/lib/events");
           publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
         } catch (e) {
           console.warn("publishNotificationEvent failed:", e);
@@ -181,6 +187,7 @@ export async function toggleReviewLike(
     include: {
       user: true,
       likesRecords: true,
+      helpfulRecords: true,
       replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
     },
   });
@@ -195,6 +202,41 @@ export async function toggleReviewLike(
   }
 
   return { value: serializeReview(review, currentUser.id, willBeLiked), opId };
+}
+
+export async function toggleReviewHelpful(
+  reviewId: string,
+  currentUser: CurrentUser,
+  opId?: string
+): Promise<{ value: any; opId?: string } | { error: "not-found" }> {
+  const existing = await prisma.review.findUnique({
+    where: { id: reviewId },
+    include: { helpfulRecords: true },
+  });
+  if (!existing) return { error: "not-found" };
+
+  const existingHelpful = await prisma.reviewHelpful.findUnique({
+    where: { reviewId_userId: { reviewId, userId: currentUser.id } },
+  });
+
+  if (existingHelpful) {
+    await prisma.reviewHelpful.delete({ where: { reviewId_userId: { reviewId, userId: currentUser.id } } });
+  } else {
+    await prisma.reviewHelpful.create({ data: { reviewId, userId: currentUser.id } });
+  }
+
+  const review = await prisma.review.findUnique({
+    where: { id: reviewId },
+    include: {
+      user: true,
+      likesRecords: true,
+      helpfulRecords: true,
+      replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
+    },
+  });
+  if (!review) return { error: "not-found" };
+
+  return { value: serializeReview(review, currentUser.id), opId };
 }
 
 export async function toggleReplyLike(
@@ -227,6 +269,7 @@ export async function toggleReplyLike(
     include: {
       user: true,
       likesRecords: true,
+      helpfulRecords: true,
       replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
     },
   });
@@ -262,14 +305,14 @@ export async function createReply(
       },
     });
     try {
-      const { publishNotificationEvent } = await import("@/app/groups/lib/events");
+          const { publishNotificationEvent } = await import("@/app/notifications/lib/events");
       publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
     } catch (e) {
       console.warn("publishNotificationEvent failed:", e);
     }
   }
 
-  const review = await prisma.review.findUnique({ where: { id: reviewId }, include: { user: true, likesRecords: true, replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } } } });
+  const review = await prisma.review.findUnique({ where: { id: reviewId }, include: { user: true, likesRecords: true, helpfulRecords: true, replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } } } });
   if (!review) return { error: "not-found" };
 
   try {
@@ -330,6 +373,7 @@ export async function getMovieReviews(
     include: {
       user: true,
       likesRecords: true,
+      helpfulRecords: true,
       replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } },
     },
     orderBy: { createdAt: "desc" },
