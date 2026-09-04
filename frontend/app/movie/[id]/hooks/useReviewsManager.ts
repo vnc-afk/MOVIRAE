@@ -86,7 +86,9 @@ export function useReviewsManager(movieId: string, userEmail: string | undefined
     setReviews((prev) => ReviewDeduplicator.reconcileTemp(prev, tempId, serverReview));
   }, []);
 
-  const currentUserReview = reviews.find((review) => review.user.email === userEmail) ?? null;
+  const currentUserReview = userEmail
+    ? reviews.find((review) => review.user.email === userEmail) ?? null
+    : null;
 
   return {
     reviews,
