@@ -123,7 +123,12 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         type: "post",
         surface: "movie",
         itemId: movieDetail.movie.id,
-        payload: { rating: reviewDialog.rating, comment: reviewDialog.comment },
+        payload: {
+          rating: reviewDialog.rating,
+          comment: reviewDialog.comment,
+          tone: reviewDialog.tone,
+          isSpoiler: reviewDialog.isSpoiler,
+        },
       });
 
       const optimisticReview: Review = {
@@ -149,6 +154,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         date: new Date().toISOString(),
         likes: 0,
         likedByMe: false,
+        tone: reviewDialog.tone ?? undefined,
+        isSpoiler: reviewDialog.isSpoiler,
         replies: [],
       } as Review;
 
@@ -156,7 +163,13 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
 
       try {
         const body = attachOpToBody(
-          { tmdbId: movieDetail.movie.id, rating: reviewDialog.rating, comment: reviewDialog.comment },
+          {
+            tmdbId: movieDetail.movie.id,
+            rating: reviewDialog.rating,
+            comment: reviewDialog.comment,
+            tone: reviewDialog.tone,
+            isSpoiler: reviewDialog.isSpoiler,
+          },
           op
         );
         const headers = attachOpToHeaders({ "Content-Type": "application/json" }, op);
@@ -165,6 +178,8 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
           movieDetail.movie.id,
           reviewDialog.rating,
           reviewDialog.comment,
+          reviewDialog.tone,
+          reviewDialog.isSpoiler,
           headers
         );
 
@@ -202,7 +217,9 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         reviewsManager.currentUserReview.id,
         movieDetail.movie.id,
         reviewDialog.rating,
-        reviewDialog.comment
+        reviewDialog.comment,
+        reviewDialog.tone,
+        reviewDialog.isSpoiler
       );
 
       if (!result.success) {
@@ -377,10 +394,14 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
         movieTitle={movie.title}
         rating={reviewDialog.rating}
         comment={reviewDialog.comment}
+        tone={reviewDialog.tone}
+        isSpoiler={reviewDialog.isSpoiler}
         isSubmitting={reviewDialog.isSubmitting}
         isEditing={Boolean(reviewsManager.currentUserReview)}
         onRatingChange={reviewDialog.setRating}
         onCommentChange={reviewDialog.setComment}
+        onToneChange={reviewDialog.setTone}
+        onSpoilerChange={reviewDialog.setIsSpoiler}
         onSubmit={handleSaveReview}
         onClose={reviewDialog.close}
         isInFlight={isInFlight(`movie-review-${movie.id}`)}
