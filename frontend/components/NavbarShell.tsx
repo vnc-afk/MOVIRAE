@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Home, User, Bell, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
+import { Home, User, Bell, Calendar, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
 import { useMemo } from "react";
 import { ThemeToggle } from "./ThemeToggle";
 import logo from "@/assets/logo.svg";
@@ -15,6 +15,7 @@ const navLinks = [
   { label: "For You", path: "/recommendations", icon: Sparkles },
   { label: "Groups", path: "/groups", icon: Users },
   { label: "Shared Lists", path: "/shared-lists", icon: ListPlus },
+  { label: "Calendar", path: "/calendar", icon: Calendar },
   { label: "Stats", path: "/stats", icon: BarChart3 },
   { label: "Wrapped", path: "/wrapped", icon: Gift },
 ];
@@ -120,6 +121,7 @@ export function NavbarShell() {
           {[
             { icon: Home, label: "Home", path: "/" },
             { icon: SlidersHorizontal, label: "Discover", path: "/discover" },
+            { icon: Calendar, label: "Calendar", path: "/calendar" },
             { icon: Sparkles, label: "For You", path: "/recommendations" },
             { icon: Bell, label: "Alerts", path: "/notifications" },
             { icon: User, label: "Profile", path: "/profile" },
