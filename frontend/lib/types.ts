@@ -62,6 +62,8 @@ export interface Reply {
   likedByMe?: boolean;
 }
 
+export type ReviewTone = "funny" | "serious" | "analytical" | "casual";
+
 export interface Review {
   id: string;
   movieId?: string;
@@ -71,12 +73,17 @@ export interface Review {
   date: string;
   likes: number;
   likedByMe?: boolean;
+  helpfulCount?: number;
+  helpfulByMe?: boolean;
+  tone?: ReviewTone;
+  isSpoiler?: boolean;
   replies: Reply[];
 }
 
 export interface Movie {
   id: string;
   title: string;
+  releaseDate?: string;
   year: number;
   rating: number;
   genre: string;
