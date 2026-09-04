@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import useEventSource from "@/hooks/use-event-source";
 import { appendNotificationToSnapshot } from "@/lib/features/messages/service";
-import type { MessagingSnapshot } from "@/lib/features/messages/service";
+import type { MessageThreadSnapshot, MessagingSnapshot } from "@/lib/features/messages/service";
 import type { NotificationItem, UserProfile } from "@/lib/types";
+import { useMessageWebSocket } from "./useMessageWebSocket";
 
 interface UseNotificationsRealtimeOptions {
   currentUser: UserProfile | null;
@@ -16,8 +18,8 @@ interface UseNotificationsRealtimeOptions {
 }
 
 /**
- * Subscribes to notification and message SSE channels and keeps React Query cache
- * in sync with server-side events.
+ * Subscribes to the notification SSE channel and message WebSocket, keeping
+ * React Query cache in sync with server-side events.
  */
 export function useNotificationsRealtime({
   currentUser,
@@ -28,6 +30,8 @@ export function useNotificationsRealtime({
   refetchThread,
 }: UseNotificationsRealtimeOptions) {
   const queryClient = useQueryClient();
+  const [isPartnerTyping, setIsPartnerTyping] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEventSource(
     "/api/notifications/events",
@@ -62,31 +66,59 @@ export function useNotificationsRealtime({
     { enabled: true, onError: () => console.error("Notifications SSE error") }
   );
 
-  useEventSource(
-    "/api/messages/events",
-    {
-      "message-created": async () => {
-        try {
-          await refetchNotifications();
-          if (activeConversationPartnerId) {
-            await refetchThread();
-          }
-        } catch (error) {
-          console.error("Failed to update messages from SSE:", error);
+  const sendTyping = useMessageWebSocket(
+    async (event) => {
+      if (
+        (event.type === "typing-start" || event.type === "typing-stop") &&
+        event.toId === currentUser?.id &&
+        event.fromId === activeConversationPartnerId
+      ) {
+        setIsPartnerTyping(event.type === "typing-start");
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        if (event.type === "typing-start") {
+          typingTimeoutRef.current = setTimeout(() => setIsPartnerTyping(false), 2500);
         }
-      },
-      "message-read": async () => {
-        try {
-          // Refresh notifications and current thread when read receipts change.
-          await refetchNotifications();
-          if (activeConversationPartnerId) {
-            await refetchThread();
-          }
-        } catch (error) {
-          console.error("Failed to update messages from SSE:", error);
+        return;
+      }
+
+      if (event.type !== "message-created" && event.type !== "message-read") return;
+
+      try {
+        await refetchNotifications();
+        const activeConversationKey = currentUser && activeConversationPartnerId
+          ? [currentUser.id, activeConversationPartnerId].sort().join(":")
+          : null;
+        const isActiveConversation = event.conversationKey === activeConversationKey;
+
+        const createdMessage = event.message;
+        if (event.type === "message-created" && createdMessage && isActiveConversation) {
+          queryClient.setQueryData<MessageThreadSnapshot>(threadQueryKey, (current) => {
+            if (!current || current.messages.some((message) => message.id === createdMessage.id)) {
+              return current;
+            }
+            return {
+              ...current,
+              messages: [...current.messages, createdMessage],
+            };
+          });
+        } else if (activeConversationPartnerId) {
+          await refetchThread();
         }
-      },
+      } catch (error) {
+        console.error("Failed to update messages from WebSocket:", error);
+      }
     },
-    { enabled: true, onError: () => console.error("Messages SSE error") }
+    { enabled: Boolean(currentUser), userId: currentUser?.id }
   );
+
+  useEffect(() => {
+    setIsPartnerTyping(false);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  }, [activeConversationPartnerId]);
+
+  useEffect(() => () => {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  }, []);
+
+  return { isPartnerTyping, sendTyping };
 }
