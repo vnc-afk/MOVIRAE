@@ -26,6 +26,7 @@ model User {
   watchlist     UserWatchlistItem[]
   reviews       Review[]
   reviewLikes   ReviewLike[]
+  reviewHelpful  ReviewHelpful[]
   reviewReplies ReviewReply[]
   reviewReplyLikes ReviewReplyLike[]
   watchExperiences UserWatchExperience[]
@@ -45,6 +46,7 @@ model User {
   followers         UserFollow[]      @relation("following")
   events            Event[]           @relation("EventCreator")
   eventAttendees    EventAttendee[]
+  calendarItems     CalendarItem[]
   groupAdmins       GroupAdmin[]
   groupDiscussionLikes   GroupDiscussionLike[]
   groupDiscussionReplies GroupDiscussionReply[] @relation("GroupDiscussionReplyAuthor")
@@ -156,6 +158,8 @@ model Review {
   tmdbId    String
   rating    Int
   comment   String?
+  tone      String?
+  isSpoiler Boolean  @default(false)
   likes     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -163,6 +167,7 @@ model Review {
   user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
   replies ReviewReply[]
   likesRecords ReviewLike[]
+  helpfulRecords ReviewHelpful[]
 
   @@index([userId])
   @@index([tmdbId])
@@ -201,6 +206,20 @@ model ReviewReplyLike {
 }
 
 model ReviewLike {
+  id        String   @id @default(cuid())
+  reviewId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reviewId, userId])
+  @@index([reviewId])
+  @@index([userId])
+}
+
+model ReviewHelpful {
   id        String   @id @default(cuid())
   reviewId  String
   userId    String
@@ -512,6 +531,31 @@ model EventAttendee {
   @@unique([eventId, userId])
   @@index([eventId])
   @@index([userId])
+}
+
+enum CalendarItemType {
+  release
+  planned
+  reminder
+}
+
+model CalendarItem {
+  id          String           @id @default(cuid())
+  userId      String
+  tmdbId      String
+  movieTitle  String
+  date        DateTime
+  type        CalendarItemType
+  poster      String?
+  genre       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId, type, date])
+  @@index([userId, date])
+  @@index([userId, type, date])
 }
 
 model GroupAdmin {
