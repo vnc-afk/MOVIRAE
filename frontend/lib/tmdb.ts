@@ -365,6 +365,51 @@ export async function getTrendingMovies(page = 1, options?: TMDBRequestOptions):
 }
 
 /**
+ * Fetch movies released within a calendar month.
+ */
+export async function getUpcomingMovies(
+  month: string,
+  page = 1,
+  options?: TMDBRequestOptions
+): Promise<{ results: Array<{ movie: Movie; releaseDate: string }>; totalPages: number }> {
+  if (!TMDB_API_KEY || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return { results: [], totalPages: 0 };
+
+  await ensureGenreMap();
+  const [year, monthNumber] = month.split("-").map(Number);
+  const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const monthStart = `${month}-01`;
+  const end = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
+  const currentMonth = todayKey.slice(0, 7);
+
+  if (month < currentMonth) return { results: [], totalPages: 0 };
+
+  const start = month === currentMonth ? todayKey : monthStart;
+
+  try {
+    const data = await fetchTmdbJson<{ results?: TMDBMovie[]; total_pages?: number }>(
+      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_release_type=2|3&primary_release_date.gte=${start}&primary_release_date.lte=${end}&sort_by=primary_release_date.asc&page=${page}`,
+      options?.signal
+    );
+
+    if (!data?.results) return { results: [], totalPages: 0 };
+
+    const movies = await Promise.all(data.results.map(async (movie) => ({
+      movie: await transformTMDBMovie(movie),
+      releaseDate: movie.release_date,
+    })));
+
+    return {
+      results: movies.filter((entry) => /^\d{4}-\d{2}-\d{2}$/.test(entry.releaseDate)),
+      totalPages: data.total_pages ?? page,
+    };
+  } catch (error) {
+    reportTmdbError("Failed to fetch upcoming movies:", error, options);
+    return { results: [], totalPages: 0 };
+  }
+}
+
+/**
  * Search movies by query
  */
 export async function searchMovies(query: string, page = 1, options?: TMDBRequestOptions): Promise<Movie[]> {
@@ -510,6 +555,7 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
   return {
     id: String(tmdbMovie.id),
     title: tmdbMovie.title,
+    releaseDate: tmdbMovie.release_date || undefined,
     year,
     rating: Math.round((tmdbMovie.vote_average / 2) * 10) / 10, // Convert 0-10 to 0-5
     genre: movieGenres[0]
