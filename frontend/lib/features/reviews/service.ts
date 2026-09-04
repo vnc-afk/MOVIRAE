@@ -74,8 +74,14 @@ export function serializeReview(review: any, currentUserId?: string | null, like
     user: buildUserProfile(review.user),
     rating: review.rating,
     comment: typeof review.comment === "string" ? review.comment : "",
+    tone: ["funny", "serious", "analytical", "casual"].includes(review.tone) ? review.tone : undefined,
+    isSpoiler: Boolean(review.isSpoiler),
     date: review.createdAt instanceof Date ? review.createdAt.toISOString() : new Date(review.createdAt).toISOString(),
     likes: typeof review.likes === "number" ? review.likes : 0,
+    helpfulCount: Array.isArray(review.helpfulRecords) ? review.helpfulRecords.length : 0,
+    helpfulByMe: currentUserId && Array.isArray(review.helpfulRecords)
+      ? review.helpfulRecords.some((record: { userId?: string }) => record.userId === currentUserId)
+      : false,
     likedByMe,
     replies: Array.isArray(review.replies) ? review.replies.map((reply: any) => serializeReply(reply, currentUserId)) : [],
   };
