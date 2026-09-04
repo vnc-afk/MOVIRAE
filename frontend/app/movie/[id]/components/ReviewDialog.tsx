@@ -1,5 +1,6 @@
 
 import { Star, Loader2 } from "lucide-react";
+import type { ReviewTone } from "@/lib/types";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,10 +10,14 @@ interface ReviewDialogProps {
   movieTitle: string;
   rating: number;
   comment: string;
+  tone: ReviewTone | null;
+  isSpoiler: boolean;
   isSubmitting: boolean;
   isEditing: boolean;
   onRatingChange: (rating: number) => void;
   onCommentChange: (comment: string) => void;
+  onToneChange: (tone: ReviewTone | null) => void;
+  onSpoilerChange: (isSpoiler: boolean) => void;
   onSubmit: () => void;
   onClose: () => void;
   isInFlight?: boolean;
@@ -27,10 +32,14 @@ export function ReviewDialog({
   movieTitle,
   rating,
   comment,
+  tone,
+  isSpoiler,
   isSubmitting,
   isEditing,
   onRatingChange,
   onCommentChange,
+  onToneChange,
+  onSpoilerChange,
   onSubmit,
   onClose,
   isInFlight,
@@ -75,6 +84,34 @@ export function ReviewDialog({
               className="min-h-[120px]"
             />
           </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-foreground">Tone</p>
+            <div className="flex flex-wrap gap-2">
+              {(["funny", "serious", "analytical", "casual"] as const).map((option) => (
+                <Button
+                  key={option}
+                  type="button"
+                  variant={tone === option ? "default" : "secondary"}
+                  onClick={() => onToneChange(tone === option ? null : option)}
+                  aria-pressed={tone === option}
+                  className="capitalize"
+                >
+                  {option}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={isSpoiler}
+              onChange={(event) => onSpoilerChange(event.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            Mark as spoiler
+          </label>
         </div>
 
         <DialogFooter>
