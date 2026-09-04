@@ -112,7 +112,7 @@ export default function Page() {
     threadQueryKey,
   });
 
-  useNotificationsRealtime({
+  const { isPartnerTyping, sendTyping } = useNotificationsRealtime({
     currentUser,
     notificationsKey,
     activeConversationPartnerId,
@@ -185,6 +185,12 @@ export default function Page() {
                 isMobile={isMobile}
                 onBack={() => selectConversation(null)}
                 onSendMessage={sendMessage}
+                isPartnerTyping={isPartnerTyping}
+                onTypingChange={(isTyping) => {
+                  if (activeConversationPartnerId) {
+                    sendTyping(activeConversationPartnerId, isTyping);
+                  }
+                }}
               />
             )}
           </div>
