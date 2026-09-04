@@ -13,6 +13,8 @@ interface MessageThreadProps {
   currentUser: UserProfile | null;
   onBack?: () => void;
   onSendMessage: (text: string) => Promise<void>;
+  isPartnerTyping: boolean;
+  onTypingChange: (isTyping: boolean) => void;
   isMobile: boolean;
 }
 
@@ -27,6 +29,8 @@ export default function MessageThread({
   currentUser,
   onBack,
   onSendMessage,
+  isPartnerTyping,
+  onTypingChange,
   isMobile,
 }: MessageThreadProps) {
   const [draftMessage, setDraftMessage] = useState("");
@@ -61,6 +65,7 @@ export default function MessageThread({
     if (isSending || !draftMessage.trim()) return;
 
     setIsSending(true);
+    onTypingChange(false);
     await onSendMessage(draftMessage);
     setDraftMessage("");
     setIsSending(false);
@@ -133,6 +138,9 @@ export default function MessageThread({
                 </div>
               );
             })}
+            {isPartnerTyping ? (
+              <p className="text-xs text-muted-foreground">{activeConversation.partner.displayName} is typing...</p>
+            ) : null}
           </div>
 
           <form onSubmit={handleSubmit} className="border-t border-border p-4">
@@ -140,7 +148,11 @@ export default function MessageThread({
               <input
                 type="text"
                 value={draftMessage}
-                onChange={(event) => setDraftMessage(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setDraftMessage(value);
+                  onTypingChange(Boolean(value.trim()));
+                }}
                 placeholder={`Message ${activeConversation.partner.displayName}`}
                 className="flex-1 rounded-full border border-border bg-secondary px-4 py-2.5 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary/20"
               />
