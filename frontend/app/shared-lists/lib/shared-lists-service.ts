@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
-import { getSharedListForView } from "@/app/shared-lists/lib/service";
+import { getSharedListDetail } from "@/app/shared-lists/lib/service";
 import type { CurrentUser } from "./api-utils";
 
 /**
@@ -62,7 +62,7 @@ export async function addSharedListComment(
     data: { comments: { increment: 1 } },
   });
 
-  const updatedList = await getSharedListForView(listId, currentUser);
+  const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
   }
@@ -120,7 +120,7 @@ export async function toggleSharedListLike(
     return { isNewLike };
   });
 
-  const updatedList = await getSharedListForView(listId, currentUser);
+  const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
   }
@@ -166,7 +166,7 @@ export async function addSharedListMovie(
     },
   });
 
-  const updatedList = await getSharedListForView(listId, currentUser);
+  const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
   }
@@ -197,7 +197,7 @@ export async function removeSharedListMovie(
     return { error: "movie-not-found" };
   }
 
-  const updatedList = await getSharedListForView(listId, currentUser);
+  const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
   }
