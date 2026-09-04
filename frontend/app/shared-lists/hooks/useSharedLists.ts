@@ -466,8 +466,6 @@ export function useToggleLike(snapshot: SharedListsSnapshot) {
             lists: nextLists.some((item) => item.id === serverList.id) ? nextLists : [serverList, ...current.lists],
           };
         });
-
-        await queryClient.invalidateQueries({ queryKey: SHARED_LISTS_KEY });
       }
     } catch (error) {
       applyEntityUpdate(queryClient, SHARED_LISTS_KEY, (current: SharedListsSnapshot | undefined) => {
