@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { format } from "date-fns";
 import { useSession } from "next-auth/react";
-import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, PencilLine, Trash2, Loader2 } from "lucide-react";
+import { Heart, MessageCircle, ChevronDown, ChevronUp, Send, PencilLine, Trash2, Loader2, ThumbsUp, Eye } from "lucide-react";
 import { StarRating } from "./StarRating";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
@@ -39,10 +39,16 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
   const [showReplyInput, setShowReplyInput] = useState(false);
   const [likeCount, setLikeCount] = useState(review.likes);
   const [liked, setLiked] = useState(Boolean(review.likedByMe));
+  const [helpfulCount, setHelpfulCount] = useState(review.helpfulCount ?? 0);
+  const [helpful, setHelpful] = useState(Boolean(review.helpfulByMe));
+  const [helpfulPending, setHelpfulPending] = useState(false);
   const [replies, setReplies] = useState(review.replies);
+  const [showSpoiler, setShowSpoiler] = useState(false);
   
   const canManageReview = Boolean(session?.user?.email && review.user.email && session.user.email === review.user.email);
   const reviewAvatar = getSafeImageSrc(review.user.avatar);
+  const isSpoiler = review.isSpoiler || /^\s*(\[?spoilers?\]?\s*[:\-])/i.test(review.comment);
+  const reviewComment = review.comment.replace(/^\s*(\[?spoilers?\]?\s*[:\-]\s*)/i, "");
 
   // Derive pending states from the centralized store
   const reviewLikeOpId = useMemo(() => `review-like-${review.id}`, [review.id]);
@@ -65,8 +71,10 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
   useEffect(() => {
     setLikeCount(review.likes);
     setLiked(Boolean(review.likedByMe));
+    setHelpfulCount(review.helpfulCount ?? 0);
+    setHelpful(Boolean(review.helpfulByMe));
     setReplies(review.replies);
-  }, [review.likes, review.likedByMe, review.replies]);
+  }, [review.likes, review.likedByMe, review.helpfulCount, review.helpfulByMe, review.replies]);
 
   async function refreshReviews() {
     await onRefresh?.();
@@ -117,6 +125,34 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
       toast.error(error instanceof Error ? error.message : "Unable to like review.");
     } finally {
       removeInFlightOp(opId);
+    }
+  }
+
+  async function handleHelpful() {
+    if (!session?.user?.email || helpfulPending) return;
+
+    const previousHelpful = helpful;
+    const previousCount = helpfulCount;
+    const nextHelpful = !previousHelpful;
+    setHelpful(nextHelpful);
+    setHelpfulCount(nextHelpful ? previousCount + 1 : Math.max(previousCount - 1, 0));
+    setHelpfulPending(true);
+
+    try {
+      const response = await fetch(`/api/reviews/${review.id}/helpful`, { method: "POST" });
+      const json = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(json?.error?.message || json?.error || "Unable to update helpful vote.");
+
+      const updatedReview = json?.data;
+      setHelpful(Boolean(updatedReview?.helpfulByMe ?? nextHelpful));
+      setHelpfulCount(typeof updatedReview?.helpfulCount === "number" ? updatedReview.helpfulCount : previousCount);
+      await refreshReviews();
+    } catch (error) {
+      setHelpful(previousHelpful);
+      setHelpfulCount(previousCount);
+      toast.error(error instanceof Error ? error.message : "Unable to update helpful vote.");
+    } finally {
+      setHelpfulPending(false);
     }
   }
 
@@ -293,6 +329,11 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
               <span className="text-xs text-muted-foreground ml-2">
                 {formatReviewDate(review.date)}
               </span>
+              {review.tone && (
+                <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-[10px] capitalize text-muted-foreground">
+                  {review.tone}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <StarRating rating={review.rating} size="sm" />
@@ -312,9 +353,28 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
               )}
             </div>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
-            {review.comment}
-          </p>
+          <div className="mt-2">
+            <p className={`text-sm leading-relaxed text-muted-foreground ${isSpoiler && !showSpoiler ? "select-none blur-sm" : ""}`}>
+              {reviewComment}
+            </p>
+            {isSpoiler && (
+              <button
+                type="button"
+                onClick={() => setShowSpoiler((current) => !current)}
+                className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                {showSpoiler ? <Eye className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                {showSpoiler ? "Hide spoiler" : "Reveal spoiler"}
+              </button>
+            )}
+          </div>
+
+          {helpfulCount > 0 && (
+            <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <ThumbsUp className="h-3.5 w-3.5" />
+              Most Helpful · {helpfulCount} {helpfulCount === 1 ? "person found this useful" : "people found this useful"}
+            </p>
+          )}
 
           <div className="mt-3 flex items-center gap-4">
             <button
@@ -325,7 +385,19 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
             >
               {likePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Heart className={`h-3.5 w-3.5 ${liked ? "fill-primary" : ""}`} />}
               <span>{likeCount}</span>
+              <span>Like</span>
               {likePending && <span className="sr-only">Updating like</span>}
+            </button>
+            <button
+              type="button"
+              onClick={handleHelpful}
+              disabled={!session?.user?.email || helpfulPending}
+              aria-busy={helpfulPending}
+              className={`flex items-center gap-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${helpful ? "text-primary" : "text-muted-foreground hover:text-primary"}`}
+            >
+              {helpfulPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ThumbsUp className={`h-3.5 w-3.5 ${helpful ? "fill-primary" : ""}`} />}
+              <span>{helpfulCount}</span>
+              <span>Helpful</span>
             </button>
             <button
               onClick={() => setShowReplyInput(!showReplyInput)}
