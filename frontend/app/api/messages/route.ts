@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
 import { buildUserProfile } from "@/lib/features/profiles/service";
 import { getConversationKey } from "@/lib/features/messages/service";
-import { publishMessageEvent } from "@/app/groups/lib/events";
+import { publishMessageEvent } from "@/lib/features/messages/events";
 
 export const runtime = "nodejs";
 
@@ -115,6 +115,16 @@ export async function POST(request: Request) {
       messageId: message.id,
       fromId: currentUser.id,
       toId: recipient.id,
+      message: {
+        id: message.id,
+        from: buildUserProfile(message.from)!,
+        to: buildUserProfile(message.to)!,
+        fromId: message.fromId,
+        toId: message.toId,
+        text: message.text,
+        date: message.createdAt.toISOString(),
+        isRead: false,
+      },
     });
 
     return NextResponse.json({

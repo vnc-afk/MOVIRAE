@@ -5,7 +5,7 @@ import { addSharedListComment, getSharedListAccessInfo } from "@/app/shared-list
 import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
 import { getSharedListDetail } from "@/app/shared-lists/lib/shared-lists-service";
 import { getCurrentUser } from "@/app/shared-lists/lib/api-utils";
-import { publishNotificationEvent } from "@/app/groups/lib/events";
+import { publishNotificationEvent } from "@/app/notifications/lib/events";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 

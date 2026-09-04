@@ -10,7 +10,8 @@ import {
   apiInternalError,
 } from "@/app/groups/lib/api-response";
 import { addDiscussionReply } from "@/app/groups/lib/discussions";
-import { publishGroupEvent, publishNotificationEvent } from "@/app/groups/lib/events";
+import { publishGroupEvent } from "@/app/groups/lib/events";
+import { publishNotificationEvent } from "@/app/notifications/lib/events";
 
 export const runtime = "nodejs";
 

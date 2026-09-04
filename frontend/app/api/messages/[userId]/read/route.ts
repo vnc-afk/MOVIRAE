@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getConversationKey } from "@/lib/features/messages/service";
 import { markMessageThreadRead } from "@/lib/features/messages/threads";
-import { publishMessageEvent } from "@/app/groups/lib/events";
+import { publishMessageEvent } from "@/lib/features/messages/events";
 
 export const runtime = "nodejs";
 

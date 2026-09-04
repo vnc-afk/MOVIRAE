@@ -12,7 +12,8 @@ import {
 import { createDiscussionSchema } from "@/app/groups/lib/api-schemas";
 import { fetchGroupDiscussions } from "@/app/groups/lib/discussions";
 import { prisma } from "@/lib/prisma";
-import { publishGroupEvent, publishNotificationEvent } from "@/app/groups/lib/events";
+import { publishGroupEvent } from "@/app/groups/lib/events";
+import { publishNotificationEvent } from "@/app/notifications/lib/events";
 
 export const runtime = "nodejs";
 

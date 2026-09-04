@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
 import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
 import { getSharedListAccessInfo, toggleSharedListLike } from "@/app/shared-lists/lib/shared-lists-service";
-import { publishNotificationEvent } from "@/app/groups/lib/events";
+import { publishNotificationEvent } from "@/app/notifications/lib/events";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
