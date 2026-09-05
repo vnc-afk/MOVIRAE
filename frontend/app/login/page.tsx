@@ -7,6 +7,19 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/logo.svg";
 
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (container: HTMLElement, options: {
+        sitekey: string;
+        callback: (token: string) => void;
+        "expired-callback": () => void;
+        "error-callback": () => void;
+      }) => string;
+    };
+  }
+}
+
 export default function LoginPage() {
   const [isSignup, setIsSignup] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -16,12 +29,45 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [callbackUrl, setCallbackUrl] = useState("/");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
   useEffect(() => {
     const nextCallbackUrl =
       new URLSearchParams(window.location.search).get("callbackUrl") || "/";
     setCallbackUrl(nextCallbackUrl);
   }, []);
+
+  useEffect(() => {
+    if (!isSignup || !turnstileSiteKey) return;
+
+    const scriptId = "cloudflare-turnstile-script";
+    const renderWidget = () => {
+      const container = document.getElementById("turnstile-widget");
+      if (!container || !window.turnstile || container.childElementCount > 0) return;
+
+      window.turnstile.render(container, {
+        sitekey: turnstileSiteKey,
+        callback: setCaptchaToken,
+        "expired-callback": () => setCaptchaToken(null),
+        "error-callback": () => setCaptchaToken(null),
+      });
+    };
+
+    const existingScript = document.getElementById(scriptId);
+    if (existingScript) {
+      renderWidget();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.onload = renderWidget;
+    document.head.appendChild(script);
+  }, [isSignup, turnstileSiteKey]);
 
   const validateSignupForm = () => {
     const trimmedName = name.trim();
@@ -71,6 +117,7 @@ export default function LoginPage() {
             name: name.trim() || undefined,
             email: email.trim(),
             password,
+            captchaToken,
           }),
         });
 
@@ -168,6 +215,10 @@ export default function LoginPage() {
             <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error}
             </p>
+          )}
+
+          {isSignup && turnstileSiteKey && (
+            <div id="turnstile-widget" className="min-h-[65px]" />
           )}
 
           <Button className="w-full gap-2 py-3" disabled={isLoading}>
