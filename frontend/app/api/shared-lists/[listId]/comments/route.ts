@@ -5,7 +5,7 @@ import { addSharedListComment, getSharedListAccessInfo } from "@/app/shared-list
 import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
 import { getSharedListDetail } from "@/app/shared-lists/lib/shared-lists-service";
 import { getCurrentUser } from "@/app/shared-lists/lib/api-utils";
-import { publishNotificationEvent } from "@/app/notifications/lib/events";
+import { enqueueNotification } from "@/lib/queues/notifications";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -54,16 +54,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
 
       // Send a notification to the owner if someone else commented (and the actor has a display name).
       if (access.ownerId !== currentUser.id && currentUser.displayName?.trim()) {
-        const notification = await prisma.notification.create({
-          data: {
-            recipientId: access.ownerId,
-            actorId: currentUser.id,
-            type: "shared_list_comment",
-            sharedListId: listId,
-            message: `commented on your movie list`,
-          },
+        await enqueueNotification({
+          recipientId: access.ownerId,
+          actorId: currentUser.id,
+          type: "shared_list_comment",
+          sharedListId: listId,
+          message: `commented on your movie list`,
         });
-        publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
       }
 
       // Notify SSE subscribers that the list has been updated (includes opId for reconciliation).

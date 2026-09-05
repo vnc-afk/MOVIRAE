@@ -13,7 +13,7 @@ import { createDiscussionSchema } from "@/app/groups/lib/api-schemas";
 import { fetchGroupDiscussions } from "@/app/groups/lib/discussions";
 import { prisma } from "@/lib/prisma";
 import { publishGroupEvent } from "@/app/groups/lib/events";
-import { publishNotificationEvent } from "@/app/notifications/lib/events";
+import { enqueueNotification } from "@/lib/queues/notifications";
 
 export const runtime = "nodejs";
 
@@ -99,27 +99,18 @@ export async function POST(
 
     const otherMembers = groupMembers.filter((member) => member.userId !== currentUser.id);
     if (otherMembers.length > 0) {
-      const createdNotifications = await Promise.all(
+      await Promise.all(
         otherMembers.map((member) =>
-          prisma.notification.create({
-            data: {
-              recipientId: member.userId,
-              actorId: currentUser.id,
-              type: "discussion_created",
-              groupId,
-              discussionId: discussion.id,
-              message: `started a discussion in your group: "${title}"`,
-            },
+          enqueueNotification({
+            recipientId: member.userId,
+            actorId: currentUser.id,
+            type: "discussion_created",
+            groupId,
+            discussionId: discussion.id,
+            message: `started a discussion in your group: "${title}"`,
           })
         )
       );
-
-      for (const notification of createdNotifications) {
-        publishNotificationEvent({
-          notificationId: notification.id,
-          recipientId: notification.recipientId,
-        });
-      }
     }
 
     publishGroupEvent(

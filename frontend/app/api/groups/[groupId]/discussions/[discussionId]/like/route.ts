@@ -9,7 +9,7 @@ import {
   apiInternalError,
 } from "@/app/groups/lib/api-response";
 import { publishGroupEvent } from "@/app/groups/lib/events";
-import { publishNotificationEvent } from "@/app/notifications/lib/events";
+import { enqueueNotification } from "@/lib/queues/notifications";
 import { toggleDiscussionLike } from "@/app/groups/lib/discussions";
 
 export const runtime = "nodejs";
@@ -54,17 +54,14 @@ export async function POST(
       });
 
       if (!recentNotification) {
-        const notification = await prisma.notification.create({
-          data: {
-            recipientId: discussion.authorId,
-            actorId: currentUser.id,
-            type: "discussion_like",
-            groupId,
-            discussionId,
-            message: `liked your discussion`,
-          },
+        await enqueueNotification({
+          recipientId: discussion.authorId,
+          actorId: currentUser.id,
+          type: "discussion_like",
+          groupId,
+          discussionId,
+          message: `liked your discussion`,
         });
-        publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
       }
     }
 

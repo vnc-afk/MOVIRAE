@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
 import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
 import { getSharedListAccessInfo, toggleSharedListLike } from "@/app/shared-lists/lib/shared-lists-service";
-import { publishNotificationEvent } from "@/app/notifications/lib/events";
+import { enqueueNotification } from "@/lib/queues/notifications";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -45,16 +45,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ lis
       });
 
       if (!recentNotification) {
-        const notification = await prisma.notification.create({
-          data: {
-            recipientId: access.ownerId,
-            actorId: currentUser.id,
-            type: "shared_list_like",
-            sharedListId: listId,
-            message: `liked your movie list`,
-          },
+        await enqueueNotification({
+          recipientId: access.ownerId,
+          actorId: currentUser.id,
+          type: "shared_list_like",
+          sharedListId: listId,
+          message: `liked your movie list`,
         });
-        publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });      }
+      }
     }
 
     // Notify SSE subscribers of the updated list. `opId` helps reconcile optimistic UI.

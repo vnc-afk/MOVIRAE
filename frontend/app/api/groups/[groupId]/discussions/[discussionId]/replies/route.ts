@@ -11,7 +11,7 @@ import {
 } from "@/app/groups/lib/api-response";
 import { addDiscussionReply } from "@/app/groups/lib/discussions";
 import { publishGroupEvent } from "@/app/groups/lib/events";
-import { publishNotificationEvent } from "@/app/notifications/lib/events";
+import { enqueueNotification } from "@/lib/queues/notifications";
 
 export const runtime = "nodejs";
 
@@ -49,17 +49,15 @@ export async function POST(
     }
 
     if (discussion.authorId !== currentUser.id && actorName) {
-      const notification = await prisma.notification.create({
-        data: {
-          recipientId: discussion.authorId,
-          actorId: currentUser.id,
-          type: "discussion_reply",
-          groupId,
-          discussionId,
-          message: `replied to your discussion`,
-        },
+      await enqueueNotification({
+        recipientId: discussion.authorId,
+        actorId: currentUser.id,
+        type: "discussion_reply",
+        groupId,
+        discussionId,
+        message: `replied to your discussion`,
       });
-      publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });    }
+    }
 
     // The shared helper updates both the reply count and the discussion payload in one step.
     const result = await addDiscussionReply(groupId, discussionId, replyBody);

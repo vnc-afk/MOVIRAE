@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
-import { publishNotificationEvent } from "@/app/notifications/lib/events";
+import { enqueueNotification } from "@/lib/queues/notifications";
 
 export const runtime = "nodejs";
 
@@ -61,27 +61,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ us
     });
 
     if (!existingFollow) {
-      const [, notification] = await prisma.$transaction([
-        prisma.userFollow.create({
-          data: {
-            followerId: currentUser.id,
-            followingId: userId,
-          },
-        }),
-        prisma.notification.create({
-          data: {
-            recipientId: userId,
-            actorId: currentUser.id,
-            type: "follow",
-            message: "started following you.",
-          },
-        }),
-      ]);
-
-      publishNotificationEvent({
-        notificationId: notification.id,
-        recipientId: notification.recipientId,
+      await prisma.userFollow.create({
+        data: {
+          followerId: currentUser.id,
+          followingId: userId,
+        },
       });
+
+      const notification = {
+        recipientId: userId,
+        actorId: currentUser.id,
+        type: "follow" as const,
+        message: "started following you.",
+      };
+
+      await enqueueNotification(notification);
     }
 
     const [targetCounts, currentCounts] = await Promise.all([

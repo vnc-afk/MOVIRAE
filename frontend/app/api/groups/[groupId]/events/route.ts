@@ -32,7 +32,7 @@ import {
   eventsListQuerySchema,
 } from "@/app/groups/lib/api-schemas";
 import { publishGroupEvent } from "@/app/groups/lib/events";
-import { publishNotificationEvent } from "@/app/notifications/lib/events";
+import { enqueueNotification, type CreateNotificationJob } from "@/lib/queues/notifications";
 
 const logger = {
   info: console.info,
@@ -248,7 +248,7 @@ export async function POST(
       return apiNotFound("Group");
     }
 
-    // Create event and notifications in a transaction
+    // Create the event transactionally; notifications are queued only after commit.
     const { event, notifications } = await prisma.$transaction(async (tx) => {
       const newEvent = await tx.event.create({
         data: {
@@ -291,34 +291,19 @@ export async function POST(
       });
 
       const otherMembers = groupMembers.filter((m) => m.userId !== user.id);
-      const createdNotifications = otherMembers.length
-        ? await Promise.all(
-            otherMembers.map((member) =>
-              tx.notification.create({
-                data: {
-                  recipientId: member.userId,
-                  actorId: user.id,
-                  type: "event_created",
-                  groupId,
-                  eventId: newEvent.id,
-                  message: `created a new event: "${title}"`,
-                },
-              })
-            )
-          )
-        : [];
+      const createdNotifications: CreateNotificationJob[] = otherMembers.map((member) => ({
+        recipientId: member.userId,
+        actorId: user.id,
+        type: "event_created",
+        groupId,
+        eventId: newEvent.id,
+        message: `created a new event: "${title}"`,
+      }));
 
       return { event: newEvent, notifications: createdNotifications };
     });
 
-    if (notifications.length > 0) {
-      for (const notification of notifications) {
-        publishNotificationEvent({
-          notificationId: notification.id,
-          recipientId: notification.recipientId,
-        });
-      }
-    }
+    await Promise.all(notifications.map((notification) => enqueueNotification(notification)));
 
     // Log success
     logger.info("Event created", {
