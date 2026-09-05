@@ -49,6 +49,12 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
   const reviewAvatar = getSafeImageSrc(review.user.avatar);
   const isSpoiler = review.isSpoiler || /^\s*(\[?spoilers?\]?\s*[:\-])/i.test(review.comment);
   const reviewComment = review.comment.replace(/^\s*(\[?spoilers?\]?\s*[:\-]\s*)/i, "");
+  const toneBadgeClasses: Record<string, string> = {
+    funny: "bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-400/25",
+    serious: "bg-sky-100 text-sky-800 border border-sky-200 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-400/25",
+    analytical: "bg-violet-100 text-violet-800 border border-violet-200 dark:bg-violet-500/15 dark:text-violet-200 dark:border-violet-400/25",
+    casual: "bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-400/25",
+  };
 
   // Derive pending states from the centralized store
   const reviewLikeOpId = useMemo(() => `review-like-${review.id}`, [review.id]);
@@ -330,7 +336,7 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
                 {formatReviewDate(review.date)}
               </span>
               {review.tone && (
-                <span className="ml-2 rounded-full bg-secondary px-2 py-0.5 text-[10px] capitalize text-muted-foreground">
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] capitalize ${toneBadgeClasses[review.tone] ?? "bg-secondary text-muted-foreground"}`}>
                   {review.tone}
                 </span>
               )}
