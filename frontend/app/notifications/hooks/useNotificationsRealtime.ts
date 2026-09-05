@@ -6,6 +6,8 @@ import useEventSource from "@/hooks/use-event-source";
 import {
   appendMessageToSnapshot,
   appendNotificationToSnapshot,
+  markConversationMessagesReadInSnapshot,
+  markConversationMessagesReadInThread,
 } from "@/lib/features/messages/service";
 import type { MessageThreadSnapshot, MessagingSnapshot } from "@/lib/features/messages/service";
 import type { NotificationItem, UserProfile } from "@/lib/types";
@@ -110,8 +112,18 @@ export function useNotificationsRealtime({
               };
             });
           }
-        } else if (activeConversationPartnerId) {
-          await refetchThread();
+        } else if (event.type === "message-read" && event.fromId && event.toId) {
+          queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
+            if (!current) return current;
+            return markConversationMessagesReadInSnapshot(current, event.fromId!, event.toId!);
+          });
+
+          if (isActiveConversation) {
+            queryClient.setQueryData<MessageThreadSnapshot>(threadQueryKey, (current) => {
+              if (!current) return current;
+              return markConversationMessagesReadInThread(current, event.fromId!, event.toId!);
+            });
+          }
         }
       } catch (error) {
         console.error("Failed to update messages from WebSocket:", error);
