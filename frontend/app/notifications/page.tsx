@@ -99,7 +99,6 @@ export default function Page() {
   const {
     activeThread,
     threadQueryKey,
-    refetchThread,
   } = useConversationThread(activeConversationPartnerId, activeTab === "messages");
 
   const { markNotificationRead, markAllRead, sendMessage } = useNotificationActions({
@@ -118,7 +117,6 @@ export default function Page() {
     activeConversationPartnerId,
     threadQueryKey,
     refetchNotifications,
-    refetchThread,
   });
 
   const unreadAlertCount = snapshot.items.filter((notification) => !notification.read).length;
