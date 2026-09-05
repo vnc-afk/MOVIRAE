@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "node server.mjs",
     "worker": "tsx workers/notifications.ts",
-    "lint": "next lint",
+    "lint": "eslint .",
     "test": "vitest run tests/unit",
     "test:db": "vitest run tests/database",
     "prisma:generate": "prisma generate",
