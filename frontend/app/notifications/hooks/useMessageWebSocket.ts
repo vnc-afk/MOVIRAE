@@ -22,6 +22,7 @@ export function useMessageWebSocket(
 ) {
   const handlerRef = useRef(onEvent);
   const socketRef = useRef<WebSocket | null>(null);
+  const pendingTypingRef = useRef<{ recipientId: string; isTyping: boolean } | null>(null);
 
   useEffect(() => {
     handlerRef.current = onEvent;
@@ -39,14 +40,23 @@ export function useMessageWebSocket(
       if (disposed) return;
 
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      socket = new WebSocket(`${protocol}//${window.location.host}/api/messages/ws`);
-      socketRef.current = socket;
+      const connectedSocket = new WebSocket(`${protocol}//${window.location.host}/api/messages/ws`);
+      socket = connectedSocket;
+      socketRef.current = connectedSocket;
 
-      socket.onopen = () => {
+      connectedSocket.onopen = () => {
         reconnectAttempt = 0;
+        const pendingTyping = pendingTypingRef.current;
+        if (pendingTyping) {
+          connectedSocket.send(JSON.stringify({
+            type: pendingTyping.isTyping ? "typing-start" : "typing-stop",
+            fromId: options.userId,
+            toId: pendingTyping.recipientId,
+          } satisfies MessageSocketEvent));
+        }
       };
 
-      socket.onmessage = (message) => {
+      connectedSocket.onmessage = (message) => {
         try {
           const event = JSON.parse(message.data) as MessageSocketEvent;
           void handlerRef.current(event);
@@ -55,7 +65,7 @@ export function useMessageWebSocket(
         }
       };
 
-      socket.onclose = () => {
+      connectedSocket.onclose = () => {
         socketRef.current = null;
         if (disposed) return;
         const delay = Math.min(1000 * 2 ** reconnectAttempt, 30000);
@@ -75,6 +85,7 @@ export function useMessageWebSocket(
   }, [options.enabled]);
 
   return (recipientId: string, isTyping: boolean) => {
+    pendingTypingRef.current = { recipientId, isTyping };
     const socket = socketRef.current;
     if (!socket || socket.readyState !== WebSocket.OPEN || !options.userId) return;
 
