@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import useEventSource from "@/hooks/use-event-source";
-import { appendNotificationToSnapshot } from "@/lib/features/messages/service";
+import {
+  appendMessageToSnapshot,
+  appendNotificationToSnapshot,
+} from "@/lib/features/messages/service";
 import type { MessageThreadSnapshot, MessagingSnapshot } from "@/lib/features/messages/service";
 import type { NotificationItem, UserProfile } from "@/lib/types";
 import { useMessageWebSocket } from "./useMessageWebSocket";
@@ -84,23 +87,29 @@ export function useNotificationsRealtime({
       if (event.type !== "message-created" && event.type !== "message-read") return;
 
       try {
-        await refetchNotifications();
         const activeConversationKey = currentUser && activeConversationPartnerId
           ? [currentUser.id, activeConversationPartnerId].sort().join(":")
           : null;
         const isActiveConversation = event.conversationKey === activeConversationKey;
 
         const createdMessage = event.message;
-        if (event.type === "message-created" && createdMessage && isActiveConversation) {
-          queryClient.setQueryData<MessageThreadSnapshot>(threadQueryKey, (current) => {
-            if (!current || current.messages.some((message) => message.id === createdMessage.id)) {
-              return current;
-            }
-            return {
-              ...current,
-              messages: [...current.messages, createdMessage],
-            };
+        if (event.type === "message-created" && createdMessage) {
+          queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
+            if (!current) return current;
+            return appendMessageToSnapshot(current, createdMessage);
           });
+
+          if (isActiveConversation) {
+            queryClient.setQueryData<MessageThreadSnapshot>(threadQueryKey, (current) => {
+              if (!current || current.messages.some((message) => message.id === createdMessage.id)) {
+                return current;
+              }
+              return {
+                ...current,
+                messages: [...current.messages, createdMessage],
+              };
+            });
+          }
         } else if (activeConversationPartnerId) {
           await refetchThread();
         }
