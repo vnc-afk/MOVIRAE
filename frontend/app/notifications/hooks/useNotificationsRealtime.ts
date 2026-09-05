@@ -19,7 +19,6 @@ interface UseNotificationsRealtimeOptions {
   activeConversationPartnerId: string | null;
   threadQueryKey: readonly unknown[];
   refetchNotifications: () => Promise<unknown>;
-  refetchThread: () => Promise<unknown>;
 }
 
 /**
@@ -32,7 +31,6 @@ export function useNotificationsRealtime({
   activeConversationPartnerId,
   threadQueryKey,
   refetchNotifications,
-  refetchThread,
 }: UseNotificationsRealtimeOptions) {
   const queryClient = useQueryClient();
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
