@@ -5,6 +5,7 @@ import { canReviewMovie, serializeReview } from "@/lib/features/reviews/service"
 import { publishReviewEvent } from "@/lib/features/reviews/events";
 import { refreshHomeActivityFeedSnapshot } from "@/lib/features/activity/feed";
 import { refreshUserStatsSnapshot } from "@/app/stats/lib/user-stats";
+import { enqueueNotification } from "@/lib/queues/notifications";
 import type { CurrentUser } from "./api-utils";
 
 export async function addReview(
@@ -162,22 +163,14 @@ export async function toggleReviewLike(
       });
 
       if (!recentNotification) {
-        const notification = await prisma.notification.create({
-          data: {
-            recipientId: existing.userId,
-            actorId: currentUser.id,
-            type: "review_like",
-            movieId: existing.tmdbId,
-            reviewId: reviewId,
-            message: `liked your review`,
-          },
+        await enqueueNotification({
+          recipientId: existing.userId,
+          actorId: currentUser.id,
+          type: "review_like",
+          movieId: existing.tmdbId,
+          reviewId,
+          message: `liked your review`,
         });
-        try {
-          const { publishNotificationEvent } = await import("@/app/notifications/lib/events");
-          publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
-        } catch (e) {
-          console.warn("publishNotificationEvent failed:", e);
-        }
       }
     }
   }
@@ -294,22 +287,14 @@ export async function createReply(
 
   // create notification if replying to someone else's review
   if (existing.userId !== currentUser.id && currentUser.displayName) {
-    const notification = await prisma.notification.create({
-      data: {
-        recipientId: existing.userId,
-        actorId: currentUser.id,
-        type: "review_reply",
-        movieId: existing.tmdbId,
-        reviewId,
-        message: `replied to your review`,
-      },
+    await enqueueNotification({
+      recipientId: existing.userId,
+      actorId: currentUser.id,
+      type: "review_reply",
+      movieId: existing.tmdbId,
+      reviewId,
+      message: `replied to your review`,
     });
-    try {
-          const { publishNotificationEvent } = await import("@/app/notifications/lib/events");
-      publishNotificationEvent({ notificationId: notification.id, recipientId: notification.recipientId });
-    } catch (e) {
-      console.warn("publishNotificationEvent failed:", e);
-    }
   }
 
   const review = await prisma.review.findUnique({ where: { id: reviewId }, include: { user: true, likesRecords: true, helpfulRecords: true, replies: { include: { user: true, likesRecords: true }, orderBy: { createdAt: "asc" } } } });
