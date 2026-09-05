@@ -66,7 +66,13 @@ server.on("upgrade", async (request, socket, head) => {
   const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host}`);
 
   if (requestUrl.pathname === "/api/messages/ws") {
-    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    const forwardedProtocol = request.headers["x-forwarded-proto"]?.split(",")[0]?.trim();
+    const secureCookie = forwardedProtocol === "https" || requestUrl.protocol === "https:";
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+      secureCookie,
+    });
     const userId = typeof token?.id === "string" ? token.id : null;
 
     if (!userId) {
@@ -84,5 +90,5 @@ server.on("upgrade", async (request, socket, head) => {
 });
 
 server.listen(port, hostname, () => {
-  console.log(`> Ready on http://localhost:${port}`);
+   console.log(`> Ready on port ${port}`);
 });
