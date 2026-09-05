@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
+import { publishNotificationEvent } from "@/app/notifications/lib/events";
 
 export const runtime = "nodejs";
 
@@ -60,7 +61,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ us
     });
 
     if (!existingFollow) {
-      await prisma.$transaction([
+      const [, notification] = await prisma.$transaction([
         prisma.userFollow.create({
           data: {
             followerId: currentUser.id,
@@ -76,6 +77,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ us
           },
         }),
       ]);
+
+      publishNotificationEvent({
+        notificationId: notification.id,
+        recipientId: notification.recipientId,
+      });
     }
 
     const [targetCounts, currentCounts] = await Promise.all([
