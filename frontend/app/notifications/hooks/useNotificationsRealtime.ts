@@ -2,15 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import useEventSource from "@/hooks/use-event-source";
 import {
   appendMessageToSnapshot,
-  appendNotificationToSnapshot,
   markConversationMessagesReadInSnapshot,
   markConversationMessagesReadInThread,
 } from "@/lib/features/messages/service";
 import type { MessageThreadSnapshot, MessagingSnapshot } from "@/lib/features/messages/service";
-import type { NotificationItem, UserProfile } from "@/lib/types";
+import type { UserProfile } from "@/lib/types";
 import { useMessageWebSocket } from "./useMessageWebSocket";
 
 interface UseNotificationsRealtimeOptions {
@@ -18,56 +16,20 @@ interface UseNotificationsRealtimeOptions {
   notificationsKey: readonly unknown[];
   activeConversationPartnerId: string | null;
   threadQueryKey: readonly unknown[];
-  refetchNotifications: () => Promise<unknown>;
 }
 
 /**
- * Subscribes to the notification SSE channel and message WebSocket, keeping
- * React Query cache in sync with server-side events.
+ * Keeps the message cache in sync with the message WebSocket.
  */
 export function useNotificationsRealtime({
   currentUser,
   notificationsKey,
   activeConversationPartnerId,
   threadQueryKey,
-  refetchNotifications,
 }: UseNotificationsRealtimeOptions) {
   const queryClient = useQueryClient();
   const [isPartnerTyping, setIsPartnerTyping] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEventSource(
-    "/api/notifications/events",
-    {
-      "notification-created": (event: MessageEvent) => {
-        try {
-          const payload = JSON.parse(event.data) as {
-            recipientId?: string;
-            notification?: NotificationItem;
-          };
-
-          if (!currentUser) return;
-
-          // Ignore events that are not intended for the current authenticated user.
-          if (payload.recipientId !== currentUser.id) {
-            return; 
-          }
-
-          if (payload.notification) {
-            queryClient.setQueryData<MessagingSnapshot>(notificationsKey, (current) => {
-              if (!current) return current;
-              return appendNotificationToSnapshot(current, payload.notification as NotificationItem);
-            });
-            return;
-          }
-          void refetchNotifications();
-        } catch (error) {
-          console.error("Failed to update notifications from SSE:", error);
-        }
-      },
-    },
-    { enabled: true, onError: () => console.error("Notifications SSE error") }
-  );
 
   const sendTyping = useMessageWebSocket(
     async (event) => {
