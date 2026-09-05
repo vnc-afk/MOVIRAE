@@ -38,7 +38,8 @@ export function useConversationThread(
     queryKey: threadQueryKey,
     queryFn: async () => fetchMessageThread(activeConversationPartnerId as string),
     enabled: enabled && Boolean(activeConversationPartnerId),
-    staleTime: 30_000,
+    refetchInterval: enabled && activeConversationPartnerId ? 2_000 : false,
+    staleTime: 0,
     gcTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
