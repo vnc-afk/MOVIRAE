@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 
+import { verifyTurnstileToken } from "@/lib/captcha";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -18,6 +19,7 @@ const signupSchema = z.object({
     .string()
     .min(8, "Password must be at least 8 characters.")
     .max(200, "Password must be 200 characters or less."),
+  captchaToken: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -33,7 +35,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, password } = parsed.data;
+  const { name, email, password, captchaToken } = parsed.data;
+  const captchaValid = await verifyTurnstileToken(
+    captchaToken,
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+  );
+
+  if (!captchaValid) {
+    return NextResponse.json(
+      { error: "Please complete the CAPTCHA and try again." },
+      { status: 400 }
+    );
+  }
+
   const normalizedEmail = email.toLowerCase();
   const displayName = name?.trim() || normalizedEmail.split("@")[0] || "";
 
