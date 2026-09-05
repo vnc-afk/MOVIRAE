@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { apiRateLimit, getClientIp } from "./lib/rate-limit";
 
 const PUBLIC_FILE = /\.(.*)$/;
 
@@ -23,6 +24,31 @@ export async function middleware(req: NextRequest) {
         headers: requestHeaders,
       },
     });
+  }
+
+  if (pathname.startsWith("/api/") && !apiRateLimit) {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { error: "Rate limiting is not configured." },
+        { status: 503 },
+      );
+    }
+  }
+
+  if (apiRateLimit && pathname.startsWith("/api/")) {
+    const rateLimit = await apiRateLimit.limit(getClientIp(req));
+    const rateLimitHeaders = {
+      "X-RateLimit-Limit": String(rateLimit.limit),
+      "X-RateLimit-Remaining": String(rateLimit.remaining),
+      "X-RateLimit-Reset": String(rateLimit.reset),
+    };
+
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429, headers: rateLimitHeaders },
+      );
+    }
   }
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
