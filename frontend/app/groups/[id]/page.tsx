@@ -149,8 +149,8 @@ export default function GroupDetailPage() {
     [id, router]
   );
 
-  // Toggle the join state locally while the membership mutation completes.
-   const handleJoinLeave = useCallback(async () => {
+  // Apply the membership change to the detail view after the mutation succeeds.
+  const handleJoinLeave = useCallback(async () => {
     if (!currentUser) {
       toast.error("Sign in to join a group.");
       return;
@@ -159,11 +159,27 @@ export default function GroupDetailPage() {
 
     try {
       await toggleJoin(group.id);
-      setIsJoined((prev) => !prev);
+      const nextIsJoined = !isJoined;
+      const nextMembers = nextIsJoined
+        ? [currentUser, ...members.filter((member) => member.id !== currentUser.id)]
+        : members.filter((member) => member.id !== currentUser.id);
+
+      setIsJoined(nextIsJoined);
+      setMembers(nextMembers);
+      setGroup((currentGroup) =>
+        currentGroup
+          ? {
+              ...currentGroup,
+              joined: nextIsJoined,
+              members: nextMembers,
+              memberCount: nextMembers.length,
+            }
+          : currentGroup
+      );
     } catch {
       // error toast already shown via the onError callback above
     }
-  }, [group, currentUser, toggleJoin]);
+  }, [group, currentUser, isJoined, members, setGroup, toggleJoin]);
 
 
   // Sync follow-state updates from the members list to the rest of the page.
