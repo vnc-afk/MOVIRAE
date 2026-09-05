@@ -48,11 +48,7 @@ export default function Page() {
   const {
     snapshot,
     notificationsHasMore,
-    messagesHasMore,
     fetchNextNotifications,
-    fetchNextMessages,
-    refetchNotifications,
-    refetchMessages,
     notificationsKey,
   } = useNotificationsData(sessionIdOrEmail, sessionEmail);
 
@@ -116,7 +112,6 @@ export default function Page() {
     notificationsKey,
     activeConversationPartnerId,
     threadQueryKey,
-    refetchNotifications,
   });
 
   const unreadAlertCount = snapshot.items.filter((notification) => !notification.read).length;
