@@ -1,3 +1,4 @@
+import "server-only";
 import Redis from "ioredis";
 
 const REDIS_CACHE_PREFIX = "movirae:cache";
