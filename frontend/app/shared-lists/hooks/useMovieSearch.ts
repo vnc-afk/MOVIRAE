@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { searchMovies } from "@/lib/tmdb";
 import { generateOpId, attachOpToBody, attachOpToHeaders } from "@/lib/optimistic";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Movie } from "@/lib/types";
@@ -38,7 +37,13 @@ export function useMovieSearch(selectedListId: string | null) {
     setError(null);
 
     const timeoutId = setTimeout(() => {
-      searchMovies(trimmedQuery)
+      fetch(`/api/tmdb/search?q=${encodeURIComponent(trimmedQuery)}`)
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Movie search request failed");
+          }
+          return (await response.json()) as Movie[];
+        })
         .then((found) => {
           if (!active) return;
           setResults(found.slice(0, 6));

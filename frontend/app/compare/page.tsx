@@ -5,9 +5,20 @@ import { motion } from "framer-motion";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeftRight, Check, X } from "lucide-react";
-import { getMovieDetailsBatch } from "@/lib/tmdb";
 import type { Movie, UserProfile } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
+
+async function getMovieDetailsBatch(movieIds: string[]): Promise<Movie[]> {
+  const movies = await Promise.all(
+    Array.from(new Set(movieIds)).map(async (movieId) => {
+      const response = await fetch(`/api/tmdb/movie/${encodeURIComponent(movieId)}`);
+      if (!response.ok) return null;
+      return (await response.json()) as Movie | null;
+    })
+  );
+
+  return movies.filter((movie): movie is Movie => movie !== null);
+}
 
 export default function CompareWatchlists() {
   const router = useRouter();

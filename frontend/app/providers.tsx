@@ -10,7 +10,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
-import { initializeGenreMap } from "@/lib/tmdb";
 
 type ProvidersProps = {
   children: React.ReactNode;
@@ -36,7 +35,7 @@ export function Providers({ children }: ProvidersProps) {
   );
 
   useEffect(() => {
-    initializeGenreMap();
+    void fetch("/api/tmdb/genre");
   }, []);
 
   return (
