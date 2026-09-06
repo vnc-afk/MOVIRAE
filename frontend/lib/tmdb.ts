@@ -1,6 +1,5 @@
 import { cache } from "react";
 import type { Movie, CastMember } from "@/lib/types";
-import { getRedisCacheKey, getRedisCached, setRedisCached } from "@/lib/redis-cache";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -158,18 +157,11 @@ function setCachedValue<T>(
 const fetchTmdbJson = cache(async <T>(url: string, signal?: AbortSignal): Promise<T | null> => {
   const cacheKey = `json:${url}`;
   const shouldUseMemoryCache = !signal;
-  const redisKey = getRedisCacheKey("tmdb-json", cacheKey);
 
   if (shouldUseMemoryCache) {
     const cached = getCachedValue(tmdbJsonCache as Map<string, { expiresAt: number; value: Promise<T | null> }>, cacheKey);
     if (cached) {
       return cached;
-    }
-
-    const redisCached = await getRedisCached<T | null>(redisKey);
-    if (redisCached !== null) {
-      setCachedValue(tmdbJsonCache as Map<string, { expiresAt: number; value: Promise<T | null> }>, cacheKey, Promise.resolve(redisCached));
-      return redisCached;
     }
   }
 
@@ -196,13 +188,7 @@ const fetchTmdbJson = cache(async <T>(url: string, signal?: AbortSignal): Promis
     setCachedValue(tmdbJsonCache as Map<string, { expiresAt: number; value: Promise<T | null> }>, cacheKey, trackedRequest);
   }
 
-  const value = await trackedRequest;
-
-  if (shouldUseMemoryCache && value !== null) {
-    await setRedisCached(redisKey, value, TMDB_REVALIDATE_SECONDS);
-  }
-
-  return value;
+  return trackedRequest;
 });
 
 /**
