@@ -8,6 +8,7 @@ import {
   type CreateNotificationJob,
 } from "@/lib/queues/notifications";
 import { createBullMqConnection } from "@/lib/queues/redis";
+import { publishNotificationCreated } from "@/lib/features/notifications/events";
 
 const worker = new Worker<CreateNotificationJob>(
   NOTIFICATION_QUEUE_NAME,
@@ -16,7 +17,9 @@ const worker = new Worker<CreateNotificationJob>(
       throw new Error(`Unsupported notification job: ${job.name}`);
     }
 
-    return prisma.notification.create({ data: job.data });
+    const notification = await prisma.notification.create({ data: job.data });
+    await publishNotificationCreated(notification.recipientId);
+    return notification;
   },
   {
     connection: createBullMqConnection(),
