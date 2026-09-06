@@ -11,7 +11,7 @@ import { useNavbarDataActions } from "./NavbarContext";
 
 export default function NavbarData() {
   const queryClient = useQueryClient();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const { setUnreadCount } = useNavbarDataActions();
   const _user = (session?.user as any) ?? {};
   const sessionIdOrEmail = _user.id ?? _user.email ?? null;
@@ -46,7 +46,7 @@ export default function NavbarData() {
         }
       },
     },
-    { enabled: true, onError: () => {} }
+    { enabled: status === "authenticated", onError: () => {} }
   );
 
   useEffect(() => {
