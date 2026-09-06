@@ -9,47 +9,46 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String?
-  username      String?   @unique
-  displayName   String?
-  avatar        String?
-  bio           String?
-
-  accounts      Account[]
-  sessions      Session[]
-  favorites     UserFavoriteMovie[]
-  watchlist     UserWatchlistItem[]
-  reviews       Review[]
-  reviewLikes   ReviewLike[]
-  reviewHelpful  ReviewHelpful[]
-  reviewReplies ReviewReply[]
-  reviewReplyLikes ReviewReplyLike[]
-  watchExperiences UserWatchExperience[]
-  favoriteLists SharedList[]      @relation("ListOwner")
-  collaborators SharedListCollaborator[]
-  sharedListLikes    SharedListLike[]
-  sharedListComments SharedListComment[]
-  ownedGroups       Group[]           @relation("GroupCreator")
-  groupMembers      GroupMember[]
-  notifications     Notification[]    @relation("NotificationRecipient")
-  notificationsSent Notification[]    @relation("NotificationActor")
-  groupDiscussions  GroupDiscussion[] @relation("DiscussionAuthor")
-  messagesSent      Message[]         @relation("MessageSender")
-  messagesReceived  Message[]         @relation("MessageRecipient")
-  filterPresets     FilterPreset[]
-  followings        UserFollow[]      @relation("follower")
-  followers         UserFollow[]      @relation("following")
-  events            Event[]           @relation("EventCreator")
-  eventAttendees    EventAttendee[]
-  calendarItems     CalendarItem[]
-  groupAdmins       GroupAdmin[]
+  id                     String                   @id @default(cuid())
+  name                   String?
+  email                  String?                  @unique
+  emailVerified          DateTime?
+  image                  String?
+  passwordHash           String?
+  avatar                 String?
+  bio                    String?
+  displayName            String?
+  username               String?                  @unique
+  accounts               Account[]
+  calendarItems          CalendarItem[]
+  events                 Event[]                  @relation("EventCreator")
+  eventAttendees         EventAttendee[]
+  filterPresets          FilterPreset[]
+  ownedGroups            Group[]                  @relation("GroupCreator")
+  groupAdmins            GroupAdmin[]
+  groupDiscussions       GroupDiscussion[]        @relation("DiscussionAuthor")
   groupDiscussionLikes   GroupDiscussionLike[]
-  groupDiscussionReplies GroupDiscussionReply[] @relation("GroupDiscussionReplyAuthor")
+  groupDiscussionReplies GroupDiscussionReply[]   @relation("GroupDiscussionReplyAuthor")
+  groupMembers           GroupMember[]
+  messagesSent           Message[]                @relation("MessageSender")
+  messagesReceived       Message[]                @relation("MessageRecipient")
+  notificationsSent      Notification[]           @relation("NotificationActor")
+  notifications          Notification[]           @relation("NotificationRecipient")
+  reviews                Review[]
+  reviewHelpful          ReviewHelpful[]
+  reviewLikes            ReviewLike[]
+  reviewReplies          ReviewReply[]
+  reviewReplyLikes       ReviewReplyLike[]
+  sessions               Session[]
+  favoriteLists          SharedList[]             @relation("ListOwner")
+  collaborators          SharedListCollaborator[]
+  sharedListComments     SharedListComment[]
+  sharedListLikes        SharedListLike[]
+  favorites              UserFavoriteMovie[]
+  followings             UserFollow[]             @relation("follower")
+  followers              UserFollow[]             @relation("following")
+  watchExperiences       UserWatchExperience[]
+  watchlist              UserWatchlistItem[]
 }
 
 model Account {
@@ -65,8 +64,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@index([userId])
@@ -77,8 +75,7 @@ model Session {
   sessionToken String   @unique
   userId       String
   expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
@@ -102,9 +99,8 @@ model UserFollow {
   followerId  String
   followingId String
   createdAt   DateTime @default(now())
-
-  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
   @@index([followingId])
@@ -115,8 +111,7 @@ model UserFavoriteMovie {
   userId  String
   tmdbId  String
   addedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId])
   @@index([userId])
@@ -127,8 +122,7 @@ model UserWatchlistItem {
   userId  String
   tmdbId  String
   addedAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId])
   @@index([userId])
@@ -143,8 +137,7 @@ model UserWatchExperience {
   mood      String
   watchedAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId])
   @@index([userId])
@@ -153,21 +146,20 @@ model UserWatchExperience {
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  userId    String
-  tmdbId    String
-  rating    Int
-  comment   String?
-  tone      String?
-  isSpoiler Boolean  @default(false)
-  likes     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  replies ReviewReply[]
-  likesRecords ReviewLike[]
+  id             String          @id @default(cuid())
+  userId         String
+  tmdbId         String
+  rating         Int
+  comment        String?
+  likes          Int             @default(0)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  isSpoiler      Boolean         @default(false)
+  tone           String?
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   helpfulRecords ReviewHelpful[]
+  likesRecords   ReviewLike[]
+  replies        ReviewReply[]
 
   @@index([userId])
   @@index([tmdbId])
@@ -175,16 +167,15 @@ model Review {
 }
 
 model ReviewReply {
-  id        String   @id @default(cuid())
-  reviewId  String
-  userId    String
-  comment   String
-  likes     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String            @id @default(cuid())
+  reviewId     String
+  userId       String
+  comment      String
+  likes        Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  review       Review            @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   likesRecords ReviewReplyLike[]
 
   @@index([reviewId])
@@ -192,13 +183,12 @@ model ReviewReply {
 }
 
 model ReviewReplyLike {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   reviewReplyId String
   userId        String
-  createdAt     DateTime @default(now())
-
-  reviewReply ReviewReply @relation(fields: [reviewReplyId], references: [id], onDelete: Cascade)
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+  reviewReply   ReviewReply @relation(fields: [reviewReplyId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([reviewReplyId, userId])
   @@index([reviewReplyId])
@@ -210,9 +200,8 @@ model ReviewLike {
   reviewId  String
   userId    String
   createdAt DateTime @default(now())
-
-  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([reviewId, userId])
   @@index([reviewId])
@@ -224,9 +213,8 @@ model ReviewHelpful {
   reviewId  String
   userId    String
   createdAt DateTime @default(now())
-
-  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([reviewId, userId])
   @@index([reviewId])
@@ -234,33 +222,26 @@ model ReviewHelpful {
 }
 
 model SharedList {
-  id             String                 @id @default(cuid())
+  id             String                   @id @default(cuid())
   ownerId        String
   name           String
   description    String
-  visibility     SharedListVisibility  @default(public)
+  visibility     SharedListVisibility     @default(public)
   groupId        String?
-  likes          Int                    @default(0)
-  comments       Int                    @default(0)
-  createdAt      DateTime               @default(now())
-  updatedAt      DateTime               @updatedAt
-
-  owner         User                      @relation("ListOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  group         Group?                    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  movies        SharedListMovie[]
-  collaborators SharedListCollaborator[]
-  likesRecords  SharedListLike[]
+  likes          Int                      @default(0)
+  comments       Int                      @default(0)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  group          Group?                   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  owner          User                     @relation("ListOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  collaborators  SharedListCollaborator[]
   commentRecords SharedListComment[]
+  likesRecords   SharedListLike[]
+  movies         SharedListMovie[]
 
   @@index([ownerId])
   @@index([groupId])
   @@index([ownerId, createdAt])
-}
-
-enum SharedListVisibility {
-  public
-  private
-  group
 }
 
 model SharedListMovie {
@@ -269,8 +250,7 @@ model SharedListMovie {
   tmdbId       String
   position     Int
   metadata     Json?
-
-  sharedList SharedList @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
+  sharedList   SharedList @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
 
   @@unique([sharedListId, tmdbId])
   @@index([sharedListId])
@@ -280,9 +260,8 @@ model SharedListCollaborator {
   id           String     @id @default(cuid())
   sharedListId String
   userId       String
-
-  sharedList SharedList @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sharedList   SharedList @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sharedListId, userId])
   @@index([userId])
@@ -293,9 +272,8 @@ model SharedListLike {
   sharedListId String
   userId       String
   createdAt    DateTime   @default(now())
-
-  sharedList SharedList @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sharedList   SharedList @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sharedListId, userId])
   @@index([sharedListId])
@@ -310,11 +288,10 @@ model SharedListComment {
   body         String
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
-
-  sharedList SharedList             @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
-  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent     SharedListComment?     @relation("SharedListCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies    SharedListComment[]    @relation("SharedListCommentThread")
+  parent       SharedListComment?  @relation("SharedListCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies      SharedListComment[] @relation("SharedListCommentThread")
+  sharedList   SharedList          @relation(fields: [sharedListId], references: [id], onDelete: Cascade)
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([sharedListId])
   @@index([userId])
@@ -323,67 +300,62 @@ model SharedListComment {
 }
 
 model Group {
-  id          String           @id @default(cuid())
+  id          String            @id @default(cuid())
   creatorId   String
   name        String
   description String?
   avatar      String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  creator      User             @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  members      GroupMember[]
-  movies       GroupMovie[]
-  discussions  GroupDiscussion[]
-  sharedLists  SharedList[]
-  events       Event[]
-  admins       GroupAdmin[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  events      Event[]
+  creator     User              @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  admins      GroupAdmin[]
+  discussions GroupDiscussion[]
+  members     GroupMember[]
+  movies      GroupMovie[]
+  sharedLists SharedList[]
 
   @@index([creatorId])
 }
 
 model GroupMember {
-  id        String   @id @default(cuid())
-  groupId   String
-  userId    String
-  joinedAt  DateTime @default(now())
-
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  joinedAt DateTime @default(now())
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
   @@index([userId])
 }
 
 model GroupMovie {
-  id        String   @id @default(cuid())
-  groupId   String
-  tmdbId    String
-  addedAt   DateTime @default(now())
-  metadata  Json?
-
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id       String   @id @default(cuid())
+  groupId  String
+  tmdbId   String
+  addedAt  DateTime @default(now())
+  metadata Json?
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, tmdbId])
   @@index([groupId])
 }
 
 model GroupDiscussion {
-  id        String   @id @default(cuid())
-  groupId   String
-  authorId  String
-  title     String
-  body      String
-  movieId   String?
-  likes     Int      @default(0)
-  replies   Int      @default(0)
-  pinned    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  group  Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  author User  @relation("DiscussionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-
+  id           String                 @id @default(cuid())
+  groupId      String
+  authorId     String
+  title        String
+  body         String
+  movieId      String?
+  likes        Int                    @default(0)
+  replies      Int                    @default(0)
+  pinned       Boolean                @default(false)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  author       User                   @relation("DiscussionAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  group        Group                  @relation(fields: [groupId], references: [id], onDelete: Cascade)
   likesRecords GroupDiscussionLike[]
   replyRecords GroupDiscussionReply[]
 
@@ -393,13 +365,12 @@ model GroupDiscussion {
 }
 
 model GroupDiscussionLike {
-  id           String   @id @default(cuid())
+  id           String          @id @default(cuid())
   discussionId String
   userId       String
-  createdAt    DateTime @default(now())
-
-  discussion GroupDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  discussion   GroupDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([discussionId, userId])
   @@index([discussionId])
@@ -407,38 +378,36 @@ model GroupDiscussionLike {
 }
 
 model GroupDiscussionReply {
-  id           String   @id @default(cuid())
+  id           String          @id @default(cuid())
   discussionId String
   authorId     String
   body         String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  discussion GroupDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
-  author     User            @relation("GroupDiscussionReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  author       User            @relation("GroupDiscussionReplyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  discussion   GroupDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
 
   @@index([discussionId])
   @@index([authorId])
 }
 
 model Notification {
-  id              String             @id @default(cuid())
-  recipientId     String
-  actorId         String?
-  type            NotificationType
-  message         String
-  movieId         String?
-  reviewId        String?
-  discussionId    String?
-  eventId         String?
-  sharedListId    String?
-  groupId         String?
-  read            Boolean            @default(false)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-
-  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor     User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  id           String           @id @default(cuid())
+  recipientId  String
+  actorId      String?
+  type         NotificationType
+  message      String
+  movieId      String?
+  read         Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  discussionId String?
+  eventId      String?
+  groupId      String?
+  reviewId     String?
+  sharedListId String?
+  actor        User?            @relation("NotificationActor", fields: [actorId], references: [id])
+  recipient    User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
 
   @@index([recipientId])
   @@index([actorId])
@@ -450,20 +419,6 @@ model Notification {
   @@index([recipientId, read, createdAt])
 }
 
-enum NotificationType {
-  follow
-  review_like
-  review_reply
-  discussion_created
-  discussion_like
-  discussion_reply
-  event_created
-  shared_list_like
-  shared_list_comment
-  group_invite
-  recommendation
-}
-
 model Message {
   id        String   @id @default(cuid())
   fromId    String
@@ -471,9 +426,8 @@ model Message {
   text      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  from User @relation("MessageSender", fields: [fromId], references: [id], onDelete: Cascade)
-  to   User @relation("MessageRecipient", fields: [toId], references: [id], onDelete: Cascade)
+  from      User     @relation("MessageSender", fields: [fromId], references: [id], onDelete: Cascade)
+  to        User     @relation("MessageRecipient", fields: [toId], references: [id], onDelete: Cascade)
 
   @@index([fromId])
   @@index([toId])
@@ -492,14 +446,13 @@ model FilterPreset {
   maxRuntime Int?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model Event {
-  id          String           @id @default(cuid())
+  id          String          @id @default(cuid())
   groupId     String
   createdBy   String
   title       String
@@ -507,11 +460,10 @@ model Event {
   startDate   DateTime
   startTime   String
   location    String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  group       Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  creator     User             @relation("EventCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  creator     User            @relation("EventCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  group       Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
   attendees   EventAttendee[]
 
   @@index([groupId])
@@ -524,34 +476,26 @@ model EventAttendee {
   userId     String
   rsvpStatus String   @default("pending")
   rsvpAt     DateTime @default(now())
-
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, userId])
   @@index([eventId])
   @@index([userId])
 }
 
-enum CalendarItemType {
-  release
-  planned
-  reminder
-}
-
 model CalendarItem {
-  id          String           @id @default(cuid())
-  userId      String
-  tmdbId      String
-  movieTitle  String
-  date        DateTime
-  type        CalendarItemType
-  poster      String?
-  genre       String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String           @id @default(cuid())
+  userId     String
+  tmdbId     String
+  movieTitle String
+  date       DateTime
+  type       CalendarItemType
+  poster     String?
+  genre      String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId, type, date])
   @@index([userId, date])
@@ -563,10 +507,35 @@ model GroupAdmin {
   groupId   String
   userId    String
   createdAt DateTime @default(now())
-
-  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
   @@index([userId])
+}
+
+enum SharedListVisibility {
+  public
+  private
+  group
+}
+
+enum NotificationType {
+  follow
+  review_like
+  review_reply
+  discussion_created
+  discussion_like
+  discussion_reply
+  event_created
+  shared_list_like
+  shared_list_comment
+  group_invite
+  recommendation
+}
+
+enum CalendarItemType {
+  release
+  planned
+  reminder
 }
