@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { withRedisCached } from "@/lib/redis-cache";
 import type { Movie, UserProfile } from "@/lib/types";
 import type { SharedList, SharedListComment } from "./types";
 import { buildUserProfile } from "@/lib/features/profiles/service";
@@ -204,37 +205,54 @@ export async function fetchSharedLists(
 ): Promise<FetchSharedListsResult> {
   const page = Math.max(1, options?.page ?? 1);
   const pageSize = Math.min(50, Math.max(1, options?.pageSize ?? DEFAULT_PAGE_SIZE));
+  const scopeKey = currentUser?.id ?? "anonymous";
 
-  const where = buildSharedListViewFilter(currentUser);
-  const rows = await prisma.sharedList.findMany({
-    where,
-    include: sharedListSummaryInclude,
-    orderBy: { createdAt: "desc" },
-    skip: (page - 1) * pageSize,
-    take: pageSize + 1,
-  });
+  return withRedisCached(
+    "shared-lists",
+    `page:${scopeKey}:${page}:${pageSize}`,
+    async () => {
+      const where = buildSharedListViewFilter(currentUser);
+      const rows = await prisma.sharedList.findMany({
+        where,
+        include: sharedListSummaryInclude,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize + 1,
+      });
 
-  const hasMore = rows.length > pageSize;
-  const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
+      const hasMore = rows.length > pageSize;
+      const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
 
-  return {
-    lists: pageRows.map((list) => serializeSharedList(list as any, currentUser, false)),
-    hasMore,
-    nextPage: hasMore ? page + 1 : null,
-  };
+      return {
+        lists: pageRows.map((list) => serializeSharedList(list as any, currentUser, false)),
+        hasMore,
+        nextPage: hasMore ? page + 1 : null,
+      };
+    },
+    180
+  );
 }
 
 export async function getSharedListDetail(listId: string, currentUser: CurrentUser | null) {
-  const row = await prisma.sharedList.findFirst({
-    where: {
-      id: listId,
-      ...buildSharedListViewFilter(currentUser),
-    },
-    include: sharedListDetailInclude,
-  });
+  const scopeKey = currentUser?.id ?? "anonymous";
 
-  if (!row) return null;
-  return serializeSharedList(row as any, currentUser, true);
+  return withRedisCached(
+    "shared-lists",
+    `detail:${scopeKey}:${listId}`,
+    async () => {
+      const row = await prisma.sharedList.findFirst({
+        where: {
+          id: listId,
+          ...buildSharedListViewFilter(currentUser),
+        },
+        include: sharedListDetailInclude,
+      });
+
+      if (!row) return null;
+      return serializeSharedList(row as any, currentUser, true);
+    },
+    180
+  );
 }
 
 export async function createSharedList(

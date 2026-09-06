@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/app/movie/lib/api-utils";
 import { prisma } from "@/lib/prisma";
+import { withRedisCached } from "@/lib/redis-cache";
 import { getGenres, getMovieDetailsBatch, getMoviesByGenre, getTrendingMovies } from "@/lib/tmdb";
 import type { Movie } from "@/lib/types";
 import type { RecommendationSectionKey, RecommendationsSnapshot } from "./types";
@@ -126,32 +127,48 @@ async function getPersonalizedSimilarMovies(page: number): Promise<Movie[]> {
 }
 
 export async function getRecommendationsSnapshot(): Promise<RecommendationsSnapshot> {
-  const [topPicks, trending, similar] = await Promise.all([
-    getTrendingMovies(1),
-    getTrendingMovies(2),
-    getPersonalizedSimilarMovies(1),
-  ]);
+  return withRedisCached(
+    "recommendations",
+    "snapshot",
+    async () => {
+      const [topPicks, trending, similar] = await Promise.all([
+        getTrendingMovies(1),
+        getTrendingMovies(2),
+        getPersonalizedSimilarMovies(1),
+      ]);
 
-  return {
-    topPicks,
-    trending,
-    similar,
-    updatedAt: Date.now(),
-  };
+      return {
+        topPicks,
+        trending,
+        similar,
+        updatedAt: Date.now(),
+      };
+    },
+    180
+  );
 }
 
 export async function getRecommendationsPage(
   section: RecommendationSectionKey,
   page: number
 ): Promise<Movie[]> {
-  switch (section) {
-    case "top-picks":
-      return await getTrendingMovies(page);
-    case "similar":
-      return await getPersonalizedSimilarMovies(page);
-    case "trending":
-      return await getTrendingMovies(page);
-    default:
-      return [];
-  }
+  const cacheKey = `${section}:${page}`;
+
+  return withRedisCached(
+    "recommendations",
+    `page:${cacheKey}`,
+    async () => {
+      switch (section) {
+        case "top-picks":
+          return await getTrendingMovies(page);
+        case "similar":
+          return await getPersonalizedSimilarMovies(page);
+        case "trending":
+          return await getTrendingMovies(page);
+        default:
+          return [];
+      }
+    },
+    180
+  );
 }
