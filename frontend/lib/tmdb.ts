@@ -8,6 +8,7 @@ const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_REVALIDATE_SECONDS = 60;
 const TMDB_MEMORY_CACHE_TTL_MS = 60 * 1000;
 const MAX_CACHE_ENTRIES = 500;
+const TMDB_DETAILS_CONCURRENCY = 6;
 
 type TMDBRequestOptions = {
   suppressClientErrors?: boolean;
@@ -501,7 +502,20 @@ export async function getMovieDetails(movieId: string, options?: TMDBRequestOpti
 
 export async function getMovieDetailsBatch(movieIds: string[], options?: TMDBRequestOptions): Promise<Movie[]> {
   const uniqueIds = Array.from(new Set(movieIds.map((id) => id.trim()).filter(Boolean)));
-  const results = await Promise.all(uniqueIds.map((movieId) => getMovieDetails(movieId, options)));
+  const results: Array<Movie | null> = new Array(uniqueIds.length);
+  let nextIndex = 0;
+
+  const fetchNext = async () => {
+    while (nextIndex < uniqueIds.length) {
+      const index = nextIndex++;
+      results[index] = await getMovieDetails(uniqueIds[index], options);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(TMDB_DETAILS_CONCURRENCY, uniqueIds.length) }, fetchNext)
+  );
+
   return results.filter((movie): movie is Movie => movie !== null);
 }
 
