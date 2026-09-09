@@ -21,11 +21,11 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? 50)));
-  const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+  const cursor = url.searchParams.get("cursor");
 
   const value = await withRedisCached(
     "notifications",
-    `user:${currentUser.id}:${limit}:${offset}`,
+    `user:${currentUser.id}:${limit}:${cursor ?? "first"}`,
     async () => {
       const notifications = await prisma.notification.findMany({
         where: { recipientId: currentUser.id },
@@ -54,14 +54,17 @@ export async function GET(request: Request) {
             },
           },
         },
-        orderBy: { createdAt: "desc" },
-        take: limit,
-        skip: offset,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       });
+
+      const hasMore = notifications.length > limit;
+      const pageNotifications = hasMore ? notifications.slice(0, limit) : notifications;
 
       const missingMovieByReviewIds = Array.from(
         new Set(
-          notifications
+          pageNotifications
             .filter((notification) => !notification.movieId && notification.reviewId)
             .map((notification) => notification.reviewId as string)
         )
@@ -69,7 +72,7 @@ export async function GET(request: Request) {
 
       const missingGroupByDiscussionIds = Array.from(
         new Set(
-          notifications
+          pageNotifications
             .filter((notification) => !notification.groupId && notification.discussionId)
             .map((notification) => notification.discussionId as string)
         )
@@ -92,7 +95,8 @@ export async function GET(request: Request) {
       const reviewMovieMap = new Map(reviews.map((review) => [review.id, review.tmdbId]));
       const discussionGroupMap = new Map(discussions.map((discussion) => [discussion.id, discussion.groupId]));
 
-      return notifications.map((notification) => {
+      return {
+        value: pageNotifications.map((notification) => {
         const movieId = notification.movieId ?? (notification.reviewId ? reviewMovieMap.get(notification.reviewId) : undefined);
         const groupId = notification.groupId ?? (notification.discussionId ? discussionGroupMap.get(notification.discussionId) : undefined);
 
@@ -122,10 +126,12 @@ export async function GET(request: Request) {
           sharedListId: notification.sharedListId ?? undefined,
           groupId: groupId ?? undefined,
         };
-      });
+        }),
+        nextCursor: hasMore ? pageNotifications[pageNotifications.length - 1]?.id ?? null : null,
+      };
     },
     60
   );
 
-  return NextResponse.json({ value });
+  return NextResponse.json(value);
 }

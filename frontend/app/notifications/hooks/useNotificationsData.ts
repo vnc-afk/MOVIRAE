@@ -27,22 +27,24 @@ interface NotificationsDataResult {
   notificationsKey: readonly unknown[];
 }
 
-async function fetchNotificationsPage(offset: number) {
-  const response = await fetch(`/api/notifications?limit=${PAGE_LIMIT}&offset=${offset}`);
+async function fetchNotificationsPage(cursor: string | null) {
+  const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await fetch(`/api/notifications?limit=${PAGE_LIMIT}${cursorParam}`);
   if (!response.ok) {
     throw new Error(`Failed to load notifications (status ${response.status})`);
   }
   const json = await response.json().catch(() => null);
-  return Array.isArray(json?.value) ? json.value : [];
+  return { value: Array.isArray(json?.value) ? json.value : [], nextCursor: json?.nextCursor ?? null };
 }
 
-async function fetchMessagesPage(offset: number) {
-  const response = await fetch(`/api/messages/list?limit=${PAGE_LIMIT}&offset=${offset}`);
+async function fetchMessagesPage(cursor: string | null) {
+  const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+  const response = await fetch(`/api/messages/list?limit=${PAGE_LIMIT}${cursorParam}`);
   if (!response.ok) {
     throw new Error(`Failed to load messages (status ${response.status})`);
   }
   const json = await response.json().catch(() => null);
-  return Array.isArray(json?.value) ? json.value : [];
+  return { value: Array.isArray(json?.value) ? json.value : [], nextCursor: json?.nextCursor ?? null };
 }
 
 async function fetchUsers() {
@@ -72,13 +74,11 @@ export function useNotificationsData(
 
   const notificationsQuery = usePaginatedApi<NotificationItem>({
     queryKey: ["notifications", "paged", sessionIdOrEmail ?? "anonymous"],
-    pageLimit: PAGE_LIMIT,
     fetchPage: fetchNotificationsPage,
   });
 
   const messagesQuery = usePaginatedApi<Message>({
     queryKey: ["messages", "paged", sessionIdOrEmail ?? "anonymous"],
-    pageLimit: PAGE_LIMIT,
     fetchPage: fetchMessagesPage,
   });
 
@@ -88,8 +88,8 @@ export function useNotificationsData(
     enabled: true,
   });
 
-  const notificationPages = notificationsQuery.data?.pages ?? [];
-  const messagePages = messagesQuery.data?.pages ?? [];
+  const notificationPages = notificationsQuery.data?.pages.map((page) => page.value) ?? [];
+  const messagePages = messagesQuery.data?.pages.map((page) => page.value) ?? [];
   const users = usersQuery.data ?? [];
 
   const items = useSnapshotDedup(notificationPages);

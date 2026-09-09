@@ -4,9 +4,13 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 
 interface UsePaginatedApiOptions<T> {
   queryKey: readonly unknown[];
-  pageLimit: number;
-  fetchPage: (offset: number) => Promise<T[]>;
+  fetchPage: (cursor: string | null) => Promise<PaginatedPage<T>>;
   enabled?: boolean;
+}
+
+export interface PaginatedPage<T> {
+  value: T[];
+  nextCursor: string | null;
 }
 
 /**
@@ -14,26 +18,24 @@ interface UsePaginatedApiOptions<T> {
  *
  * @param queryKey - Unique cache key for this paginated resource.
  * @param pageLimit - Number of items per page.
- * @param fetchPage - Function that loads a page by offset.
+ * @param fetchPage - Function that loads a page by cursor.
  * @param enabled - Controls whether the query should run.
  */
 export function usePaginatedApi<T>({
   queryKey,
-  pageLimit,
   fetchPage,
   enabled = true,
 }: UsePaginatedApiOptions<T>) {
-  return useInfiniteQuery<T[]>({
+  return useInfiniteQuery<PaginatedPage<T>>({
     queryKey,
     queryFn: async ({ pageParam }) => {
-      const offset = typeof pageParam === "number" ? pageParam : 0;
-      return fetchPage(offset);
+      const cursor = typeof pageParam === "string" ? pageParam : null;
+      return fetchPage(cursor);
     },
-    getNextPageParam: (lastPage, pages) => {
-      // Fetch the next page only when the last page is full.
-      return lastPage.length === pageLimit ? pages.flat().length : undefined;
+    getNextPageParam: (lastPage) => {
+      return lastPage.nextCursor ?? undefined;
     },
-    initialPageParam: 0,
+    initialPageParam: null,
     enabled,
   });
 }

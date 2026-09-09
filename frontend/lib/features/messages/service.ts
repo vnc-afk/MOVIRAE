@@ -86,8 +86,8 @@ async function fetchJsonOrThrow(url: string) {
 export async function fetchMessagingSnapshot(): Promise<MessagingSnapshot> {
   const PAGE_LIMIT = 50;
   const [notificationsResponse, messagesResponse, usersResponse, sessionResponse] = await Promise.all([
-    fetchJsonOrThrow(`/api/notifications?limit=${PAGE_LIMIT}&offset=0`),
-    fetchJsonOrThrow(`/api/messages/list?limit=${PAGE_LIMIT}&offset=0`),
+    fetchJsonOrThrow(`/api/notifications?limit=${PAGE_LIMIT}`),
+    fetchJsonOrThrow(`/api/messages/list?limit=${PAGE_LIMIT}`),
     fetchJsonOrThrow("/api/users"),
     fetchJsonOrThrow("/api/auth/session"),
   ]);

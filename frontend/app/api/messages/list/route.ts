@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const limit = Math.max(1, Math.min(1000, Number(url.searchParams.get("limit") ?? 50)));
-  const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0));
+  const cursor = url.searchParams.get("cursor");
 
   const messages = await prisma.message.findMany({
     where: {
@@ -41,14 +41,17 @@ export async function GET(request: Request) {
         select: { id: true, name: true, email: true, image: true, username: true, displayName: true, avatar: true, bio: true },
       },
     },
-    orderBy: { createdAt: "asc" },
-    take: limit,
-    skip: offset,
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   });
+
+  const hasMore = messages.length > limit;
+  const pageMessages = hasMore ? messages.slice(0, limit) : messages;
 
   const conversationPartnerIds = Array.from(
     new Set(
-      messages
+      pageMessages
         .map((message) => (message.fromId === currentUser.id ? message.toId : message.fromId))
         .filter((partnerId): partnerId is string => typeof partnerId === "string" && partnerId.length > 0)
     )
@@ -64,7 +67,7 @@ export async function GET(request: Request) {
   const readStateByPartnerId = new Map(readStates.map(({ partnerId, state }) => [partnerId, state]));
 
   return NextResponse.json({
-    value: messages.map((message) => ({
+    value: pageMessages.map((message) => ({
       id: message.id,
       from: {
         id: message.from.id,
@@ -107,5 +110,6 @@ export async function GET(request: Request) {
                 new Date(readStateByPartnerId.get(message.fromId)?.[currentUser.id] ?? 0).getTime() >= message.createdAt.getTime()
             ),
     })),
+    nextCursor: hasMore ? pageMessages[pageMessages.length - 1]?.id ?? null : null,
   });
 }

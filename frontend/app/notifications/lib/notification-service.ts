@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { CurrentUser } from "./api-utils";
 import { ApiError } from "./api-utils";
+import { deleteRedisCachedByPrefix } from "@/lib/redis-cache";
 
 /**
  * Marks all unread notifications as read for the authenticated user.
@@ -15,6 +16,7 @@ export async function markAllNotificationsRead(currentUser: CurrentUser): Promis
     data: { read: true },
   });
 
+  await deleteRedisCachedByPrefix("notifications", `user:${currentUser.id}:`);
   return { ok: true };
 }
 
@@ -35,5 +37,7 @@ export async function markNotificationRead(notificationId: string, currentUser: 
     throw new ApiError("FORBIDDEN", "You don't have permission to access this notification", 403);
   }
 
-  return await prisma.notification.update({ where: { id: notificationId }, data: { read: true } });
+  const updatedNotification = await prisma.notification.update({ where: { id: notificationId }, data: { read: true } });
+  await deleteRedisCachedByPrefix("notifications", `user:${currentUser.id}:`);
+  return updatedNotification;
 }
