@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getMovieDetails } from "@/lib/tmdb";
+import { deleteRedisCachedByPrefix } from "@/lib/redis-cache";
 import { getSharedListDetail } from "@/app/shared-lists/lib/service";
 import type { CurrentUser } from "./api-utils";
 
@@ -62,6 +63,7 @@ export async function addSharedListComment(
     data: { comments: { increment: 1 } },
   });
 
+  await deleteRedisCachedByPrefix("shared-lists");
   const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
@@ -120,6 +122,7 @@ export async function toggleSharedListLike(
     return { isNewLike };
   });
 
+  await deleteRedisCachedByPrefix("shared-lists");
   const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
@@ -166,6 +169,7 @@ export async function addSharedListMovie(
     },
   });
 
+  await deleteRedisCachedByPrefix("shared-lists");
   const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
@@ -197,6 +201,7 @@ export async function removeSharedListMovie(
     return { error: "movie-not-found" };
   }
 
+  await deleteRedisCachedByPrefix("shared-lists");
   const updatedList = await getSharedListDetail(listId, currentUser);
   if (!updatedList) {
     return { error: "not-found" };
@@ -216,5 +221,6 @@ export async function deleteSharedList(
   }
 
   await prisma.sharedList.delete({ where: { id: listId } });
+  await deleteRedisCachedByPrefix("shared-lists");
   return { value: {} };
 }

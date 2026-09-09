@@ -62,6 +62,24 @@ export async function deleteRedisCached(key: string) {
   }
 }
 
+export async function deleteRedisCachedByPrefix(namespace: string, keyPrefix = "") {
+  const client = createRedisClient();
+  if (!client) return;
+
+  const pattern = `${getRedisCacheKey(namespace, keyPrefix)}*`;
+
+  try {
+    const stream = client.scanStream({ match: pattern, count: 100 });
+    for await (const keys of stream) {
+      if (keys.length > 0) {
+        await client.del(...keys);
+      }
+    }
+  } catch (error) {
+    console.warn("Redis cache prefix delete failed:", error);
+  }
+}
+
 export async function withRedisCached<T>(
   namespace: string,
   key: string,

@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { withRedisCached } from "@/lib/redis-cache";
+import { deleteRedisCachedByPrefix, withRedisCached } from "@/lib/redis-cache";
 import type { Movie, UserProfile } from "@/lib/types";
 import type { SharedList, SharedListComment } from "./types";
 import { buildUserProfile } from "@/lib/features/profiles/service";
@@ -344,5 +344,6 @@ export async function createSharedList(
     },
   });
 
+  await deleteRedisCachedByPrefix("shared-lists");
   return { value: await fetchSharedLists(currentUser) } as const;
 }

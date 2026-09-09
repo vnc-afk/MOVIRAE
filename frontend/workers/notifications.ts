@@ -9,6 +9,7 @@ import {
 } from "@/lib/queues/notifications";
 import { createBullMqConnection } from "@/lib/queues/redis";
 import { publishNotificationCreated } from "@/lib/features/notifications/events";
+import { deleteRedisCachedByPrefix } from "@/lib/redis-cache";
 
 const worker = new Worker<CreateNotificationJob>(
   NOTIFICATION_QUEUE_NAME,
@@ -18,6 +19,7 @@ const worker = new Worker<CreateNotificationJob>(
     }
 
     const notification = await prisma.notification.create({ data: job.data });
+    await deleteRedisCachedByPrefix("notifications", `user:${notification.recipientId}:`);
     await publishNotificationCreated(notification.recipientId);
     return notification;
   },
