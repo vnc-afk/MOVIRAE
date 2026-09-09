@@ -152,23 +152,96 @@ export function buildSharedListViewFilter(currentUser: CurrentUser | null): Pris
 }
 
 const sharedListDetailInclude = {
-  owner: true,
+  owner: {
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      username: true,
+      displayName: true,
+      avatar: true,
+      image: true,
+      bio: true,
+      _count: {
+        select: {
+          followers: true,
+          followings: true,
+          reviews: true,
+          watchlist: true,
+        },
+      },
+    },
+  },
   group: { select: { id: true, name: true } },
-  collaborators: { include: { user: true } },
-  movies: true,
-  likesRecords: true,
+  collaborators: {
+    select: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          image: true,
+          bio: true,
+          _count: {
+            select: {
+              followers: true,
+              followings: true,
+              reviews: true,
+              watchlist: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  movies: {
+    select: { tmdbId: true, metadata: true },
+    orderBy: { position: "asc" as const },
+  },
+  likesRecords: { select: { userId: true } },
   commentRecords: {
-    include: { user: true },
+    select: {
+      id: true,
+      sharedListId: true,
+      userId: true,
+      parentId: true,
+      body: true,
+      createdAt: true,
+      updatedAt: true,
+      user: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          username: true,
+          displayName: true,
+          avatar: true,
+          image: true,
+          bio: true,
+          _count: {
+            select: {
+              followers: true,
+              followings: true,
+              reviews: true,
+              watchlist: true,
+            },
+          },
+        },
+      },
+    },
     orderBy: { createdAt: "asc" as const },
   },
 };
 
 const sharedListSummaryInclude = {
-  owner: true,
+  owner: sharedListDetailInclude.owner,
   group: { select: { id: true, name: true } },
-  collaborators: { include: { user: true } },
-  movies: true,
-  likesRecords: true,
+  collaborators: sharedListDetailInclude.collaborators,
+  movies: sharedListDetailInclude.movies,
+  likesRecords: sharedListDetailInclude.likesRecords,
 };
 
 export async function getSharedListForView(listId: string, currentUser: CurrentUser | null) {
