@@ -14,7 +14,10 @@ export interface InFlightOp {
 
 export interface OptimisticContextType {
   inFlightOps: Map<string, InFlightOp>;
-  addInFlightOp: (opId: string, op: Omit<InFlightOp, "createdAt" | "opId">) => void;
+  addInFlightOp: (
+    opId: string,
+    op: Omit<InFlightOp, "createdAt" | "opId"> & Partial<Pick<InFlightOp, "opId">>
+  ) => void;
   removeInFlightOp: (opId: string) => void;
   getInFlightOp: (opId: string) => InFlightOp | undefined;
   isInFlight: (opId: string) => boolean;
@@ -28,12 +31,15 @@ export const OptimisticContext = createContext<OptimisticContextType | null>(nul
 export function useOptimisticOpsStore(): OptimisticContextType {
   const [inFlightOps, setInFlightOps] = useState<Map<string, InFlightOp>>(new Map());
 
-  const addInFlightOp = useCallback((opId: string, op: Omit<InFlightOp, "createdAt" | "opId">) => {
+  const addInFlightOp = useCallback((
+    opId: string,
+    op: Omit<InFlightOp, "createdAt" | "opId"> & Partial<Pick<InFlightOp, "opId">>
+  ) => {
     setInFlightOps((prev) => {
       const next = new Map(prev);
       next.set(opId, {
-        opId,
         ...op,
+        opId,
         createdAt: Date.now(),
       });
       return next;
