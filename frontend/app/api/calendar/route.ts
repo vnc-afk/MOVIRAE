@@ -1,38 +1,21 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { z } from "zod";
-import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUpcomingMovies } from "@/lib/tmdb";
+import { apiSuccess, apiUnauthorized, apiValidationError } from "@/app/calendar/lib/api-response";
+import { calendarQuerySchema, createCalendarItemSchema, deleteCalendarItemSchema } from "@/app/calendar/lib/api-schemas";
+import { getCurrentUser, getOperationId, serializeCalendarDate } from "@/app/calendar/lib/api-utils";
 
 export const runtime = "nodejs";
 
-const createCalendarItemSchema = z.object({
-  tmdbId: z.string().min(1),
-  movieTitle: z.string().min(1).max(200),
-  date: z.coerce.date(),
-  type: z.enum(["release", "planned", "reminder"]),
-  poster: z.string().url().optional().nullable(),
-  genre: z.string().max(100).optional().nullable(),
-});
-
-async function getCurrentUser() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-  return prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
-}
-
 export async function GET(request: Request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return apiUnauthorized();
 
   const url = new URL(request.url);
-  const month = url.searchParams.get("month") ?? "";
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
-    return NextResponse.json({ error: "month must use YYYY-MM format" }, { status: 400 });
+  const query = calendarQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+  if (!query.success) {
+    return apiValidationError("Invalid calendar query parameters", { fields: query.error.flatten().fieldErrors });
   }
-  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 20));
+  const { month, page, limit } = query.data;
   const [year, monthNumber] = month.split("-").map(Number);
   const from = new Date(Date.UTC(year, monthNumber - 1, 1));
   const to = new Date(Date.UTC(year, monthNumber, 1));
@@ -58,37 +41,43 @@ export async function GET(request: Request) {
   const persisted = items.map((item) => ({ ...item, date: item.date.toISOString().slice(0, 10) }));
   const value = [...releases, ...persisted].sort((a, b) => a.date.localeCompare(b.date));
 
-  return NextResponse.json({ value, pagination: { page, limit, total: value.length, hasMore: false } });
+  return apiSuccess(
+    { value, pagination: { page, limit, total: value.length, hasMore: false } },
+    200,
+    { source: "tmdb-and-calendar" }
+  );
 }
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return apiUnauthorized();
 
   const parsed = createCalendarItemSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Invalid calendar item", details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return apiValidationError("Invalid calendar item", { fields: parsed.error.flatten().fieldErrors });
+
+  const { opId, ...calendarItem } = parsed.data;
 
   const item = await prisma.calendarItem.upsert({
-    where: { userId_tmdbId_type_date: { userId: user.id, tmdbId: parsed.data.tmdbId, type: parsed.data.type, date: parsed.data.date } },
-    create: { ...parsed.data, userId: user.id },
-    update: { movieTitle: parsed.data.movieTitle, poster: parsed.data.poster, genre: parsed.data.genre },
+    where: { userId_tmdbId_type_date: { userId: user.id, tmdbId: calendarItem.tmdbId, type: calendarItem.type, date: calendarItem.date } },
+    create: { ...calendarItem, userId: user.id },
+    update: { movieTitle: calendarItem.movieTitle, poster: calendarItem.poster, genre: calendarItem.genre },
   });
 
-  return NextResponse.json({ value: { ...item, date: item.date.toISOString().slice(0, 10) } }, { status: 201 });
+  return apiSuccess({ value: { ...item, date: serializeCalendarDate(item.date) }, opId }, 201);
 }
 
 export async function DELETE(request: Request) {
   const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return apiUnauthorized();
 
   const url = new URL(request.url);
-  const tmdbId = url.searchParams.get("tmdbId");
-  const date = url.searchParams.get("date");
-  const type = url.searchParams.get("type");
-  if (!tmdbId || !date || !["planned", "reminder"].includes(type ?? "")) {
-    return NextResponse.json({ error: "tmdbId, date, and type are required" }, { status: 400 });
+  const parsed = deleteCalendarItemSchema.safeParse(Object.fromEntries(url.searchParams));
+  if (!parsed.success) {
+    return apiValidationError("Invalid calendar delete parameters", { fields: parsed.error.flatten().fieldErrors });
   }
+  const { tmdbId, date, type } = parsed.data;
+  const opId = getOperationId(request, parsed.data);
 
-  await prisma.calendarItem.deleteMany({ where: { userId: user.id, tmdbId, date: new Date(`${date}T00:00:00.000Z`), type: type as "planned" | "reminder" } });
-  return NextResponse.json({ value: true });
+  await prisma.calendarItem.deleteMany({ where: { userId: user.id, tmdbId, date: new Date(`${date}T00:00:00.000Z`), type } });
+  return apiSuccess({ value: true, opId });
 }
