@@ -10,11 +10,13 @@ interface CalendarGridProps {
   year: number;
   selectedDay: number | null;
   eventsByDay: Map<number, CalendarEvent[]>;
+  reminders: Set<string>;
+  planned: Set<string>;
   onNavigate: (direction: -1 | 1) => void;
   onSelectDay: (day: number) => void;
 }
 
-export const CalendarGrid = memo(function CalendarGrid({ month, year, selectedDay, eventsByDay, onNavigate, onSelectDay }: CalendarGridProps) {
+export const CalendarGrid = memo(function CalendarGrid({ month, year, selectedDay, eventsByDay, reminders, planned, onNavigate, onSelectDay }: CalendarGridProps) {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   return (
@@ -33,14 +35,14 @@ export const CalendarGrid = memo(function CalendarGrid({ month, year, selectedDa
           return <button type="button" key={day} onClick={() => onSelectDay(day)} className={`relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm transition-colors ${selected ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 ring-offset-background" : "text-foreground hover:bg-secondary"}`}>
             {day}
             {dayEvents.length > 0 && (() => {
-              const markerEvent = dayEvents.find((event) => event.type === "reminder")
-                ?? dayEvents.find((event) => event.type === "planned")
+              const markerEvent = dayEvents.find((event) => reminders.has(event.id) || event.type === "reminder")
+                ?? dayEvents.find((event) => planned.has(event.id) || event.type === "planned")
                 ?? dayEvents[0];
               const markerColor = selected
                 ? "bg-primary-foreground"
-                : markerEvent.type === "reminder"
+                : reminders.has(markerEvent.id) || markerEvent.type === "reminder"
                   ? "bg-destructive"
-                  : markerEvent.type === "planned"
+                  : planned.has(markerEvent.id) || markerEvent.type === "planned"
                     ? "bg-accent"
                     : "bg-orange-500";
 
