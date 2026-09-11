@@ -164,6 +164,7 @@ model Review {
   @@index([userId])
   @@index([tmdbId])
   @@index([tmdbId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model ReviewReply {
@@ -242,6 +243,7 @@ model SharedList {
   @@index([ownerId])
   @@index([groupId])
   @@index([ownerId, createdAt])
+  @@index([createdAt])
 }
 
 model SharedListMovie {
@@ -417,6 +419,7 @@ model Notification {
   @@index([sharedListId])
   @@index([groupId])
   @@index([recipientId, read, createdAt])
+  @@index([recipientId, createdAt])
 }
 
 model Message {
