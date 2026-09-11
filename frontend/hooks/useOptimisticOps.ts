@@ -9,12 +9,12 @@ export interface InFlightOp {
   parentId?: string;
   payload?: Record<string, any>;
   createdAt: number;
-  surface: "review" | "shared-list" | "group" | "movie";
+  surface: "review" | "shared-list" | "group" | "movie" | "calendar";
 }
 
 export interface OptimisticContextType {
   inFlightOps: Map<string, InFlightOp>;
-  addInFlightOp: (opId: string, op: Omit<InFlightOp, "createdAt">) => void;
+  addInFlightOp: (opId: string, op: Omit<InFlightOp, "createdAt" | "opId">) => void;
   removeInFlightOp: (opId: string) => void;
   getInFlightOp: (opId: string) => InFlightOp | undefined;
   isInFlight: (opId: string) => boolean;
@@ -28,10 +28,11 @@ export const OptimisticContext = createContext<OptimisticContextType | null>(nul
 export function useOptimisticOpsStore(): OptimisticContextType {
   const [inFlightOps, setInFlightOps] = useState<Map<string, InFlightOp>>(new Map());
 
-  const addInFlightOp = useCallback((opId: string, op: Omit<InFlightOp, "createdAt">) => {
+  const addInFlightOp = useCallback((opId: string, op: Omit<InFlightOp, "createdAt" | "opId">) => {
     setInFlightOps((prev) => {
       const next = new Map(prev);
       next.set(opId, {
+        opId,
         ...op,
         createdAt: Date.now(),
       });
