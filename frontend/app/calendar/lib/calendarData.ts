@@ -9,8 +9,13 @@ export function createCalendarDataSource(): CalendarDataSource {
     fetchPage: async (month, page, pageSize) => {
       const response = await fetch(`/api/calendar?month=${encodeURIComponent(month)}&page=${page}&limit=${pageSize}`, { cache: "no-store" });
       if (!response.ok) throw new Error(response.status === 401 ? "Sign in to view your calendar." : "Unable to load calendar items.");
-      const payload = await response.json() as { value?: CalendarEvent[] };
-      return Array.isArray(payload.value) ? payload.value : [];
+      const payload = await response.json() as {
+        success?: boolean;
+        data?: { value?: CalendarEvent[] };
+        error?: { message?: string };
+      };
+      if (!payload.success) throw new Error(payload.error?.message ?? "Unable to load calendar items.");
+      return Array.isArray(payload.data?.value) ? payload.data.value : [];
     },
   };
 }
