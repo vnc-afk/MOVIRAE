@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { fetchRecommendationsSnapshot } from "../lib/recommendations-service";
+import { fetchRecommendationsSnapshot } from "@/services/recommendations/recommendations.client";
 import { RECOMMENDATIONS_CONFIG } from "../lib/constants";
 import type { RecommendationsSnapshot } from "../lib/types";
 
