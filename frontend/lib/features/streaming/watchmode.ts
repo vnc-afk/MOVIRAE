@@ -1,11 +1,14 @@
 import "server-only";
 
+import { withRedisCached } from "@/lib/redis-cache";
+
 /**
  * WatchMode API Integration
  * Provides streaming availability information for movies
  */
 
 const WATCHMODE_BASE_URL = "https://api.watchmode.com/v1";
+const STREAMING_CACHE_TTL_SECONDS = 12 * 60 * 60;
 const WATCHMODE_API_KEY = process.env.
 WATCHMODE_API_KEY;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
@@ -130,9 +133,9 @@ async function getTmdbWatchProviders(tmdbId: string, region = "US") {
 /**
  * Get streaming platforms for a movie using TMDB ID
  */
-export async function getStreamingPlatforms(
+async function fetchStreamingPlatforms(
   tmdbId: string,
-  region?: string
+  region: string
 ): Promise<string[]> {
   if (!WATCHMODE_API_KEY) {
     console.warn("WATCHMODE_API_KEY is not set");
@@ -184,6 +187,20 @@ export async function getStreamingPlatforms(
     console.warn("Streaming platform fetch failed, using TMDB fallback");
     return await getTmdbWatchProviders(tmdbId, region);
   }
+}
+
+export async function getStreamingPlatforms(
+  tmdbId: string,
+  region = "US"
+): Promise<string[]> {
+  const cacheKey = `platforms:${region}:${tmdbId}`;
+
+  return withRedisCached(
+    "watchmode",
+    cacheKey,
+    () => fetchStreamingPlatforms(tmdbId, region),
+    STREAMING_CACHE_TTL_SECONDS
+  );
 }
 
 /**
