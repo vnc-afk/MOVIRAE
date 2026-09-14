@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import type { Movie, CastMember } from "@/lib/types";
+import type { Movie, CastMember, Mood } from "@/lib/types";
 import { getRedisCacheKey, getRedisCached, setRedisCached } from "@/lib/redis-cache";
 
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
@@ -24,9 +24,10 @@ interface TMDBMovie {
   genre_ids?: number[];
   poster_path: string | null;
   overview: string;
-  runtime: number;
-  spoken_languages: { name: string }[];
-  production_countries: { iso_3166_1: string }[];
+  runtime?: number;
+  original_language?: string;
+  spoken_languages?: { name: string }[];
+  production_countries?: { iso_3166_1: string; name?: string }[];
   director?: string;
   credits?: {
     cast: Array<{ name: string; character: string; profile_path: string }>;
@@ -56,7 +57,7 @@ let genreMapInitPromise: Promise<void> | null = null;
 const movieDetailsCache = new Map<string, { expiresAt: number; value: Promise<Movie | null> }>();
 const tmdbJsonCache = new Map<string, { expiresAt: number; value: Promise<unknown> }>();
 
-const moodByGenre: Record<string, string[]> = {
+const moodByGenre: Record<string, Mood[]> = {
   Action: ["Intense", "Thrilling"],
   Adventure: ["Thrilling"],
   Animation: ["Fun", "Uplifting"],
@@ -371,9 +372,7 @@ export async function getTrendingMovies(page = 1, options?: TMDBRequestOptions):
 
     if (!data || !data.results) return [];
 
-    return Promise.all(
-      data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
-    );
+    return enrichDiscoverMovies(data.results, options);
   } catch (error) {
     reportTmdbError("Failed to fetch trending movies:", error, options);
     return [];
@@ -444,9 +443,7 @@ export async function searchMovies(query: string, page = 1, options?: TMDBReques
 
     if (!data || !data.results) return [];
 
-    return Promise.all(
-      data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
-    );
+    return enrichDiscoverMovies(data.results, options);
   } catch (error) {
     reportTmdbError("Failed to search movies:", error, options);
     return [];
@@ -498,6 +495,67 @@ export async function getMovieDetails(movieId: string, options?: TMDBRequestOpti
   setCachedValue(movieDetailsCache, normalizedMovieId, trackedRequest, TMDB_MEMORY_CACHE_TTL_MS);
 
   return trackedRequest;
+}
+
+export interface MovieScoreCredits {
+  id: number;
+  title: string;
+  poster: string;
+  year?: number;
+  composers: string[];
+}
+
+/** Fetches the movie metadata and music-department credits used by the soundtrack catalog. */
+export async function getMovieScoreCredits(
+  movieId: string,
+  options?: TMDBRequestOptions
+): Promise<MovieScoreCredits | null> {
+  if (!TMDB_API_KEY || !movieId.trim()) return null;
+
+  try {
+    const movie = await fetchTmdbJson<TMDBMovie>(
+      `${TMDB_BASE_URL}/movie/${encodeURIComponent(movieId.trim())}?api_key=${TMDB_API_KEY}&append_to_response=credits`,
+      options?.signal
+    );
+
+    if (!movie) return null;
+
+    const composers = extractScoreComposers(movie.credits?.crew ?? []);
+
+    return {
+      id: movie.id,
+      title: movie.title,
+      poster: movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : "",
+      year: movie.release_date ? new Date(movie.release_date).getFullYear() : undefined,
+      composers,
+    };
+  } catch (error) {
+    reportTmdbError("Failed to fetch movie score credits:", error, options);
+    return null;
+  }
+}
+
+function extractScoreComposers(crew: NonNullable<TMDBMovie["credits"]>["crew"] = []) {
+  const scoreCredits = crew.filter((member) => {
+    const job = member.job.toLowerCase();
+    const department = member.department.toLowerCase();
+    return /(composer|original music|music by|score)/.test(job)
+      || (department === "sound" && /music/.test(job))
+      || (department === "crew" && /music/.test(job));
+  });
+
+  const fallbackMusicCredits = crew.filter((member) => {
+    const job = member.job.toLowerCase();
+    return /music supervisor|music consultant|songs/.test(job);
+  });
+
+  return Array.from(
+    new Set(
+      (scoreCredits.length > 0 ? scoreCredits : fallbackMusicCredits)
+        .map((member) => member.name)
+        .filter(Boolean)
+    )
+  );
 }
 
 export async function getMovieDetailsBatch(movieIds: string[], options?: TMDBRequestOptions): Promise<Movie[]> {
@@ -599,9 +657,29 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
     streamingOn: [], // WatchMode will provide this
     runtime: tmdbMovie.runtime || 0,
     language: tmdbMovie.spoken_languages?.[0]?.name || "Unknown",
-    country: tmdbMovie.production_countries?.[0]?.iso_3166_1 || "Unknown",
-    moods: [], // Can be inferred from genre, or user-defined
+    country: tmdbMovie.production_countries?.[0]?.name
+      || tmdbMovie.production_countries?.[0]?.iso_3166_1
+      || "Unknown",
+    moods: Array.from(new Set(movieGenres.flatMap((genre) => moodByGenre[genre.name] ?? []))),
   };
+}
+
+/**
+ * List endpoints omit details needed by discover filters, so hydrate each result
+ * before returning it while retaining the list response as a fallback.
+ */
+async function enrichDiscoverMovies(
+  movies: TMDBMovie[],
+  options?: TMDBRequestOptions
+): Promise<Movie[]> {
+  const transformedMovies = await Promise.all(movies.map((movie) => transformTMDBMovie(movie)));
+  const detailedMovies = await getMovieDetailsBatch(
+    transformedMovies.map((movie) => movie.id),
+    options
+  );
+  const detailsById = new Map(detailedMovies.map((movie) => [movie.id, movie]));
+
+  return transformedMovies.map((movie) => detailsById.get(movie.id) ?? movie);
 }
 
 /**
@@ -627,9 +705,7 @@ export async function getMoviesByGenre(
 
     if (!data || !data.results) return [];
 
-    return Promise.all(
-      data.results.map((movie: TMDBMovie) => transformTMDBMovie(movie))
-    );
+    return enrichDiscoverMovies(data.results, options);
   } catch (error) {
     reportTmdbError("Failed to fetch movies by genre:", error, options);
     return [];

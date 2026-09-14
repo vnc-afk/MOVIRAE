@@ -22,6 +22,7 @@ export type Mood =
   | "Romantic"
   | "Dark"
   | "Uplifting"
+  | "Emotional"
   | "Thought-Provoking"
   | "Fun"
   | "Intense";
