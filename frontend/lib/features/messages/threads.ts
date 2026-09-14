@@ -1,6 +1,6 @@
 import { getAppData, setAppData } from "@/lib/app-data";
 
-import { getConversationKey } from "@/lib/features/messages/service";
+import { getConversationKey } from "@/services/messages/messages.client";
 
 export type MessageThreadReadState = Record<string, string>;
 

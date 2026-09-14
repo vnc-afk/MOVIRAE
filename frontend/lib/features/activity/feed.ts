@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getMovieDetailsBatch } from "@/lib/tmdb";
-import { buildUserProfile } from "@/lib/features/profiles/service";
+import { buildUserProfile } from "@/services/profiles/profiles";
 import { getCachedAggregation, setCachedAggregation } from "@/lib/aggregation-cache";
 import type { ActivityItem } from "@/lib/types";
 
