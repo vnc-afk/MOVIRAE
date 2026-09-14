@@ -1,7 +1,7 @@
 import { subscribeToSharedListEvents } from "@/app/shared-lists/lib/events";
 import type { SharedListEvent } from "@/app/shared-lists/lib/events";
 import { getCurrentUser } from "@/app/shared-lists/lib/api-utils";
-import { getSharedListForView } from "@/app/shared-lists/lib/service";
+import { getSharedListForView } from "@/services/shared-lists/queries.server";
 
 export const runtime = "nodejs";
 

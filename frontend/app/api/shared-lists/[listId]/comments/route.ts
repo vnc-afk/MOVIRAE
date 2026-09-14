@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
-import { addSharedListComment, getSharedListAccessInfo } from "@/app/shared-lists/lib/shared-lists-service";
+import { addSharedListComment, getSharedListAccessInfo } from "@/services/shared-lists/mutations.server";
 import { parseRequestJson, getOpId, requireAuth } from "@/app/shared-lists/lib/api-utils";
-import { getSharedListDetail } from "@/app/shared-lists/lib/shared-lists-service";
+import { getSharedListDetail } from "@/services/shared-lists/queries.server";
 import { getCurrentUser } from "@/app/shared-lists/lib/api-utils";
 import { enqueueNotification } from "@/lib/queues/notifications";
 import { prisma } from "@/lib/prisma";

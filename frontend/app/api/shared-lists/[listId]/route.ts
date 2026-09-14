@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { deleteSharedList } from "@/app/shared-lists/lib/shared-lists-service";
+import { deleteSharedList } from "@/services/shared-lists/mutations.server";
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
 import { requireAuth } from "@/app/shared-lists/lib/api-utils";
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { publishSharedListEvent } from "@/app/shared-lists/lib/events";
-import { addSharedListMovie, removeSharedListMovie } from "@/app/shared-lists/lib/shared-lists-service";
+import { addSharedListMovie, removeSharedListMovie } from "@/services/shared-lists/mutations.server";
 import { getOpId, parseRequestJson, requireAuth } from "@/app/shared-lists/lib/api-utils";
 
 export const runtime = "nodejs";
