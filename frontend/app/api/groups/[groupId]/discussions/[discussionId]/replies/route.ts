@@ -9,7 +9,7 @@ import {
   apiValidationError,
   apiInternalError,
 } from "@/app/groups/lib/api-response";
-import { addDiscussionReply } from "@/app/groups/lib/discussions";
+import { addDiscussionReply } from "@/services/groups/discussions.server";
 import { publishGroupEvent } from "@/app/groups/lib/events";
 import { enqueueNotification } from "@/lib/queues/notifications";
 

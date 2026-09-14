@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { fetchGroupDetail, getCurrentUser } from "@/app/groups/lib/discussions";
-import { buildUserProfile } from "@/lib/features/profiles/service";
+import { fetchGroupDetail } from "@/services/groups/discussions.server";
+import { getCurrentUser } from "@/app/groups/lib/api-utils";
+import { buildUserProfile } from "@/services/profiles/profiles";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";

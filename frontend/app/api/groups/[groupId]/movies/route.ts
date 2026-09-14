@@ -11,7 +11,7 @@ import {
   apiConflict,
   apiInternalError,
 } from "@/app/groups/lib/api-response";
-import { fetchGroupDetail } from "@/app/groups/lib/discussions";
+import { fetchGroupDetail } from "@/services/groups/discussions.server";
 import { publishGroupEvent } from "@/app/groups/lib/events";
 
 export const runtime = "nodejs";

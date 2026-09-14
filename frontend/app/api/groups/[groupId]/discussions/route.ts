@@ -10,7 +10,7 @@ import {
   apiInternalError,
 } from "@/app/groups/lib/api-response";
 import { createDiscussionSchema } from "@/app/groups/lib/api-schemas";
-import { fetchGroupDiscussions } from "@/app/groups/lib/discussions";
+import { fetchGroupDiscussions } from "@/services/groups/discussions.server";
 import { prisma } from "@/lib/prisma";
 import { publishGroupEvent } from "@/app/groups/lib/events";
 import { enqueueNotification } from "@/lib/queues/notifications";

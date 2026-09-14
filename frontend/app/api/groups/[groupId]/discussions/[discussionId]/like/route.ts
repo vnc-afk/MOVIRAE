@@ -10,7 +10,7 @@ import {
 } from "@/app/groups/lib/api-response";
 import { publishGroupEvent } from "@/app/groups/lib/events";
 import { enqueueNotification } from "@/lib/queues/notifications";
-import { toggleDiscussionLike } from "@/app/groups/lib/discussions";
+import { toggleDiscussionLike } from "@/services/groups/discussions.server";
 
 export const runtime = "nodejs";
 
