@@ -1,6 +1,6 @@
 import { apiInternalError, apiSuccess } from "@/app/movie/lib/api-response";
 import { getCurrentUser } from "@/app/movie/lib/api-utils";
-import { getMovieReviews } from "@/app/movie/lib/movie-service";
+import { getMovieReviews } from "@/services/movies/movies.server";
 
 export const runtime = "nodejs";
 

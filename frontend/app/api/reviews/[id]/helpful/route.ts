@@ -1,6 +1,6 @@
 import { apiInternalError, apiNotFound, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
 import { getOpId, parseRequestJson, requireAuth } from "@/app/movie/lib/api-utils";
-import { toggleReviewHelpful } from "@/app/movie/lib/movie-service";
+import { toggleReviewHelpful } from "@/services/movies/movies.server";
 
 export const runtime = "nodejs";
 

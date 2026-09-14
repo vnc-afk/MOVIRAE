@@ -1,6 +1,6 @@
 import { apiInternalError, apiNotFound, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
 import { requireAuth } from "@/app/movie/lib/api-utils";
-import { deleteReply } from "@/app/movie/lib/movie-service";
+import { deleteReply } from "@/services/movies/movies.server";
 
 export const runtime = "nodejs";
 

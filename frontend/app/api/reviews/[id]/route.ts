@@ -1,7 +1,7 @@
 import { apiBadRequest, apiInternalError, apiNotFound, apiForbidden, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
 import { requireAuth, parseRequestJson } from "@/app/movie/lib/api-utils";
 import { updateReviewSchema } from "@/app/movie/lib/api-schemas";
-import { editReview, deleteReview } from "@/app/movie/lib/movie-service";
+import { editReview, deleteReview } from "@/services/movies/movies.server";
 
 export const runtime = "nodejs";
 
