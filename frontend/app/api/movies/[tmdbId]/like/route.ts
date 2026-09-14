@@ -1,6 +1,6 @@
 import { apiInternalError, apiNotFound, apiSuccess, apiUnauthorized } from "@/app/movie/lib/api-response";
 import { requireAuth } from "@/app/movie/lib/api-utils";
-import { toggleMovieFavorite } from "@/app/movie/lib/movie-service";
+import { toggleMovieFavorite } from "@/services/movies/movies.server";
 
 export const runtime = "nodejs";
 

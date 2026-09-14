@@ -3,8 +3,8 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
-import { buildUserProfile } from "@/lib/features/profiles/service";
-import { getConversationKey } from "@/lib/features/messages/service";
+import { buildUserProfile } from "@/services/profiles/profiles";
+import { getConversationKey } from "@/services/messages/messages.client";
 import { publishMessageEvent } from "@/lib/features/messages/events";
 
 export const runtime = "nodejs";

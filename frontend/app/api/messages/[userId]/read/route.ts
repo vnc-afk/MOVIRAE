@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
-import { getConversationKey } from "@/lib/features/messages/service";
+import { getConversationKey } from "@/services/messages/messages.client";
 import { markMessageThreadRead } from "@/lib/features/messages/threads";
 import { publishMessageEvent } from "@/lib/features/messages/events";
 
