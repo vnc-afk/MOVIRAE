@@ -11,7 +11,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
 
-export { buildUserProfile } from "@/lib/features/profiles/service";
+export { buildUserProfile } from "@/services/profiles/profiles";
 
 // ============================================================================
 // Shared Prisma Selects

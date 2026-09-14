@@ -1,5 +1,5 @@
 import type { GroupDetailRecord } from "@/app/groups/lib/types";
-import type { DiscussionRecord } from "@/app/groups/lib/discussions";
+import type { DiscussionRecord } from "@/services/groups/discussions.server";
 
 export type GroupEvent = {
   type: "group-updated";
