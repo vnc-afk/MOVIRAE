@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * WatchMode API Integration
  * Provides streaming availability information for movies
