@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { queryKeys } from "@/lib/queryKeys";
-import { buildConversationSummaries, getCurrentUserFromSnapshot, fetchMessageThread } from "@/lib/features/messages/service";
+import { buildConversationSummaries, getCurrentUserFromSnapshot, fetchMessageThread } from "@/services/messages/messages.client";
 import { getNotificationLink } from "@/app/notifications/lib/links";
 import NotificationsHeader from "./components/NotificationsHeader";
 import NotificationFeed from "./components/NotificationFeed";

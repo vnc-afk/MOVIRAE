@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
 import type { Message, NotificationItem, UserProfile } from "@/lib/types";
-import type { MessagingSnapshot } from "@/lib/features/messages/service";
+import type { MessagingSnapshot } from "@/services/messages/messages.client";
 import { usePaginatedApi } from "./usePaginatedApi";
 import { useSnapshotDedup } from "./useSnapshotDedup";
 import { PAGE_LIMIT } from "../lib/constants";

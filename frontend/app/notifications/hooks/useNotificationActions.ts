@@ -12,12 +12,12 @@ import {
   markNotificationReadInSnapshot,
   replaceMessageInSnapshot,
   replaceMessageInThread,
-} from "@/lib/features/messages/service";
+} from "@/services/messages/messages.client";
 import type {
   ConversationSummary,
   MessageThreadSnapshot,
   MessagingSnapshot,
-} from "@/lib/features/messages/service";
+} from "@/services/messages/messages.client";
 import type { Message, NotificationItem, UserProfile } from "@/lib/types";
 
 interface UseNotificationActionsOptions {

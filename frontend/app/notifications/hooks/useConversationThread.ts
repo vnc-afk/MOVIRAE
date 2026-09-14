@@ -3,8 +3,8 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { fetchMessageThread } from "@/lib/features/messages/service";
-import type { MessageThreadSnapshot } from "@/lib/features/messages/service";
+import { fetchMessageThread } from "@/services/messages/messages.client";
+import type { MessageThreadSnapshot } from "@/services/messages/messages.client";
 
 interface ConversationThreadResult {
   threadQueryKey: readonly unknown[];

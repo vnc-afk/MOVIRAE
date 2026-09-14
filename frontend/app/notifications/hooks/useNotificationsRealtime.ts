@@ -6,8 +6,8 @@ import {
   appendMessageToSnapshot,
   markConversationMessagesReadInSnapshot,
   markConversationMessagesReadInThread,
-} from "@/lib/features/messages/service";
-import type { MessageThreadSnapshot, MessagingSnapshot } from "@/lib/features/messages/service";
+} from "@/services/messages/messages.client";
+import type { MessageThreadSnapshot, MessagingSnapshot } from "@/services/messages/messages.client";
 import type { UserProfile } from "@/lib/types";
 import { useMessageWebSocket } from "./useMessageWebSocket";
 
