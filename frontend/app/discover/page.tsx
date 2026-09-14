@@ -98,6 +98,20 @@ function DiscoverContent() {
   const trimmedQuery = debouncedQuery.trim();
   const isLoading = isHydrating && (isDefaultMode ? baseMovies.length === 0 : pageMovies.length === 0);
   const shouldDisableControls = isDefaultMode && isLoading;
+  const clientFilterKey = JSON.stringify({
+    runtimeRange: filters.runtimeRange,
+    moods: filters.moods,
+    tags: filters.tags,
+    languages: filters.languages,
+    countries: filters.countries,
+  });
+  const hasClientFilters =
+    filters.runtimeRange[0] !== DEFAULT_FILTERS.runtimeRange[0] ||
+    filters.runtimeRange[1] !== DEFAULT_FILTERS.runtimeRange[1] ||
+    filters.moods.length > 0 ||
+    filters.tags.length > 0 ||
+    filters.languages.length > 0 ||
+    filters.countries.length > 0;
 
   // Build the visible movie pages from the  current mode, applying runtime and sort filters.
   const visiblePages = useMemo(() => {
@@ -178,14 +192,14 @@ function DiscoverContent() {
   }, [filters.query, setFilters]);
 
   useEffect(() => {
-    // Whenever the query or selected genre changes, clear stale paginated data
+    // Whenever the data source or client-side filters change, clear stale paginated data
     // and revalidate discover seeds so the next page load starts fresh.
     resetPagination();
     setPageMovies([]);
     resetDedupe();
     invalidateCache();
     setIsHydrating(true);
-  }, [trimmedQuery, filters.genreId, resetPagination, resetDedupe, invalidateCache]);
+  }, [trimmedQuery, filters.genreId, clientFilterKey, resetPagination, resetDedupe, invalidateCache]);
 
   useEffect(() => {
     if (isDefaultMode && baseMovies.length > 0) {
@@ -222,7 +236,7 @@ function DiscoverContent() {
     };
 
     loadFirstPage();
-  }, [isDefaultMode, fetchPage, resetPagination, resetDedupe, deduplicate]);
+  }, [isDefaultMode, clientFilterKey, fetchPage, resetPagination, resetDedupe, deduplicate]);
 
   const handleLoadNext = useCallback(() => {
     if (isFetching || !hasMore) return;
@@ -243,6 +257,14 @@ function DiscoverContent() {
       }
     });
   }, [isFetching, hasMore, loadNext, fetchPage, deduplicate]);
+
+  useEffect(() => {
+    if (isLoading || !hasClientFilters || uniqueMovies.length > 0 || isFetching || !hasMore) {
+      return;
+    }
+
+    handleLoadNext();
+  }, [hasClientFilters, handleLoadNext, hasMore, isFetching, isLoading, uniqueMovies.length]);
 
   const handleDismissError = useCallback((errorMessage: string) => {
     setDismissedErrors((prev) => new Set([...prev, errorMessage]));
@@ -336,7 +358,7 @@ function DiscoverContent() {
 
         <MovieGrid movies={uniqueMovies} isLoading={isLoading} />
 
-        {!isLoading && uniqueMovies.length > 0 && (
+        {!isLoading && (uniqueMovies.length > 0 || hasClientFilters) && (
           <PaginationLoader isLoading={isFetching} hasMore={hasMore} onLoadMore={handleLoadNext} />
         )}
       </div>
