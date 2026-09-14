@@ -1,5 +1,5 @@
 import { apiInternalError, apiSuccess } from "@/app/recommendations/lib/api-response";
-import { getRecommendationsSnapshot } from "@/app/recommendations/lib/recommendations-server-service";
+import { getRecommendationsSnapshot } from "@/services/recommendations/recommendations.server";
 
 export const runtime = "nodejs";
 

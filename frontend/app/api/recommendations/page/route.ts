@@ -1,5 +1,5 @@
 import { apiBadRequest, apiInternalError, apiSuccess } from "@/app/recommendations/lib/api-response";
-import { getRecommendationsPage } from "@/app/recommendations/lib/recommendations-server-service";
+import { getRecommendationsPage } from "@/services/recommendations/recommendations.server";
 import type { RecommendationSectionKey } from "@/app/recommendations/lib/types";
 
 const SECTION_KEYS: RecommendationSectionKey[] = ["top-picks", "similar", "trending"];
