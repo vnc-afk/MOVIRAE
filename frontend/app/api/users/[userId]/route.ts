@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 
 import { authOptions } from "@/lib/features/auth/config";
 import { prisma } from "@/lib/prisma";
-import { buildUserProfile } from "@/lib/features/profiles/service";
+import { buildUserProfile } from "@/services/profiles/profiles";
 
 export const runtime = "nodejs";
 
