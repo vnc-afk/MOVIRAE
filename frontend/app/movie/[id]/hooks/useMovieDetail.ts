@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import React, { useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { getStreamingPlatforms } from "@/lib/features/streaming/watchmode";
 import type { Movie } from "@/lib/types";
 
 async function fetchMovieDetails(movieId: string): Promise<Movie | null> {
@@ -15,6 +14,13 @@ async function fetchMovieDetails(movieId: string): Promise<Movie | null> {
 
 async function fetchSimilarMovies(movieId: string): Promise<Movie[]> {
   const response = await fetch(`/api/tmdb/movie/${movieId}/similar`);
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => null);
+  return Array.isArray(data) ? data : [];
+}
+
+async function fetchStreamingPlatforms(movieId: string): Promise<string[]> {
+  const response = await fetch(`/api/streaming/${movieId}`);
   if (!response.ok) return [];
   const data = await response.json().catch(() => null);
   return Array.isArray(data) ? data : [];
@@ -66,7 +72,7 @@ export function useMovieDetail({ movieId, enabled = true }: UseMovieDetailOption
     setStreamingLoading(true);
     setStreamingOn([]);
 
-    void getStreamingPlatforms(movieQuery.data.id)
+    void fetchStreamingPlatforms(movieQuery.data.id)
       .then((platforms) => {
         if (!cancelled) {
           setStreamingOn(platforms);
