@@ -1,6 +1,6 @@
 import { apiInternalError, apiNotFound, apiSuccess, apiUnauthorized, apiForbidden } from "@/app/notifications/lib/api-response";
 import { requireAuth, ApiError } from "@/app/notifications/lib/api-utils";
-import { markNotificationRead } from "@/app/notifications/lib/notification-service";
+import { markNotificationRead } from "@/services/notifications/notifications.server";
 
 export const runtime = "nodejs";
 
