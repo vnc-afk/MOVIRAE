@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys";
-import { fetchFriends, fetchMessageThread } from "@/lib/features/messages/service";
+import { fetchFriends, fetchMessageThread } from "@/services/messages/messages.client";
 import type { UserProfile } from "@/lib/types";
 
 type FriendsListProps = {

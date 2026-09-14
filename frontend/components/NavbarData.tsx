@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import useEventSource from "@/hooks/use-event-source";
-import { appendNotificationToSnapshot, buildConversationSummaries, fetchMessagingSnapshot, getCurrentUserFromSnapshot, type MessagingSnapshot } from "@/lib/features/messages/service";
+import { appendNotificationToSnapshot, buildConversationSummaries, fetchMessagingSnapshot, getCurrentUserFromSnapshot, type MessagingSnapshot } from "@/services/messages/messages.client";
 import { queryKeys } from "@/lib/queryKeys";
 import type { NotificationItem } from "@/lib/types";
 import { useNavbarDataActions } from "./NavbarContext";
