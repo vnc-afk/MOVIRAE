@@ -39,13 +39,21 @@ export function EventsList({
   isLoading = false,
 }: EventsListProps) {
   const sortedEvents = sortEventsByDate(events);
+  const upcomingEventCount = sortedEvents.filter((event) => {
+    const eventDate = new Date(`${event.startDate}T${event.startTime}`);
+    return !Number.isNaN(eventDate.getTime()) && eventDate >= new Date();
+  }).length;
 
   return (
     <div className="space-y-6">
-
-      {isAdmin && currentUser && (
-        <AddEventForm onSubmit={onAddEvent} isLoading={isLoading} />
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="text-sm font-medium text-muted-foreground">
+          {upcomingEventCount} {upcomingEventCount === 1 ? "upcoming event" : "upcoming events"}
+        </p>
+        {isAdmin && currentUser && (
+          <AddEventForm onSubmit={onAddEvent} isLoading={isLoading} />
+        )}
+      </div>
 
       {sortedEvents.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">

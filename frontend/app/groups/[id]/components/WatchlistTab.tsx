@@ -105,69 +105,74 @@ export function WatchlistTab({
 
   return (
     <div className="space-y-6">
-      {canEdit && (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Movie
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add movie to watchlist</DialogTitle>
-              <DialogDescription>
-                Search for a movie and add it to this group's shared watchlist.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3 py-2">
-              <Input
-                placeholder="Search movies..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  handleSearch(e.target.value);
-                }}
-                disabled={isSubmitting || isLoading}
-              />
-              {isSearching && (
-                <div className="text-center text-xs text-muted-foreground py-4">
-                  Searching...
-                </div>
-              )}
-              {searchResults.length > 0 && (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {searchResults.map((result) => (
-                    <Button
-                      key={result.id}
-                      variant="outline"
-                      className="w-full justify-start h-auto py-2"
-                      onClick={() => handleSelectMovie(result.id)}
-                      disabled={isSubmitting || isLoading}
-                    >
-                      {result.poster ? (
-                        <img
-                          src={result.poster}
-                          alt={result.title}
-                          className="h-10 w-7 rounded object-cover mr-3"
-                        />
-                      ) : null}
-                      <div className="text-left">
-                        <p className="text-xs font-medium">{result.title}</p>
-                        {(result as any).releaseDate && (
-                          <p className="text-xs text-muted-foreground">
-                            {new Date((result as any).releaseDate).getFullYear()}
-                          </p>
-                        )}
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <p className="text-sm font-medium text-muted-foreground">
+          {movies.length} {movies.length === 1 ? "film" : "films"} shared by the club
+        </p>
+        {canEdit && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Movie
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add movie to watchlist</DialogTitle>
+                <DialogDescription>
+                  Search for a movie and add it to this group's shared watchlist.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <Input
+                  placeholder="Search movies..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    handleSearch(e.target.value);
+                  }}
+                  disabled={isSubmitting || isLoading}
+                />
+                {isSearching && (
+                  <div className="py-4 text-center text-xs text-muted-foreground">
+                    Searching...
+                  </div>
+                )}
+                {searchResults.length > 0 && (
+                  <div className="max-h-96 space-y-2 overflow-y-auto">
+                    {searchResults.map((result) => (
+                      <Button
+                        key={result.id}
+                        variant="outline"
+                        className="h-auto w-full justify-start py-2"
+                        onClick={() => handleSelectMovie(result.id)}
+                        disabled={isSubmitting || isLoading}
+                      >
+                        {result.poster ? (
+                          <img
+                            src={result.poster}
+                            alt={result.title}
+                            className="mr-3 h-10 w-7 rounded object-cover"
+                          />
+                        ) : null}
+                        <div className="text-left">
+                          <p className="text-xs font-medium">{result.title}</p>
+                          {(result as any).releaseDate && (
+                            <p className="text-xs text-muted-foreground">
+                              {new Date((result as any).releaseDate).getFullYear()}
+                            </p>
+                          )}
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
+      </div>
 
       {movies.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
@@ -183,7 +188,7 @@ export function WatchlistTab({
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
-              className="group relative"
+              className="group relative w-full max-w-[240px]"
             >
               <MoviePrefetchLink movieId={movie.id} href={`/movie/${movie.id}`}>
                 {movie.poster ? (
