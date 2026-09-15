@@ -688,7 +688,8 @@ async function enrichDiscoverMovies(
 export async function getMoviesByGenre(
   genreId: number,
   page = 1,
-  options?: TMDBRequestOptions
+  options?: TMDBRequestOptions,
+  sortBy: "rating" | "year" | "title" | "runtime" = "rating"
 ): Promise<Movie[]> {
   if (!TMDB_API_KEY) {
     console.error("TMDB_API_KEY is not set");
@@ -698,8 +699,15 @@ export async function getMoviesByGenre(
   await ensureGenreMap();
 
   try {
+    const tmdbSort = {
+      rating: "vote_average.desc",
+      year: "primary_release_date.desc",
+      title: "original_title.asc",
+      runtime: "popularity.desc",
+    }[sortBy];
+    const genreFilter = genreId > 0 ? `&with_genres=${genreId}` : "";
     const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
-      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_genres=${genreId}&sort_by=popularity.desc&page=${page}`,
+      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}${genreFilter}&sort_by=${tmdbSort}&page=${page}`,
       options?.signal
     );
 
