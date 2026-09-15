@@ -21,6 +21,8 @@ model User {
   username               String?                  @unique
   accounts               Account[]
   calendarItems          CalendarItem[]
+  soundtrackFavorites    UserSoundtrackFavorite[]
+  soundtrackPlayEvents   SoundtrackPlayEvent[]
   events                 Event[]                  @relation("EventCreator")
   eventAttendees         EventAttendee[]
   filterPresets          FilterPreset[]
@@ -115,6 +117,81 @@ model UserFavoriteMovie {
 
   @@unique([userId, tmdbId])
   @@index([userId])
+}
+
+model Soundtrack {
+  id             String                    @id @default(cuid())
+  tmdbMovieId    String                    @unique
+  movieTitle     String
+  poster         String?
+  composer       String?
+  musicbrainzReleaseId String?
+  musicbrainzReleaseName String?
+  lastFetchedAt  DateTime                  @default(now())
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  tracks         SoundtrackTrack[]
+  favorites      UserSoundtrackFavorite[]
+  playEvents     SoundtrackPlayEvent[]
+
+  @@index([lastFetchedAt])
+}
+
+model SoundtrackTrack {
+  id           String     @id @default(cuid())
+  soundtrackId String
+  musicbrainzRecordingId String
+  musicbrainzReleaseId String?
+  musicbrainzArtistId String?
+  youtubeVideoId String?
+  title        String
+  artist       String
+  durationMs   Int
+  position     Int
+  soundtrack   Soundtrack @relation(fields: [soundtrackId], references: [id], onDelete: Cascade)
+
+  @@unique([soundtrackId, musicbrainzRecordingId])
+  @@index([musicbrainzRecordingId])
+  @@index([youtubeVideoId])
+  @@index([soundtrackId, position])
+}
+
+model UserSoundtrackFavorite {
+  id           String     @id @default(cuid())
+  userId       String
+  soundtrackId String
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  soundtrack   Soundtrack @relation(fields: [soundtrackId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, soundtrackId])
+  @@index([userId, createdAt])
+}
+
+model SoundtrackPlayEvent {
+  id           String     @id @default(cuid())
+  userId       String?
+  soundtrackId String
+  musicbrainzRecordingId String?
+  action       String
+  durationMs   Int?
+  createdAt    DateTime   @default(now())
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  soundtrack   Soundtrack @relation(fields: [soundtrackId], references: [id], onDelete: Cascade)
+
+  @@index([soundtrackId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model SoundtrackMatchOverride {
+  id             String   @id @default(cuid())
+  tmdbMovieId    String   @unique
+  musicbrainzReleaseId String
+  note           String?
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  @@index([musicbrainzReleaseId])
 }
 
 model UserWatchlistItem {
