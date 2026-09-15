@@ -47,7 +47,7 @@ export function PublicListCard({ list, index, isInFlight, onLike, onOpen, adding
         </div>
       </div>
 
-      <div className="flex gap-2 mt-4 overflow-hidden relative">
+      <div className="relative mt-4 flex gap-2 overflow-hidden">
         {(addingMovieToListId === list.id || removingMovieFromListId === list.id) && (
           <div className="absolute -top-2 right-3 z-20">
             <span className={`inline-flex items-center gap-2 rounded-full px-2 py-1 text-[10px] font-medium border ${addingMovieToListId === list.id ? "border-primary/30 bg-primary/10 text-primary animate-pulse" : "border-destructive/30 bg-destructive/10 text-destructive animate-pulse"}`}>
@@ -56,16 +56,16 @@ export function PublicListCard({ list, index, isInFlight, onLike, onOpen, adding
           </div>
         )}
         {list.movies.slice(0, 5).map((movie) => (
-          <MoviePrefetchLink key={movie.id} movieId={movie.id} href={`/movie/${movie.id}`} className="flex-1 min-w-0">
+          <MoviePrefetchLink key={movie.id} movieId={movie.id} href={`/movie/${movie.id}`} className="h-20 w-12 shrink-0">
             <img
               src={getSafeImageSrc(movie.poster) || ""}
               alt={movie.title}
-              className="h-20 w-full rounded-md object-cover poster-shadow hover:scale-105 transition-transform duration-200"
+              className="h-full w-full rounded-md bg-muted object-contain poster-shadow transition-transform duration-200 hover:scale-105"
             />
           </MoviePrefetchLink>
         ))}
         {list.movies.length > 5 && (
-          <div className="flex-1 min-w-0 h-20 rounded-md bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground">
+          <div className="flex h-20 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground">
             +{list.movies.length - 5}
           </div>
         )}
@@ -95,7 +95,7 @@ export function PublicListCard({ list, index, isInFlight, onLike, onOpen, adding
               <Button
                 size="sm"
                 variant="ghost"
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                className={`inline-flex h-7 min-w-[4.5rem] items-center justify-center gap-1 rounded-full border px-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
                   isLiked ? "border-primary/40 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"
                 }`}
                 onClick={() => onLike(list)}
@@ -108,7 +108,7 @@ export function PublicListCard({ list, index, isInFlight, onLike, onOpen, adding
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs"
+            className="h-7 min-w-[4.5rem] justify-center text-xs"
             onClick={() => onOpen(list.id)}
           >
             View
