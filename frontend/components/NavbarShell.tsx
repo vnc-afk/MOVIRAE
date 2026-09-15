@@ -3,91 +3,86 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Home, User, Bell, Calendar, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, SlidersHorizontal, Gift, ListPlus, LogOut } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Home, User, Bell, Calendar, Music, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, Gift, ListPlus, LogOut, LayoutGrid, ChevronDown, Menu, Compass, Film, Search } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import logo from "@/assets/logo.svg";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useNavbarDataState } from "./NavbarContext";
 
-const navLinks = [
-  { label: "Discover", path: "/discover", icon: SlidersHorizontal },
-  { label: "For You", path: "/recommendations", icon: Sparkles },
-  { label: "Groups", path: "/groups", icon: Users },
-  { label: "Shared Lists", path: "/shared-lists", icon: ListPlus },
-  { label: "Calendar", path: "/calendar", icon: Calendar },
-  { label: "Stats", path: "/stats", icon: BarChart3 },
-  { label: "Wrapped", path: "/wrapped", icon: Gift },
+const primaryNav = [
+  { label: "Home", path: "/", icon: Home },
+  { label: "Discover", path: "/discover", icon: Compass },
+  { label: "Social", path: "/groups", icon: Users },
+  { label: "Activity", path: "/notifications", icon: Bell },
+];
+
+const exploreGroups = [
+  {
+    label: "Discovery",
+    items: [
+      { label: "For You", path: "/recommendations", icon: Sparkles, desc: "Personalized picks" },
+      { label: "Discover", path: "/discover", icon: Search, desc: "Find your next film" },
+    ],
+  },
+  {
+    label: "Collections",
+    items: [
+      { label: "Shared Lists", path: "/shared-lists", icon: ListPlus, desc: "Collaborate" },
+      { label: "Calendar", path: "/calendar", icon: Calendar, desc: "Upcoming releases" },
+      { label: "Soundtracks", path: "/soundtracks", icon: Music, desc: "Movie music" },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { label: "Stats", path: "/stats", icon: BarChart3, desc: "Your analytics" },
+      { label: "Wrapped", path: "/wrapped", icon: Gift, desc: "Year in review" },
+    ],
+  },
+];
+
+const utilityLinks = [
+  { label: "Compare", path: "/compare", icon: ArrowLeftRight },
+  { label: "Import/Export", path: "/import-export", icon: FileText },
 ];
 
 export function NavbarShell() {
   const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { unreadCount } = useNavbarDataState();
   const notificationLabel = useMemo(() => (unreadCount > 9 ? "9+" : unreadCount), [unreadCount]);
+  const isActive = (path: string) => path === "/" ? pathname === "/" : pathname.startsWith(path);
 
   return (
     <>
       <nav className="sticky top-0 z-50 glass-surface border-b">
-        <div className="container flex items-center justify-between h-16 gap-4">
-          <Link href="/" className="flex items-center gap-2 flex-shrink-0">
-            <img src={logo.src} alt="Movirae" className="h-7" />
+        <div className="container flex h-14 items-center justify-between gap-3">
+          <Link href="/" className="flex shrink-0 items-center gap-2">
+            <Film className="h-5 w-5 text-primary sm:hidden" />
+            <img src={logo.src} alt="Movirae" className="hidden h-7 sm:block" />
             <span className="font-display text-lg font-bold text-foreground">MOVIRAE</span>
           </Link>
 
-          <div className="hidden lg:flex items-center gap-1">
-            {navLinks.map(({ label, path, icon: Icon }) => (
-              <Link
-                key={path}
-                href={path}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  pathname === path
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-0.5 md:flex">
+            {primaryNav.map(({ label, path, icon: Icon }) => <Link key={path} href={path} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive(path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}><Icon className="h-4 w-4" />{label}</Link>)}
             <DropdownMenu>
-              <DropdownMenuTrigger className="lg:hidden h-9 w-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-                <SlidersHorizontal className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {navLinks.map(({ label, path, icon: Icon }) => (
-                  <DropdownMenuItem key={path} asChild>
-                    <Link href={path} className="flex items-center gap-2">
-                      <Icon className="h-4 w-4" /> {label}
-                    </Link>
-                  </DropdownMenuItem>
-                ))}
+              <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"><LayoutGrid className="h-4 w-4" />Explore<ChevronDown className="h-3 w-3 opacity-50" /></DropdownMenuTrigger>
+              <DropdownMenuContent align="center" className="w-72 p-2">
+                {exploreGroups.map((group, index) => <div key={group.label}>{index > 0 && <DropdownMenuSeparator />}<DropdownMenuLabel className="text-xs uppercase tracking-wider text-muted-foreground">{group.label}</DropdownMenuLabel>{group.items.map(({ label, path, icon: Icon, desc }) => <DropdownMenuItem key={path} asChild><Link href={path} className={`flex items-center gap-3 rounded-md px-2 py-2 ${isActive(path) ? "bg-primary/10 text-primary" : ""}`}><Icon className="h-4 w-4 shrink-0" /><span className="flex flex-col"><span className="text-sm font-medium">{label}</span><span className="text-xs text-muted-foreground">{desc}</span></span></Link></DropdownMenuItem>)}</div>)}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/compare" className="flex items-center gap-2">
-                    <ArrowLeftRight className="h-4 w-4" /> Compare
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/import-export" className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" /> Import/Export
-                  </Link>
-                </DropdownMenuItem>
+                {utilityLinks.map(({ label, path, icon: Icon }) => <DropdownMenuItem key={path} asChild><Link href={path} className="flex items-center gap-3 px-2 py-1.5"><Icon className="h-4 w-4 text-muted-foreground" /><span className="text-sm">{label}</span></Link></DropdownMenuItem>)}
               </DropdownMenuContent>
             </DropdownMenu>
+          </div>
 
-            <Link
-              href="/notifications"
-              className="h-9 w-9 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors relative"
-            >
+          <div className="hidden max-w-xs flex-1 md:block"><div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground"><Search className="h-4 w-4" /><span>Search movies...</span></div></div>
+
+          <div className="flex items-center gap-2">
+            <Link href="/notifications" aria-label="Notifications" className="relative flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:text-foreground">
               <Bell className="h-4 w-4" />
-              {unreadCount > 0 ? (
-                <span className="absolute -top-0.5 -right-0.5 h-3.5 min-w-3.5 rounded-full bg-primary px-0.5 text-primary-foreground text-[8px] font-bold flex items-center justify-center">
-                  {notificationLabel}
-                </span>
-              ) : null}
+              {unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">{notificationLabel}</span>}
             </Link>
             <ThemeToggle />
             <DropdownMenu modal={false}>
@@ -112,18 +107,29 @@ export function NavbarShell() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetTrigger className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:text-foreground md:hidden"><Menu className="h-4 w-4" /></SheetTrigger>
+              <SheetContent side="right" className="w-72 p-0">
+                <SheetHeader className="p-4 pb-2"><SheetTitle className="flex items-center gap-2 text-base"><Film className="h-4 w-4 text-primary" />MOVIRAE</SheetTitle></SheetHeader>
+                <div className="border-b border-border px-3 py-2"><div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground"><Search className="h-4 w-4" />Search movies...</div></div>
+                <div className="overflow-y-auto px-2 pb-20">
+                  <div className="py-2">{primaryNav.map(({ label, path, icon: Icon }) => <Link key={path} href={path} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${isActive(path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}><Icon className="h-4 w-4" />{label}</Link>)}</div>
+                  {exploreGroups.map((group) => <div key={group.label} className="border-t border-border py-2"><p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>{group.items.map(({ label, path, icon: Icon }) => <Link key={path} href={path} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(path) ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}><Icon className="h-4 w-4" />{label}</Link>)}</div>)}
+                  <div className="border-t border-border py-2"><p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Tools</p>{utilityLinks.map(({ label, path, icon: Icon }) => <Link key={path} href={path} onClick={() => setMobileOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"><Icon className="h-4 w-4" />{label}</Link>)}</div>
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </nav>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 glass-surface border-t">
-        <div className="flex items-center justify-around h-14">
+        <div className="flex h-14 items-center justify-around">
           {[
             { icon: Home, label: "Home", path: "/" },
-            { icon: SlidersHorizontal, label: "Discover", path: "/discover" },
-            { icon: Calendar, label: "Calendar", path: "/calendar" },
+            { icon: Compass, label: "Discover", path: "/discover" },
             { icon: Sparkles, label: "For You", path: "/recommendations" },
-            { icon: Bell, label: "Alerts", path: "/notifications" },
+            { icon: Users, label: "Social", path: "/groups" },
             { icon: User, label: "Profile", path: "/profile" },
           ].map(({ icon: Icon, label, path }) => (
             <Link
@@ -134,11 +140,6 @@ export function NavbarShell() {
               } transition-colors`}
             >
               <Icon className="h-5 w-5" />
-              {label === "Alerts" && unreadCount > 0 ? (
-                <span className="absolute right-1 top-0 h-3.5 min-w-3.5 rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground flex items-center justify-center">
-                  {notificationLabel}
-                </span>
-              ) : null}
               <span className="text-[10px] font-medium">{label}</span>
             </Link>
           ))}
