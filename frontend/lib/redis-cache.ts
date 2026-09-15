@@ -1,9 +1,10 @@
-import "server-only";
 import Redis from "ioredis";
 
 const REDIS_CACHE_PREFIX = "movirae:cache";
 
 let redisClient: Redis | null = null;
+let redisUnavailable = false;
+let redisWarningShown = false;
 
 export function getRedisCacheKey(namespace: string, key: string) {
   return `${REDIS_CACHE_PREFIX}:${namespace}:${key}`;
@@ -12,7 +13,7 @@ export function getRedisCacheKey(namespace: string, key: string) {
 function createRedisClient() {
   const redisUrl = process.env.REDIS_URL;
 
-  if (!redisUrl) {
+  if (!redisUrl || redisUnavailable) {
     return null;
   }
 
@@ -20,6 +21,17 @@ function createRedisClient() {
     redisClient = new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
+      connectTimeout: 2_500,
+      retryStrategy: () => null,
+    });
+    redisClient.on("error", (error) => {
+      redisUnavailable = true;
+      if (!redisWarningShown) {
+        redisWarningShown = true;
+        console.warn("Redis cache unavailable; continuing without Redis cache:", error.message);
+      }
+      redisClient?.disconnect();
+      redisClient = null;
     });
   }
 
@@ -100,9 +112,31 @@ export async function withRedisCached<T>(
   return value;
 }
 
+export async function withRedisCachedNullable<T>(
+  namespace: string,
+  key: string,
+  factory: () => Promise<T | null> | T | null,
+  ttlSeconds: number,
+  nullTtlSeconds: number
+): Promise<T | null> {
+  const cacheKey = getRedisCacheKey(namespace, key);
+  const cached = await getRedisCached<T | { __null: true }>(cacheKey);
+  if (cached !== null) {
+    return typeof cached === "object" && cached !== null && "__null" in cached
+      ? null
+      : cached as T;
+  }
+
+  const value = await factory();
+  await setRedisCached(cacheKey, value === null ? { __null: true } : value, value === null ? nullTtlSeconds : ttlSeconds);
+  return value;
+}
+
 export function closeRedisCacheClient() {
   if (redisClient) {
     redisClient.disconnect();
     redisClient = null;
   }
+  redisUnavailable = false;
+  redisWarningShown = false;
 }
