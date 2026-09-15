@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Disc3, Loader2, Music } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSession } from "next-auth/react";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import { attachOpToHeaders, generateOpId } from "@/lib/optimistic";
 import { useSoundtracks } from "../hooks";
@@ -11,18 +13,35 @@ import { SoundtrackHero } from "./SoundtrackHero";
 import { SoundtrackSidebar } from "./SoundtrackSidebar";
 import { TrackList } from "./TrackList";
 import { NowPlayingBar } from "./NowPlayingBar";
+import type { Soundtrack } from "../lib/types";
 
 export function SoundtracksView() {
   const soundtrack = useSoundtracks();
   const visibleItems = filterSoundtracks(soundtrack.items, soundtrack.query.search);
   const selected = soundtrack.selected;
+  const { data: session, status: sessionStatus } = useSession();
+  const queryClient = useQueryClient();
+  const savedQueryKey = ["soundtracks", "favorites", session?.user?.email ?? "anonymous"] as const;
+  const savedQuery = useQuery<Soundtrack[]>({
+    queryKey: savedQueryKey,
+    queryFn: async () => {
+      const response = await fetch("/api/soundtracks/favorites", { cache: "no-store" });
+      if (!response.ok) return [];
+      const payload = await response.json() as { value?: Soundtrack[] };
+      return Array.isArray(payload.value) ? payload.value : [];
+    },
+    enabled: sessionStatus === "authenticated",
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
   const [isFavorite, setIsFavorite] = useState(false);
   const [view, setView] = useState<"all" | "saved">("all");
-  const [savedItems, setSavedItems] = useState<typeof soundtrack.items>([]);
-  const [savedLoading, setSavedLoading] = useState(false);
   const [isFavoritePending, setIsFavoritePending] = useState(false);
   const favoriteActionRef = useRef<string | null>(null);
   const { addInFlightOp, removeInFlightOp } = useOptimisticOps();
+  const savedItems = savedQuery.data ?? [];
+  const savedLoading = savedQuery.isLoading || sessionStatus === "loading";
   const displayedItems = view === "saved" ? filterSoundtracks(savedItems, soundtrack.query.search) : visibleItems;
   const displayedSelected = view === "saved"
     ? displayedItems.find((item) => item.movieId === soundtrack.query.selectedId) ?? displayedItems[0] ?? null
@@ -53,21 +72,6 @@ export function SoundtracksView() {
     });
   }, [displayedSelected]);
 
-  const loadSaved = useCallback(async () => {
-    setSavedLoading(true);
-    try {
-      const response = await fetch("/api/soundtracks/favorites", { cache: "no-store" });
-      const payload = await response.json() as { value?: typeof soundtrack.items };
-      setSavedItems(Array.isArray(payload.value) ? payload.value : []);
-    } finally {
-      setSavedLoading(false);
-    }
-  }, [soundtrack.items]);
-
-  useEffect(() => {
-    if (view === "saved") void loadSaved();
-  }, [loadSaved, view]);
-
   const toggleFavorite = useCallback(async () => {
     if (!displayedSelected) return;
     if (favoriteActionRef.current) return;
@@ -83,7 +87,7 @@ export function SoundtracksView() {
         headers: attachOpToHeaders(undefined, { opId, type: next ? "create" : "delete", ts: Date.now() }),
       });
       if (!response.ok) throw new Error("Could not update soundtrack favorite.");
-      if (view === "saved") await loadSaved();
+      await queryClient.invalidateQueries({ queryKey: savedQueryKey });
     } catch {
       setIsFavorite(!next);
     } finally {
@@ -91,7 +95,7 @@ export function SoundtracksView() {
       favoriteActionRef.current = null;
       setIsFavoritePending(false);
     }
-  }, [addInFlightOp, displayedSelected, isFavorite, loadSaved, removeInFlightOp, view]);
+  }, [addInFlightOp, displayedSelected, isFavorite, queryClient, removeInFlightOp, savedQueryKey, view]);
 
   return (
     <div className="pb-20 md:pb-0">
