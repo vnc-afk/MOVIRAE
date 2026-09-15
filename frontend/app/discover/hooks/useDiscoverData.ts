@@ -79,9 +79,11 @@ async function fetchSearch(query: string, page: number, signal?: AbortSignal): P
 async function fetchByGenre(
   genreId: number,
   page: number,
+  sortBy: FilterState["sortBy"],
   signal?: AbortSignal
 ): Promise<Movie[]> {
-  const response = await fetch(`/api/tmdb/discover?genreId=${genreId}&page=${page}`, {
+  const genreParam = genreId > 0 ? `&genreId=${genreId}` : "";
+  const response = await fetch(`/api/tmdb/discover?sortBy=${sortBy}${genreParam}&page=${page}`, {
     signal,
   });
   if (!response.ok) return [];
@@ -213,11 +215,11 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
 
   // Trending data is only relevant when the user is not actively searching or filtering by genre.
   const trendingQuery = useQuery<Movie[]>({
-    queryKey: queryKeys.discover.seeds(),
+    queryKey: queryKeys.discover.seeds(filters.sortBy),
     queryFn: async () => {
       const signal = AbortSignal.timeout(API_CONFIG.TIMEOUT_MS);
       try {
-        return await fetchTrending(1, signal);
+        return await fetchByGenre(0, 1, filters.sortBy, signal);
       } catch (err) {
         throw normalizeError(err);
       }
@@ -245,9 +247,9 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
         if (isSearchMode) {
           results = await fetchSearch(trimmedQuery, page, mergedSignal);
         } else if (isGenreMode) {
-          results = await fetchByGenre(Number(filters.genreId), page, mergedSignal);
+          results = await fetchByGenre(Number(filters.genreId), page, filters.sortBy, mergedSignal);
         } else {
-          results = await fetchTrending(page, mergedSignal);
+          results = await fetchByGenre(0, page, filters.sortBy, mergedSignal);
         }
 
         return { movies: results, pageSize: results.length };
@@ -268,7 +270,7 @@ export function useDiscoverData(filters: FilterState): DiscoverDataState {
         }
       }
     },
-    [isSearchMode, isGenreMode, trimmedQuery, filters.genreId]
+    [isSearchMode, isGenreMode, trimmedQuery, filters.genreId, filters.sortBy]
   );
 
   const invalidateCache = useCallback(() => {
