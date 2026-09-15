@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Home, User, Bell, Calendar, Music, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, Gift, ListPlus, LogOut, LayoutGrid, ChevronDown, Menu, Compass, Film, Search } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import logo from "@/assets/logo.svg";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { useNavbarDataState } from "./NavbarContext";
 
 const primaryNav = [
   { label: "Home", path: "/", icon: Home },
@@ -51,8 +50,6 @@ const utilityLinks = [
 export function NavbarShell() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { unreadCount } = useNavbarDataState();
-  const notificationLabel = useMemo(() => (unreadCount > 9 ? "9+" : unreadCount), [unreadCount]);
   const isActive = (path: string) => path === "/" ? pathname === "/" : pathname.startsWith(path);
 
   return (
@@ -77,13 +74,7 @@ export function NavbarShell() {
             </DropdownMenu>
           </div>
 
-          <div className="hidden max-w-xs flex-1 md:block"><div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground"><Search className="h-4 w-4" /><span>Search movies...</span></div></div>
-
           <div className="flex items-center gap-2">
-            <Link href="/notifications" aria-label="Notifications" className="relative flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:text-foreground">
-              <Bell className="h-4 w-4" />
-              {unreadCount > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-bold text-primary-foreground">{notificationLabel}</span>}
-            </Link>
             <ThemeToggle />
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
@@ -111,7 +102,6 @@ export function NavbarShell() {
               <SheetTrigger className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-muted-foreground transition-colors hover:text-foreground md:hidden"><Menu className="h-4 w-4" /></SheetTrigger>
               <SheetContent side="right" className="w-72 p-0">
                 <SheetHeader className="p-4 pb-2"><SheetTitle className="flex items-center gap-2 text-base"><Film className="h-4 w-4 text-primary" />MOVIRAE</SheetTitle></SheetHeader>
-                <div className="border-b border-border px-3 py-2"><div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm text-muted-foreground"><Search className="h-4 w-4" />Search movies...</div></div>
                 <div className="overflow-y-auto px-2 pb-20">
                   <div className="py-2">{primaryNav.map(({ label, path, icon: Icon }) => <Link key={path} href={path} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium ${isActive(path) ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}><Icon className="h-4 w-4" />{label}</Link>)}</div>
                   {exploreGroups.map((group) => <div key={group.label} className="border-t border-border py-2"><p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{group.label}</p>{group.items.map(({ label, path, icon: Icon }) => <Link key={path} href={path} onClick={() => setMobileOpen(false)} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${isActive(path) ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-secondary hover:text-foreground"}`}><Icon className="h-4 w-4" />{label}</Link>)}</div>)}
