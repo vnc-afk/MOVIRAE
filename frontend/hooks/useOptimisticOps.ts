@@ -9,7 +9,7 @@ export interface InFlightOp {
   parentId?: string;
   payload?: Record<string, any>;
   createdAt: number;
-  surface: "review" | "shared-list" | "group" | "movie" | "calendar";
+  surface: "review" | "shared-list" | "group" | "movie" | "calendar" | "soundtrack";
 }
 
 export interface OptimisticContextType {
