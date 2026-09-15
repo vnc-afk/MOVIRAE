@@ -1,0 +1,18 @@
+ALTER TABLE "SoundtrackTrack" ADD COLUMN "musicbrainzRecordingId_new" TEXT;
+UPDATE "SoundtrackTrack" SET "musicbrainzRecordingId_new" = COALESCE("musicbrainzRecordingId", "spotifyId");
+ALTER TABLE "SoundtrackTrack" DROP CONSTRAINT IF EXISTS "SoundtrackTrack_soundtrackId_spotifyId_key";
+DROP INDEX IF EXISTS "SoundtrackTrack_musicbrainzRecordingId_idx";
+DROP INDEX IF EXISTS "SoundtrackTrack_youtubeVideoId_idx";
+ALTER TABLE "SoundtrackTrack" DROP COLUMN "musicbrainzRecordingId";
+ALTER TABLE "SoundtrackTrack" DROP COLUMN "spotifyId";
+ALTER TABLE "SoundtrackTrack" RENAME COLUMN "musicbrainzRecordingId_new" TO "musicbrainzRecordingId";
+ALTER TABLE "SoundtrackTrack" ALTER COLUMN "musicbrainzRecordingId" SET NOT NULL;
+ALTER TABLE "SoundtrackTrack" ADD CONSTRAINT "SoundtrackTrack_soundtrackId_musicbrainzRecordingId_key" UNIQUE ("soundtrackId", "musicbrainzRecordingId");
+CREATE INDEX "SoundtrackTrack_musicbrainzRecordingId_idx" ON "SoundtrackTrack"("musicbrainzRecordingId");
+CREATE INDEX "SoundtrackTrack_youtubeVideoId_idx" ON "SoundtrackTrack"("youtubeVideoId");
+ALTER TABLE "Soundtrack" DROP COLUMN "spotifyAlbumId";
+ALTER TABLE "Soundtrack" DROP COLUMN "spotifyAlbumName";
+ALTER TABLE "SoundtrackPlayEvent" RENAME COLUMN "spotifyTrackId" TO "musicbrainzRecordingId";
+ALTER TABLE "SoundtrackMatchOverride" RENAME COLUMN "spotifyAlbumId" TO "musicbrainzReleaseId";
+DROP INDEX IF EXISTS "SoundtrackMatchOverride_spotifyAlbumId_idx";
+CREATE INDEX "SoundtrackMatchOverride_musicbrainzReleaseId_idx" ON "SoundtrackMatchOverride"("musicbrainzReleaseId");
