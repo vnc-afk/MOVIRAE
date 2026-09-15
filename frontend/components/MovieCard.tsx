@@ -180,30 +180,30 @@ export const MovieCard = memo(function MovieCard({
           </button>
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-            <div className="flex gap-2 mb-3">
+            <div className="mb-3 flex flex-wrap gap-2">
               <button
                 onClick={handleToggleWatched}
                 disabled={!session?.user?.email || loading.watched}
-                className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed ${
                   isWatched
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-secondary-foreground"
                 }`}
               >
                 {isWatched ? <Check className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                {isWatched ? "Watched" : "Watch"}
+                <span className="min-w-0 truncate">{isWatched ? "Watched" : "Watch"}</span>
               </button>
               <button
                 onClick={handleToggleWatchlist}
                 disabled={!session?.user?.email || loading.watchlist}
-                className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed ${
                   isWatchlist
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-secondary-foreground"
                 }`}
               >
                 {isWatchlist ? <Check className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                {isWatchlist ? "Saved" : "Watchlist"}
+                <span className="min-w-0 truncate">{isWatchlist ? "Saved" : "Watchlist"}</span>
               </button>
             </div>
             <p className="text-sm text-primary-foreground/80 line-clamp-2">
