@@ -15,7 +15,7 @@ export const DiscoverHeader = memo(function DiscoverHeader() {
         <h1 className="font-display text-2xl font-bold text-foreground">Smart Discover</h1>
       </div>
       <p className="text-sm text-muted-foreground">
-        Search TMDB movies, filter by genre, and sort by runtime or rating.
+        Multi-filter by genre, mood, vibe, language, duration & more.
       </p>
     </motion.div>
   );

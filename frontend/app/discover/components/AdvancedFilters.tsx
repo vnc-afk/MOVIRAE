@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe2, Languages } from "lucide-react";
 import { RuntimeFilter } from "./RuntimeFilter";
 import type { DiscoverMetadata, FilterState } from "../lib/types";
 
@@ -27,11 +27,14 @@ function FilterChipGroup({
   values: readonly string[];
   onToggle: (value: string) => void;
 }) {
+  const Icon = label === "Language" ? Languages : Globe2;
+
   return (
     <div className="space-y-2.5">
-      <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-      </span>
+      <div className="flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</span>
+      </div>
       <div className="flex flex-wrap gap-2">
         {options.map((option) => {
           const active = values.includes(option);

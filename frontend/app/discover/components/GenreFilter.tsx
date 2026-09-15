@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
+import { Clapperboard } from "lucide-react";
 import type { GenreOption } from "../lib/types";
 
 interface GenreFilterProps {
@@ -70,6 +71,7 @@ export const GenreFilter = memo(function GenreFilter({
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5 mb-2">
+        <Clapperboard className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs font-medium text-muted-foreground">Genre</span>
       </div>
       <ChipContainer>

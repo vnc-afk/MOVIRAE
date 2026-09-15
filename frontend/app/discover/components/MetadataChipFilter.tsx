@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
+import { Sparkles, Tags } from "lucide-react";
 
 interface MetadataChipFilterProps {
   label: string;
@@ -67,9 +68,12 @@ export const MetadataChipFilter = memo(function MetadataChipFilter({
   selectedValues,
   onToggle,
 }: MetadataChipFilterProps) {
+  const Icon = label === "Tags" ? Tags : Sparkles;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-1.5 mb-2">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
       </div>
       <ChipContainer>
