@@ -6,7 +6,7 @@
     "dev": "node server.mjs --dev",
     "build": "next build",
     "start": "node server.mjs",
-    "worker": "tsx workers/notifications.ts",
+    "worker": "tsx workers/index.ts",
     "lint": "eslint .",
     "test": "vitest run tests/unit",
     "test:db": "vitest run tests/database",
