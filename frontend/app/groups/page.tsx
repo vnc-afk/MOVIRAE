@@ -126,10 +126,19 @@ export default function GroupsPage() {
     return (
       <GroupsContainer>
         <GroupsHeader>
-          <h1 className="text-3xl font-bold">Groups</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Discover and join communities to watch and discuss movies together
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">Groups</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Join communities, share watchlists, and discuss films together.
+              </p>
+            </div>
+            <CreateGroupDialog
+              onCreate={handleCreateGroup}
+              isLoading={isCreating}
+              disabled={isLoading}
+            />
+          </div>
         </GroupsHeader>
         <ErrorState 
           error={error} 
@@ -143,17 +152,20 @@ export default function GroupsPage() {
   return (
     <GroupsContainer>
       <GroupsHeader>
-        <h1 className="text-3xl font-bold">Groups</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Discover and join communities to watch and discuss movies together
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Groups</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Join communities, share watchlists, and discuss films together.
+            </p>
+          </div>
+          <CreateGroupDialog
+            onCreate={handleCreateGroup}
+            isLoading={isCreating}
+            disabled={isLoading}
+          />
+        </div>
       </GroupsHeader>
-
-      <CreateGroupDialog 
-        onCreate={handleCreateGroup} 
-        isLoading={isCreating}
-        disabled={isLoading}
-      />
 
       {isLoading ? (
         <GroupsLoadingSkeleton count={Math.max(3, groups.length)} />
