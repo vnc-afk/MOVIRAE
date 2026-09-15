@@ -59,7 +59,7 @@ export default function Page() {
 						<h1 className="font-display text-2xl font-bold text-foreground">For You</h1>
 					</div>
 					<p className="text-sm text-muted-foreground">
-						Movies shaped by your ratings, watchlist, and favorites.
+						Personalized picks based on your watch history & ratings.
 					</p>
 				</motion.div>
 
