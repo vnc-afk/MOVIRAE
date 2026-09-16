@@ -428,6 +428,7 @@ model GroupDiscussion {
   title        String
   body         String
   movieId      String?
+  movieIds     Json?
   likes        Int                    @default(0)
   replies      Int                    @default(0)
   pinned       Boolean                @default(false)
@@ -500,14 +501,21 @@ model Notification {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  fromId    String
-  toId      String
-  text      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  from      User     @relation("MessageSender", fields: [fromId], references: [id], onDelete: Cascade)
-  to        User     @relation("MessageRecipient", fields: [toId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  fromId        String
+  toId          String
+  text          String
+  type          MessageType @default(TEXT)
+  gifId         String?
+  gifUrl        String?
+  gifPreviewUrl String?
+  gifTitle      String?
+  gifWidth      Int?
+  gifHeight     Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  from          User        @relation("MessageSender", fields: [fromId], references: [id], onDelete: Cascade)
+  to            User        @relation("MessageRecipient", fields: [toId], references: [id], onDelete: Cascade)
 
   @@index([fromId])
   @@index([toId])
@@ -515,6 +523,11 @@ model Message {
   @@index([toId, createdAt])
   @@index([fromId, toId, createdAt])
   @@index([toId, fromId, createdAt])
+}
+
+enum MessageType {
+  TEXT
+  GIF
 }
 
 model FilterPreset {
