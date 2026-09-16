@@ -60,6 +60,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
         fromId: true,
         toId: true,
         text: true,
+        type: true,
+        gifId: true,
+        gifUrl: true,
+        gifPreviewUrl: true,
+        gifTitle: true,
+        gifWidth: true,
+        gifHeight: true,
         createdAt: true,
         from: {
           select: {
@@ -104,6 +111,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ use
           fromId: message.fromId,
           toId: message.toId,
           text: message.text,
+          type: message.type,
+          gifId: message.gifId,
+          gifUrl: message.gifUrl,
+          gifPreviewUrl: message.gifPreviewUrl,
+          gifTitle: message.gifTitle,
+          gifWidth: message.gifWidth,
+          gifHeight: message.gifHeight,
           date: message.createdAt.toISOString(),
           isRead:
             message.fromId === currentUser.id

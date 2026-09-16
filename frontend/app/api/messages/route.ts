@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { buildUserProfile } from "@/services/profiles/profiles";
 import { getConversationKey } from "@/services/messages/messages.client";
 import { publishMessageEvent } from "@/lib/features/messages/events";
+import { getGifById } from "@/lib/features/messages/giphy";
 
 export const runtime = "nodejs";
 
@@ -39,9 +40,10 @@ export async function POST(request: Request) {
     const payload = await request.json().catch(() => null);
     const toUserId = typeof payload?.toUserId === "string" ? payload.toUserId : null;
     const text = typeof payload?.text === "string" ? payload.text.trim() : "";
+    const gifId = typeof payload?.gifId === "string" ? payload.gifId.trim() : "";
 
-    if (!toUserId || !text) {
-      return NextResponse.json({ error: "Recipient and message text are required" }, { status: 400 });
+    if (!toUserId || (!text && !gifId) || (text && gifId)) {
+      return NextResponse.json({ error: "Recipient and either message text or a GIF are required" }, { status: 400 });
     }
 
     const recipient = await prisma.user.findUnique({
@@ -70,17 +72,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "You can only message users who are your friends" }, { status: 403 });
     }
 
+    let gif = null;
+    if (gifId) {
+      try {
+        gif = await getGifById(gifId);
+      } catch (error) {
+        console.error("Failed to resolve GIF:", error);
+        return NextResponse.json({ error: "That GIF is no longer available" }, { status: 400 });
+      }
+      if (!gif) return NextResponse.json({ error: "That GIF is no longer available" }, { status: 400 });
+    }
+
     const message = await prisma.message.create({
       data: {
         fromId: currentUser.id,
         toId: recipient.id,
-        text,
+        text: text || "",
+        type: gif ? "GIF" : "TEXT",
+        gifId: gif?.id,
+        gifUrl: gif?.url,
+        gifPreviewUrl: gif?.previewUrl,
+        gifTitle: gif?.title,
+        gifWidth: gif?.width,
+        gifHeight: gif?.height,
       },
       select: {
         id: true,
         fromId: true,
         toId: true,
         text: true,
+        type: true,
+        gifId: true,
+        gifUrl: true,
+        gifPreviewUrl: true,
+        gifTitle: true,
+        gifWidth: true,
+        gifHeight: true,
         createdAt: true,
         from: {
           select: {
@@ -122,6 +149,13 @@ export async function POST(request: Request) {
         fromId: message.fromId,
         toId: message.toId,
         text: message.text,
+        type: message.type,
+        gifId: message.gifId,
+        gifUrl: message.gifUrl,
+        gifPreviewUrl: message.gifPreviewUrl,
+        gifTitle: message.gifTitle,
+        gifWidth: message.gifWidth,
+        gifHeight: message.gifHeight,
         date: message.createdAt.toISOString(),
         isRead: false,
       },
@@ -135,6 +169,13 @@ export async function POST(request: Request) {
         fromId: message.fromId,
         toId: message.toId,
         text: message.text,
+        type: message.type,
+        gifId: message.gifId,
+        gifUrl: message.gifUrl,
+        gifPreviewUrl: message.gifPreviewUrl,
+        gifTitle: message.gifTitle,
+        gifWidth: message.gifWidth,
+        gifHeight: message.gifHeight,
         date: message.createdAt.toISOString(),
         isRead: false,
       },

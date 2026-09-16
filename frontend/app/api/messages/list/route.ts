@@ -33,6 +33,13 @@ export async function GET(request: Request) {
       fromId: true,
       toId: true,
       text: true,
+      type: true,
+      gifId: true,
+      gifUrl: true,
+      gifPreviewUrl: true,
+      gifTitle: true,
+      gifWidth: true,
+      gifHeight: true,
       createdAt: true,
       from: {
         select: { id: true, name: true, email: true, image: true, username: true, displayName: true, avatar: true, bio: true },
@@ -98,6 +105,13 @@ export async function GET(request: Request) {
       fromId: message.fromId,
       toId: message.toId,
       text: message.text,
+      type: message.type,
+      gifId: message.gifId,
+      gifUrl: message.gifUrl,
+      gifPreviewUrl: message.gifPreviewUrl,
+      gifTitle: message.gifTitle,
+      gifWidth: message.gifWidth,
+      gifHeight: message.gifHeight,
       date: message.createdAt.toISOString(),
       isRead:
         message.fromId === currentUser.id
