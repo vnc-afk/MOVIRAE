@@ -148,6 +148,13 @@ export interface Message {
   fromId?: string;
   toId?: string;
   text: string;
+  type?: "TEXT" | "GIF";
+  gifId?: string | null;
+  gifUrl?: string | null;
+  gifPreviewUrl?: string | null;
+  gifTitle?: string | null;
+  gifWidth?: number | null;
+  gifHeight?: number | null;
   date: string;
   isRead?: boolean;
 }
