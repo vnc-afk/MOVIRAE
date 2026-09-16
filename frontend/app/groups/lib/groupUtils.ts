@@ -172,6 +172,22 @@ export function sortEventsByDate(events: GroupEventRecord[]): GroupEventRecord[]
 }
 
 /**
+ * Returns whether an event has already passed its scheduled date/time.
+ */
+export function isEventPast(event: Pick<GroupEventRecord, "startDate" | "startTime">): boolean {
+  const eventDate = new Date(`${event.startDate}T${event.startTime || "00:00"}`);
+  if (Number.isNaN(eventDate.getTime())) return false;
+  return eventDate < new Date();
+}
+
+/**
+ * Returns whether an event is still upcoming.
+ */
+export function isEventUpcoming(event: Pick<GroupEventRecord, "startDate" | "startTime">): boolean {
+  return !isEventPast(event);
+}
+
+/**
  * Formats a discussion timestamp into a human-readable relative string.
  */
 export function formatDiscussionDate(date: string): string {
