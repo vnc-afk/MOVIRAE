@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Calendar, MapPin, Users, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { isEventPast } from "../../lib/groupUtils";
 import type { GroupEventRecord } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
 
@@ -49,6 +50,7 @@ export function EventCard({
   const userRsvp = event.attendees?.find(
     (attendee) => attendee.user?.id === currentUser?.id
   )?.rsvpStatus;
+  const isPastEvent = isEventPast(event);
 
   const rsvpCounts = {
     yes: event.attendees?.filter((a) => a.rsvpStatus === "yes").length || 0,
@@ -94,7 +96,14 @@ export function EventCard({
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-base">{event.title}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-base">{event.title}</h3>
+            {isPastEvent && (
+              <Badge variant="secondary" className="text-[10px] px-2 py-0.5 rounded-full">
+                Done
+              </Badge>
+            )}
+          </div>
           {event.description && (
             <p className="text-xs text-muted-foreground mt-1">
               {event.description}

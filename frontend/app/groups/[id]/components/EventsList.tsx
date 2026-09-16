@@ -2,7 +2,7 @@
 
 import { EventCard } from "./EventCard";
 import { AddEventForm } from "./AddEventForm";
-import { sortEventsByDate } from "../../lib/groupUtils";
+import { isEventUpcoming, sortEventsByDate } from "../../lib/groupUtils";
 import type { GroupEventRecord } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
 
@@ -39,10 +39,7 @@ export function EventsList({
   isLoading = false,
 }: EventsListProps) {
   const sortedEvents = sortEventsByDate(events);
-  const upcomingEventCount = sortedEvents.filter((event) => {
-    const eventDate = new Date(`${event.startDate}T${event.startTime}`);
-    return !Number.isNaN(eventDate.getTime()) && eventDate >= new Date();
-  }).length;
+  const upcomingEventCount = sortedEvents.filter(isEventUpcoming).length;
 
   return (
     <div className="space-y-6">
