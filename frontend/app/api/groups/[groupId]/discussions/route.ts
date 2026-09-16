@@ -68,7 +68,8 @@ export async function POST(
       });
     }
 
-    const { title, body: discussionBody, movieId, opId } = parseResult.data;
+    const { title, body: discussionBody, movieId, movieIds, opId } = parseResult.data;
+    const attachedMovieIds = [...new Set(movieIds?.length ? movieIds : movieId ? [movieId] : [])];
 
     const group = await prisma.group.findUnique({
       where: { id: groupId },
@@ -86,7 +87,8 @@ export async function POST(
         authorId: currentUser.id,
         title,
         body: discussionBody,
-        movieId,
+        movieId: attachedMovieIds[0],
+        movieIds: attachedMovieIds,
         likes: 0,
         replies: 0,
       },
