@@ -13,7 +13,7 @@ interface DiscussionsListProps {
   discussions: Discussion[];
   sortType: DiscussionSortType;
   onSortChange: (sortType: DiscussionSortType) => void;
-  onAddDiscussion: (title: string, body: string, movieId?: string) => Promise<void>;
+  onAddDiscussion: (title: string, body: string, movieIds?: string[]) => Promise<void>;
   onLikeDiscussion: (discussionId: string) => Promise<void>;
   onAddReply: (discussionId: string, body: string) => Promise<void>;
   currentUser: UserProfile | null;
@@ -74,7 +74,6 @@ export function DiscussionsList({
       {currentUser && (
         <AddDiscussionForm
           onSubmit={onAddDiscussion}
-          currentUser={currentUser}
           isLoading={isLoading}
         />
       )}

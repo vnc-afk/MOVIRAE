@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, MessageCircle, Loader2 } from "lucide-react";
+import { Heart, MessageCircle, Loader2, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDiscussionDate } from "../../lib/groupUtils";
 import type { Discussion, DiscussionReply } from "../../lib/types";
 import type { UserProfile } from "@/lib/types";
+import { MoviePrefetchLink } from "@/components/MoviePrefetchLink";
 
 interface DiscussionItemProps {
   discussion: Discussion;
@@ -27,6 +28,22 @@ export function DiscussionItem({
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [movies, setMovies] = useState<Array<{ id: string; title: string; poster?: string; year?: number }>>([]);
+
+  useEffect(() => {
+    const movieIds = discussion.movieIds?.length ? discussion.movieIds : discussion.movieId ? [discussion.movieId] : [];
+    if (movieIds.length === 0) return;
+    let active = true;
+    Promise.all(movieIds.map((movieId) =>
+      fetch(`/api/tmdb/movie/${movieId}`)
+        .then((response) => response.ok ? response.json() : null)
+        .then((payload) => payload?.value ?? payload)
+        .catch(() => null)
+    )).then((results) => {
+      if (active) setMovies(results.filter((movie) => movie?.id));
+    });
+    return () => { active = false; };
+  }, [discussion.movieId, discussion.movieIds]);
 
   const handleLike = useCallback(async () => {
     try {
@@ -85,6 +102,21 @@ export function DiscussionItem({
 
       
       <p className="text-sm text-foreground mt-3 ml-11">{discussion.body}</p>
+
+      {(discussion.movieIds?.length ?? 0) > 0 || discussion.movieId ? (
+        <div className="mt-3 ml-11 flex flex-wrap gap-2">
+          {movies.length > 0 ? movies.map((movie) => (
+            <MoviePrefetchLink key={movie.id} movieId={movie.id} href={`/movie/${movie.id}`} className="flex min-w-0 items-center gap-2 rounded-md border border-border bg-secondary/50 p-2 hover:bg-secondary">
+              {movie.poster ? <img src={movie.poster} alt="" className="h-14 w-10 rounded object-cover" /> : <div className="flex h-14 w-10 items-center justify-center rounded bg-muted"><Film className="h-4 w-4 text-muted-foreground" /></div>}
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Attached movie</p>
+                <p className="max-w-40 truncate text-sm font-medium">{movie.title}</p>
+                {movie.year ? <p className="text-xs text-muted-foreground">{movie.year}</p> : null}
+              </div>
+            </MoviePrefetchLink>
+          )) : <p className="text-xs text-muted-foreground">Loading attached movies...</p>}
+        </div>
+      ) : null}
 
       <div className="flex items-center gap-3 mt-4 ml-11">
         <Button
