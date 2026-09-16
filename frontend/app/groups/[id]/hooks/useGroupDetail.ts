@@ -102,14 +102,14 @@ export function useGroupDiscussions(groupId: string, currentUser: UserProfile | 
   }, [groupId, queryClient]);
 
 const addDiscussion = useCallback(
-  async (title: string, body: string, movieId?: string): Promise<void> => {
+  async (title: string, body: string, movieIds: string[] = []): Promise<void> => {
     if (!currentUser) throw new Error("User must be signed in");
 
     const tempId = makeOptimisticTempId("disc");
     const newDiscussion: Discussion = {
       id: tempId, tempId, author: currentUser, title, body,
       date: new Date().toISOString(), likes: 0, replies: 0, likedByMe: false,
-      replyItems: [], movieId, opId: `add-${tempId}`,
+      replyItems: [], movieId: movieIds[0], movieIds, opId: `add-${tempId}`,
     };
 
     setDiscussions((prev) => [newDiscussion, ...prev]);
@@ -118,7 +118,7 @@ const addDiscussion = useCallback(
       const response = await fetch(`/api/groups/${groupId}/discussions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, body, movieId }),
+        body: JSON.stringify({ title, body, movieIds }),
       });
       const saved = await parseApiResponse<Discussion>(response);
 
