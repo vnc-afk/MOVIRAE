@@ -33,7 +33,7 @@ interface UseNotificationActionsOptions {
 interface UseNotificationActionsResult {
   markNotificationRead: (notification: NotificationItem) => Promise<void>;
   markAllRead: () => Promise<void>;
-  sendMessage: (text: string) => Promise<void>;
+  sendMessage: (input: string | { gifId: string; gifUrl: string; previewUrl: string; title: string; width: number; height: number }) => Promise<void>;
 }
 
 /**
@@ -112,11 +112,12 @@ export function useNotificationActions({
   }, [notificationsKey, queryClient]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (input: string | { gifId: string; gifUrl: string; previewUrl: string; title: string; width: number; height: number }) => {
       if (!activeConversation || !currentUser) return;
 
-      const trimmedText = text.trim();
-      if (!trimmedText) return;
+      const isGif = typeof input !== "string";
+      const trimmedText = typeof input === "string" ? input.trim() : "";
+      if (!trimmedText && !isGif) return;
 
       const tempId = `temp-message-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const optimisticMessage = createOptimisticMessage({
@@ -124,6 +125,17 @@ export function useNotificationActions({
         from: currentUser,
         to: activeConversation.partner,
         text: trimmedText,
+        type: isGif ? "GIF" : "TEXT",
+        ...(isGif
+          ? {
+              gifId: input.gifId,
+              gifUrl: input.gifUrl,
+              gifPreviewUrl: input.previewUrl,
+              gifTitle: input.title,
+              gifWidth: input.width,
+              gifHeight: input.height,
+            }
+          : {}),
       });
 
       const previousSnapshot = queryClient.getQueryData<MessagingSnapshot>(notificationsKey);
@@ -157,6 +169,7 @@ export function useNotificationActions({
           body: JSON.stringify({
             toUserId: activeConversation.partner.id,
             text: trimmedText,
+            ...(isGif ? { gifId: input.gifId } : {}),
           }),
         });
 
