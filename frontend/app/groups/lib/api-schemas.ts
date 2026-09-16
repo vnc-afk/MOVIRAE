@@ -85,6 +85,10 @@ export const createDiscussionSchema = z.object({
   movieId: z
     .string()
     .optional(),
+  movieIds: z
+    .array(z.string())
+    .max(10, "You can attach up to 10 movies")
+    .optional(),
   opId: z
     .string()
     .optional(),
