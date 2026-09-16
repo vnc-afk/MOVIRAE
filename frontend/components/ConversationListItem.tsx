@@ -51,7 +51,7 @@ function ConversationListItem({ conversation, isActive = false, onSelect, onHove
           )}
         </div>
         <p className={`truncate text-xs ${conversation.unreadCount > 0 ? "text-foreground/80 font-medium" : "text-muted-foreground"}`}>
-          {previewMessage?.text || "No messages yet"}
+          {previewMessage?.type === "GIF" ? "GIF" : previewMessage?.text || "No messages yet"}
         </p>
       </div>
     </button>
