@@ -58,6 +58,7 @@ export interface Discussion {
   replyItems?: DiscussionReply[];
   pinned?: boolean;
   movieId?: string;
+  movieIds?: string[];
   opId?: string;
 }
 
