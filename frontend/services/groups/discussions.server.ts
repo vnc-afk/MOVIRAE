@@ -33,6 +33,7 @@ export interface DiscussionRecord {
   replyItems: DiscussionReplyRecord[];
   pinned?: boolean;
   movieId?: string;
+  movieIds?: string[];
 }
 
 export type GroupWithDiscussions = Group & {
@@ -72,6 +73,7 @@ function serializeDiscussionRow(
     createdAt: Date;
     pinned: boolean;
     movieId: string | null;
+    movieIds?: unknown;
     author: any;
     likesRecords: Array<{ userId: string }>;
     replyRecords: Array<{ id: string; body: string; createdAt: Date; author: any }>;
@@ -95,6 +97,9 @@ function serializeDiscussionRow(
     })),
     pinned: discussion.pinned,
     movieId: discussion.movieId ?? undefined,
+    movieIds: Array.isArray(discussion.movieIds)
+      ? discussion.movieIds.filter((movieId): movieId is string => typeof movieId === "string")
+      : discussion.movieId ? [discussion.movieId] : [],
   };
 }
 
