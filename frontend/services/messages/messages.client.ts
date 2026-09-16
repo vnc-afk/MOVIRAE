@@ -125,6 +125,13 @@ export function createOptimisticMessage(params: {
   from: UserProfile;
   to: UserProfile;
   text: string;
+  type?: "TEXT" | "GIF";
+  gifId?: string;
+  gifUrl?: string;
+  gifPreviewUrl?: string;
+  gifTitle?: string;
+  gifWidth?: number;
+  gifHeight?: number;
   date?: string;
 }): Message {
   return {
@@ -134,6 +141,13 @@ export function createOptimisticMessage(params: {
     fromId: params.from.id,
     toId: params.to.id,
     text: params.text,
+    type: params.type ?? "TEXT",
+    gifId: params.gifId,
+    gifUrl: params.gifUrl,
+    gifPreviewUrl: params.gifPreviewUrl,
+    gifTitle: params.gifTitle,
+    gifWidth: params.gifWidth,
+    gifHeight: params.gifHeight,
     date: params.date ?? new Date().toISOString(),
     isRead: false,
   };
