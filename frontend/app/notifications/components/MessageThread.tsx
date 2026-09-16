@@ -1,18 +1,19 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { ChevronLeft, MessageCircle, Send } from "lucide-react";
+import { ChevronLeft, FileImage, Send } from "lucide-react";
 import type { ConversationSummary, MessageThreadSnapshot } from "@/services/messages/messages.client";
 import type { UserProfile } from "@/lib/types";
 import { formatExactDate, formatRelativeDate } from "../lib/utils";
 import NoConversationSelected from "./NoConversationSelected";
+import GifPicker, { type GifSelection } from "./GifPicker";
 
 interface MessageThreadProps {
   activeConversation: ConversationSummary | null;
   activeThread: MessageThreadSnapshot;
   currentUser: UserProfile | null;
   onBack?: () => void;
-  onSendMessage: (text: string) => Promise<void>;
+  onSendMessage: (input: string | GifSelection) => Promise<void>;
   isPartnerTyping: boolean;
   onTypingChange: (isTyping: boolean) => void;
   isMobile: boolean;
@@ -35,6 +36,7 @@ export default function MessageThread({
 }: MessageThreadProps) {
   const [draftMessage, setDraftMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isGifPickerOpen, setIsGifPickerOpen] = useState(false);
   const scrollContainer = useRef<HTMLDivElement | null>(null);
 
   const messages = useMemo(
@@ -69,6 +71,18 @@ export default function MessageThread({
     await onSendMessage(draftMessage);
     setDraftMessage("");
     setIsSending(false);
+  };
+
+  const handleGifSelect = async (gif: GifSelection) => {
+    if (isSending) return;
+    setIsSending(true);
+    onTypingChange(false);
+    try {
+      await onSendMessage(gif);
+      setIsGifPickerOpen(false);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -111,6 +125,7 @@ export default function MessageThread({
           >
             {messages.map((message) => {
               const isMe = currentUser ? message.fromId === currentUser.id : false;
+              const isGif = message.type === "GIF" && Boolean(message.gifUrl);
 
               return (
                 <div
@@ -118,16 +133,35 @@ export default function MessageThread({
                   className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`w-fit max-w-[78%] rounded-2xl px-4 py-2.5 text-sm break-words ${
-                      isMe
-                        ? "rounded-br-sm bg-primary text-primary-foreground"
-                        : "rounded-bl-sm bg-secondary text-foreground"
+                    className={`w-fit max-w-[78%] text-sm break-words ${
+                      isGif
+                        ? "bg-transparent p-0"
+                        : isMe
+                          ? "rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-primary-foreground"
+                          : "rounded-2xl rounded-bl-sm bg-secondary px-4 py-2.5 text-foreground"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                    {message.type === "GIF" && message.gifUrl ? (
+                      <div className="group relative overflow-hidden rounded-xl bg-black/10">
+                        <img
+                          src={message.gifUrl}
+                          alt={message.gifTitle || "GIF"}
+                          className="block max-h-64 max-w-full object-contain"
+                          style={{ aspectRatio: message.gifWidth && message.gifHeight ? `${message.gifWidth} / ${message.gifHeight}` : undefined }}
+                          onError={(event) => {
+                            event.currentTarget.style.display = "none";
+                            event.currentTarget.parentElement?.classList.add("p-4");
+                            if (event.currentTarget.parentElement) event.currentTarget.parentElement.dataset.error = "true";
+                          }}
+                        />
+                        <span className="hidden p-4 text-xs text-muted-foreground group-data-[error=true]:block">GIF unavailable</span>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                    )}
                     <div
                       className={`mt-1 flex items-center justify-between gap-3 text-[10px] ${
-                        isMe ? "text-primary-foreground/60" : "text-muted-foreground"
+                        isGif || !isMe ? "text-muted-foreground" : "text-primary-foreground/60"
                       }`}
                       title={formatExactDate(message.date)}
                     >
@@ -144,7 +178,17 @@ export default function MessageThread({
           </div>
 
           <form onSubmit={handleSubmit} className="border-t border-border p-4">
+            {isGifPickerOpen ? <GifPicker onSelect={handleGifSelect} onClose={() => setIsGifPickerOpen(false)} /> : null}
             <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsGifPickerOpen((open) => !open)}
+                disabled={isSending}
+                aria-label="Choose a GIF"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-secondary text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <FileImage className="h-4 w-4" />
+              </button>
               <input
                 type="text"
                 value={draftMessage}
