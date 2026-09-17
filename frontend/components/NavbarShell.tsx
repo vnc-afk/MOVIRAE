@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
-import { Home, User, Bell, Calendar, Music, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, Gift, ListPlus, LogOut, LayoutGrid, ChevronDown, Menu, Compass, Film, Search } from "lucide-react";
+import { Home, User, Bell, Calendar, Music, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, Gift, ListPlus, LogOut, LayoutGrid, ChevronDown, Menu, Compass, Film, Search, Bot } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import logo from "@/assets/logo.svg";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -23,6 +23,7 @@ const exploreGroups = [
     items: [
       { label: "For You", path: "/recommendations", icon: Sparkles, desc: "Personalized picks" },
       { label: "Discover", path: "/discover", icon: Search, desc: "Find your next film" },
+      { label: "Movie Assistant", path: "/ai-assistant", icon: Bot, desc: "Get a tailored recommendation" },
     ],
   },
   {
