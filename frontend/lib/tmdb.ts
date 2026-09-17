@@ -19,7 +19,10 @@ interface TMDBMovie {
   id: number;
   title: string;
   release_date: string;
+  adult?: boolean;
   vote_average: number;
+  vote_count?: number;
+  popularity?: number;
   genres?: { id: number; name: string }[];
   genre_ids?: number[];
   poster_path: string | null;
@@ -33,6 +36,17 @@ interface TMDBMovie {
     cast: Array<{ name: string; character: string; profile_path: string }>;
     crew?: Array<{ name: string; job: string; department: string }>;
   };
+}
+
+interface TMDBReleaseDate {
+  certification?: string;
+  release_date: string;
+  type: number;
+}
+
+interface TMDBReleaseDateCountry {
+  iso_3166_1: string;
+  release_dates?: TMDBReleaseDate[];
 }
 
 interface TMDBGenre {
@@ -403,16 +417,50 @@ export async function getUpcomingMovies(
 
   try {
     const data = await fetchTmdbJson<{ results?: TMDBMovie[]; total_pages?: number }>(
-      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_release_type=2|3&primary_release_date.gte=${start}&primary_release_date.lte=${end}&sort_by=primary_release_date.asc&page=${page}`,
+      `${TMDB_BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&include_adult=false&with_release_type=1|2|3|4&primary_release_date.gte=${start}&primary_release_date.lte=${end}&sort_by=primary_release_date.asc&page=${page}`,
       options?.signal
     );
 
     if (!data?.results) return { results: [], totalPages: 0 };
 
-    const movies = await Promise.all(data.results.map(async (movie) => ({
-      movie: await transformTMDBMovie(movie),
-      releaseDate: movie.release_date,
-    })));
+    const candidates = data.results.filter((movie) => (
+      !movie.adult
+      && Boolean(movie.title?.trim())
+      && /^\d{4}-\d{2}-\d{2}$/.test(movie.release_date)
+      && Boolean(movie.poster_path)
+      && Boolean(movie.overview?.trim())
+    ));
+    const confirmed = new Array<TMDBMovie | null>(candidates.length);
+    let nextIndex = 0;
+
+    const verifyNext = async () => {
+      while (nextIndex < candidates.length) {
+        const index = nextIndex++;
+        const movie = candidates[index];
+        const releaseData = await fetchTmdbJson<{ results?: TMDBReleaseDateCountry[] }>(
+          `${TMDB_BASE_URL}/movie/${movie.id}/release_dates?api_key=${TMDB_API_KEY}`,
+          options?.signal
+        );
+        const hasConfirmedRelease = releaseData?.results?.some((country) =>
+          country.release_dates?.some((release) => (
+            [1, 2, 3, 4].includes(release.type)
+            && /^\d{4}-\d{2}-\d{2}/.test(release.release_date)
+          ))
+        ) ?? false;
+        confirmed[index] = hasConfirmedRelease ? movie : null;
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(TMDB_DETAILS_CONCURRENCY, candidates.length) }, verifyNext)
+    );
+
+    const movies = await Promise.all(
+      confirmed.filter((movie): movie is TMDBMovie => movie !== null).map(async (movie) => ({
+        movie: await transformTMDBMovie(movie),
+        releaseDate: movie.release_date,
+      }))
+    );
 
     return {
       results: movies.filter((entry) => /^\d{4}-\d{2}-\d{2}$/.test(entry.releaseDate)),
@@ -645,6 +693,7 @@ async function transformTMDBMovie(tmdbMovie: TMDBMovie): Promise<Movie> {
     releaseDate: tmdbMovie.release_date || undefined,
     year,
     rating: Math.round((tmdbMovie.vote_average / 2) * 10) / 10, // Convert 0-10 to 0-5
+    popularity: tmdbMovie.popularity ?? 0,
     genre: movieGenres[0]
       ? movieGenres[0].name
       : "Unknown",

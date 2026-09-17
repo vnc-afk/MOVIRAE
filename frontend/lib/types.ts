@@ -87,6 +87,7 @@ export interface Movie {
   releaseDate?: string;
   year: number;
   rating: number;
+  popularity?: number;
   genre: string;
   poster: string;
   synopsis: string;
