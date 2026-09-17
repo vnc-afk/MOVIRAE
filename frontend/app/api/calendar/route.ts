@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 
   const reminders = items.filter((item) => item.type === "reminder");
   const releases = movies
-    .map(({ movie, releaseDate }) => ({ id: `tmdb-release-${movie.id}`, tmdbId: movie.id, movieTitle: movie.title, date: releaseDate, type: "release" as const, poster: movie.poster, genre: movie.genre, reminderId: reminders.find((item) => item.tmdbId === movie.id && item.date.toISOString().slice(0, 10) === releaseDate)?.id }));
+    .map(({ movie, releaseDate }) => ({ id: `tmdb-release-${movie.id}`, tmdbId: movie.id, movieTitle: movie.title, date: releaseDate, popularity: movie.popularity, type: "release" as const, poster: movie.poster, genre: movie.genre, reminderId: reminders.find((item) => item.tmdbId === movie.id && item.date.toISOString().slice(0, 10) === releaseDate)?.id }));
   const persisted = items.map((item) => ({ ...item, date: item.date.toISOString().slice(0, 10) }));
   const value = [...releases, ...persisted].sort((a, b) => a.date.localeCompare(b.date));
 
