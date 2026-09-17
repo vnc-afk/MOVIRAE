@@ -13,6 +13,7 @@ const TMDB_DETAILS_CONCURRENCY = 6;
 type TMDBRequestOptions = {
   suppressClientErrors?: boolean;
   signal?: AbortSignal;
+  year?: number;
 };
 
 interface TMDBMovie {
@@ -485,7 +486,7 @@ export async function searchMovies(query: string, page = 1, options?: TMDBReques
 
   try {
     const data = await fetchTmdbJson<{ results?: TMDBMovie[] }>(
-      `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}`,
+      `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}${options?.year ? `&year=${options.year}` : ""}`,
       options?.signal
     );
 
