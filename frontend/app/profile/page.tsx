@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Heart, List, MessageCircle, BarChart3, ArrowLeftRight, FileText } from "lucide-react";
+import { Eye, Heart, List, MessageCircle, BarChart3, ArrowLeftRight, FileText } from "lucide-react";
 import { MovieCard } from "@/components/MovieCard";
 import { StarRating } from "@/components/StarRating";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -31,6 +31,7 @@ type ProfileSnapshot = {
   user: UserProfile | null;
   favoriteMovies: Movie[];
   watchlistMovies: Movie[];
+  watchedMovies: Movie[];
   reviewSummaries: ReviewSummary[];
   reviewMovies: Record<string, Movie | null>;
 };
@@ -39,6 +40,7 @@ const emptyProfileSnapshot: ProfileSnapshot = {
   user: null,
   favoriteMovies: [] as Movie[],
   watchlistMovies: [] as Movie[],
+  watchedMovies: [] as Movie[],
   reviewSummaries: [] as ReviewSummary[],
   reviewMovies: {} as Record<string, Movie | null>,
 };
@@ -62,10 +64,11 @@ export default function ProfilePage() {
   const profileQuery = useQuery<ProfileSnapshot>({
     queryKey: queryKeys.profile.current(),
     queryFn: async () => {
-      const [usersResponse, reviewsResponse, watchlistResponse] = await Promise.all([
+      const [usersResponse, reviewsResponse, watchlistResponse, watchedResponse] = await Promise.all([
         fetch("/api/users").then((response) => response.json()),
         fetch("/api/reviews/me").then((response) => response.json()),
         fetch("/api/watchlist").then((response) => response.json()),
+        fetch("/api/watched").then((response) => response.json()),
       ]);
 
       const users = Array.isArray(usersResponse.value) ? usersResponse.value : [];
@@ -76,6 +79,8 @@ export default function ProfilePage() {
 
       const watchlistIds = Array.isArray(watchlistResponse.value) ? watchlistResponse.value : [];
       const watchlistResults = await getMovieDetailsBatch(watchlistIds);
+      const watchedIds = Array.isArray(watchedResponse.value) ? watchedResponse.value : [];
+      const watchedResults = await getMovieDetailsBatch(watchedIds);
 
       const reviewList = Array.isArray(reviewsResponse.value) ? reviewsResponse.value : [];
       const reviewedMovies = await getMovieDetailsBatch(reviewList.map((review: ReviewSummary) => review.movieId));
@@ -86,6 +91,7 @@ export default function ProfilePage() {
         user: currentUser,
         favoriteMovies: favoriteResults.filter((movie): movie is Movie => movie !== null),
         watchlistMovies: watchlistResults.filter((movie): movie is Movie => movie !== null),
+        watchedMovies: watchedResults.filter((movie): movie is Movie => movie !== null),
         reviewSummaries: reviewList,
         reviewMovies: nextReviewMovies,
       };
@@ -97,6 +103,7 @@ export default function ProfilePage() {
   const user = profile.user;
   const favoriteMovies = profile.favoriteMovies;
   const watchlistMovies = profile.watchlistMovies;
+  const watchedMovies = profile.watchedMovies;
   const reviewSummaries = profile.reviewSummaries;
   const reviewMovies = profile.reviewMovies;
 
@@ -183,6 +190,7 @@ export default function ProfilePage() {
           <TabsList className="mb-6 bg-secondary">
             <TabsTrigger value="favorites" className="gap-1.5"><Heart className="h-3.5 w-3.5" /> Favorites</TabsTrigger>
             <TabsTrigger value="watchlist" className="gap-1.5"><List className="h-3.5 w-3.5" /> Watchlist</TabsTrigger>
+            <TabsTrigger value="watched" className="gap-1.5"><Eye className="h-3.5 w-3.5" /> Watched</TabsTrigger>
             <TabsTrigger value="reviews" className="gap-1.5"><MessageCircle className="h-3.5 w-3.5" /> Reviews</TabsTrigger>
           </TabsList>
 
@@ -202,6 +210,16 @@ export default function ProfilePage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {watchlistMovies.map((movie, index) => <MovieCard key={movie.id} movie={movie} index={index} />)}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="watched">
+            {watchedMovies.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">No watched movies yet.</div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {watchedMovies.map((movie, index) => <MovieCard key={movie.id} movie={movie} index={index} />)}
               </div>
             )}
           </TabsContent>
