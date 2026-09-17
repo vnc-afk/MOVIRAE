@@ -54,12 +54,12 @@ const movieSummary = (movie: Movie) => ({
 const searchTmdb = {
   definition: {
     name: "search_tmdb",
-    description: "Search TMDB for movies by title, topic, or description.",
+    description: "Search TMDB for open-ended movie searches by title, keyword, mood, genre phrase, or optional release year. Use this for candidates, not one already-identified movie or similarity.",
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Movie title or search phrase." },
-        year: { type: "integer", description: "Optional four-digit release year." },
+        query: { type: "string", minLength: 1, maxLength: 200, description: "A focused title, keyword, mood, or genre search phrase; do not include unrelated conversation." },
+        year: { type: "integer", minimum: 1888, maximum: 2200, description: "Optional four-digit release year used to narrow candidates." },
       },
       required: ["query"],
     },
@@ -78,10 +78,10 @@ const searchTmdb = {
 const getMovieDetailsTool = {
   definition: {
     name: "get_movie_details",
-    description: "Get detailed information about one movie from TMDB using its TMDB movie ID.",
+    description: "Get details for exactly one already-identified TMDB movie. Use only when a specific movie ID is known; do not guess an ID from an ambiguous title.",
     parameters: {
       type: "object",
-      properties: { movieId: { type: "string", description: "The TMDB movie ID." } },
+      properties: { movieId: { type: "string", pattern: "^[0-9]+$", description: "A verified numeric TMDB movie ID, not a title or user ID." } },
       required: ["movieId"],
     },
   },
@@ -97,11 +97,11 @@ const getMovieDetailsTool = {
 const discoverMovies = {
   definition: {
     name: "discover_movies",
-    description: "Discover movies using an optional TMDB genre ID and sort order.",
+    description: "Discover a broad TMDB catalog page, optionally constrained by a numeric genre ID and sorted by rating, year, title, or popularity. Do not use for exact title lookup.",
     parameters: {
       type: "object",
       properties: {
-        genreId: { type: "integer", description: "Optional TMDB genre ID; use 0 for all genres." },
+        genreId: { type: "integer", minimum: 0, description: "Optional TMDB genre ID; use 0 for all genres." },
         sortBy: { type: "string", enum: ["rating", "year", "title", "runtime"] },
       },
     },
@@ -120,10 +120,10 @@ const discoverMovies = {
 const findSimilarMovies = {
   definition: {
     name: "find_similar_movies",
-    description: "Find movies similar to a verified TMDB movie ID.",
+    description: "Find candidate movies similar to one verified TMDB movie. Identify the source movie first; do not use this for a title search.",
     parameters: {
       type: "object",
-      properties: { movieId: { type: "string", description: "The TMDB movie ID." } },
+      properties: { movieId: { type: "string", pattern: "^[0-9]+$", description: "A verified numeric TMDB movie ID." } },
       required: ["movieId"],
     },
   },
@@ -139,7 +139,7 @@ const findSimilarMovies = {
 const getMyWatchHistory = {
   definition: {
     name: "get_my_watch_history",
-    description: "Retrieve movies watched by the authenticated Movirae user.",
+    description: "Read the authenticated user's watched movies. Use only for explicit questions about the user's own watch history; never accepts a user ID.",
     parameters: {
       type: "object",
       properties: { limit: { type: "integer", description: "Maximum number of watched movies to return, from 1 to 20." } },
@@ -180,7 +180,7 @@ async function getMovieSummaries(movieIds: string[]) {
 const getMyRatings = {
   definition: {
     name: "get_my_ratings",
-    description: "Retrieve movies rated by the authenticated Movirae user.",
+    description: "Read the authenticated user's movie ratings. Use only for explicit questions about their own ratings; never accepts a user ID.",
     parameters: { type: "object", properties: { limit: { type: "integer", description: "Maximum results, from 1 to 20." } } },
   },
   schema: z.object({ limit: z.number().int().min(1).max(20).optional() }).strict(),
@@ -194,7 +194,7 @@ const getMyRatings = {
 const getMyReviews = {
   definition: {
     name: "get_my_reviews",
-    description: "Retrieve reviews written by the authenticated Movirae user.",
+    description: "Read the authenticated user's reviews. Use only for explicit questions about their own reviews; never accepts a user ID.",
     parameters: { type: "object", properties: { limit: { type: "integer", description: "Maximum results, from 1 to 20." } } },
   },
   schema: z.object({ limit: z.number().int().min(1).max(20).optional() }).strict(),
@@ -208,7 +208,7 @@ const getMyReviews = {
 const getMyRating = {
   definition: {
     name: "get_my_rating",
-    description: "Get the authenticated user's rating for a verified TMDB movie.",
+    description: "Read the authenticated user's rating for one verified TMDB movie. This does not create or change ratings.",
     parameters: { type: "object", properties: { movieId: { type: "string", description: "The TMDB movie ID." } }, required: ["movieId"] },
   },
   schema: z.object({ movieId: z.string().trim().regex(/^\d+$/) }).strict(),
@@ -221,7 +221,7 @@ const getMyRating = {
 const getMyReview = {
   definition: {
     name: "get_my_review",
-    description: "Get the authenticated user's review for a verified TMDB movie.",
+    description: "Read the authenticated user's review for one verified TMDB movie. This does not create or change reviews.",
     parameters: { type: "object", properties: { movieId: { type: "string", description: "The TMDB movie ID." } }, required: ["movieId"] },
   },
   schema: z.object({ movieId: z.string().trim().regex(/^\d+$/) }).strict(),
@@ -234,7 +234,7 @@ const getMyReview = {
 const getMyWatchlist = {
   definition: {
     name: "get_my_watchlist",
-    description: "Retrieve movies on the authenticated Movirae user's watchlist.",
+    description: "Read the authenticated user's watchlist. Use only for explicit questions about their own watchlist; never accepts a user ID.",
     parameters: { type: "object", properties: { limit: { type: "integer", description: "Maximum results, from 1 to 20." } } },
   },
   schema: z.object({ limit: z.number().int().min(1).max(20).optional() }).strict(),
@@ -249,7 +249,7 @@ const getMyWatchlist = {
 const getMyMoviePreferences = {
   definition: {
     name: "get_my_movie_preferences",
-    description: "Summarize the authenticated user's recorded movie-watching preferences.",
+    description: "Summarize preferences recorded in the authenticated user's watch experiences. Use only when personalization data is relevant.",
     parameters: { type: "object", properties: {} },
   },
   schema: z.object({}).strict(),
@@ -263,7 +263,7 @@ const getMyMoviePreferences = {
 const checkWatchlist = {
   definition: {
     name: "check_watchlist",
-    description: "Check whether a verified TMDB movie is on the authenticated user's watchlist.",
+    description: "Check watchlist membership for one verified TMDB movie and the authenticated user. This is read-only.",
     parameters: { type: "object", properties: { movieId: { type: "string", description: "The TMDB movie ID." } }, required: ["movieId"] },
   },
   schema: z.object({ movieId: z.string().trim().regex(/^\d+$/) }).strict(),
@@ -278,7 +278,7 @@ const checkWatchlist = {
 const addToWatchlist = {
   definition: {
     name: "add_to_watchlist",
-    description: "Add a verified TMDB movie to the authenticated user's Movirae watchlist.",
+    description: "Explicitly add one verified TMDB movie to the authenticated user's watchlist. Call only after a clear user request, never for a suggestion or ambiguous title.",
     parameters: {
       type: "object",
       properties: { movieId: { type: "string", description: "The TMDB movie ID." } },
@@ -303,7 +303,7 @@ const addToWatchlist = {
 const removeFromWatchlist = {
   definition: {
     name: "remove_from_watchlist",
-    description: "Remove a movie from the authenticated user's Movirae watchlist.",
+    description: "Explicitly remove one verified movie from the authenticated user's watchlist. Call only after a clear, unambiguous removal request; this is destructive.",
     parameters: {
       type: "object",
       properties: { movieId: { type: "string", description: "The TMDB movie ID." } },
