@@ -56,6 +56,7 @@ export function useMovieActions(movieId: string): UseMovieActionsResult {
       // If the API returns the updated list, keep local state in sync.
       if (Array.isArray(result)) {
         setIsWatched(result.includes(movieId));
+        queryClient.invalidateQueries({ queryKey: queryKeys.profile.current() });
         queryClient.invalidateQueries({ queryKey: queryKeys.stats.current() });
         queryClient.invalidateQueries({ queryKey: queryKeys.wrapped.current() });
       }
