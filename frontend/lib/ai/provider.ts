@@ -22,9 +22,15 @@ export interface AIToolResult {
   response: Record<string, unknown>;
 }
 
+export interface AIToolExchange {
+  call: AIFunctionCall;
+  result: AIToolResult;
+}
+
 export interface AITextGenerationRequest {
   messages: AIMessage[];
   tools?: AIFunctionTool[];
+  toolExchanges?: AIToolExchange[];
   functionCall?: AIFunctionCall;
   toolResult?: AIToolResult;
 }
