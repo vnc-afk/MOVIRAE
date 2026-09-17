@@ -25,7 +25,9 @@ export function CalendarFeature() {
   const { year, month } = getMonthParts(query.month);
 
   const releases = useMemo(
-    () => events.filter((event) => event.type === "release").sort((a, b) => a.date.localeCompare(b.date)),
+    () => events
+      .filter((event) => event.type === "release")
+      .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0) || a.date.localeCompare(b.date)),
     [events]
   );
   const planned = useMemo(() => events.filter((event) => plannedIds.has(event.id)), [events, plannedIds]);
