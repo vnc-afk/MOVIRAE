@@ -5,6 +5,7 @@ export interface CalendarEvent {
   tmdbId?: string;
   movieTitle: string;
   date: string;
+  popularity?: number;
   type: CalendarEventType;
   poster: string;
   genre: string;
