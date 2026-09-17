@@ -32,13 +32,20 @@ interface RegisteredTool<TSchema extends z.ZodTypeAny> {
   execute: (input: z.output<TSchema>, context: AIToolContext) => Promise<AIToolExecutionResult>;
 }
 
+function withToolTimeout<T>(promise: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => resolve({ success: false, error: "Tool timed out" } as T), TOOL_TIMEOUT_MS);
+    promise.then(resolve, reject).finally(() => clearTimeout(timeout));
+  });
+}
+
 const movieSummary = (movie: Movie) => ({
   id: movie.id,
   title: movie.title,
   year: movie.year,
   rating: movie.rating,
   genre: movie.genre,
-  synopsis: movie.synopsis,
+  synopsis: movie.synopsis.slice(0, 600),
   director: movie.director,
   runtime: movie.runtime,
   language: movie.language,
@@ -330,12 +337,7 @@ export async function executeTool(name: string, args: unknown, context: AIToolCo
 
   try {
     const executableTool = tool as unknown as RegisteredTool<z.ZodTypeAny>;
-    return await Promise.race([
-      executableTool.execute(parsed.data, context),
-      new Promise<AIToolExecutionResult>((resolve) => {
-        setTimeout(() => resolve({ success: false, error: "Tool timed out" }), TOOL_TIMEOUT_MS);
-      }),
-    ]);
+    return await withToolTimeout(executableTool.execute(parsed.data, context));
   } catch (error) {
     console.error("[ai] tool execution failed", { tool: name, error: error instanceof Error ? error.name : "unknown" });
     return { success: false, error: name === "get_my_watch_history" || name.startsWith("get_my_") ? "User data request failed" : name === "add_to_watchlist" || name === "remove_from_watchlist" ? "Watchlist update failed" : "TMDB request failed" };
