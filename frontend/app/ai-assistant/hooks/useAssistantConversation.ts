@@ -39,6 +39,7 @@ export function useAssistantConversation(query: string, movies: Movie[], isLoadi
   const addUserMessage = useCallback(async (text: string) => {
     const history = messages
       .filter((message) => message.id !== "welcome")
+      .slice(-20)
       .map((message) => ({ role: message.role, content: message.text }));
     setMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", text }]);
     setError(null);
@@ -62,7 +63,10 @@ export function useAssistantConversation(query: string, movies: Movie[], isLoadi
         ? payload.response.trim()
         : "";
       if (!assistantText) throw new Error("The AI returned an empty response");
-      setMessages((current) => [...current, { id: `assistant-${Date.now()}`, role: "assistant", text: assistantText }]);
+      const movies = typeof payload === "object" && payload !== null && "movies" in payload && Array.isArray(payload.movies)
+        ? payload.movies as Movie[]
+        : undefined;
+      setMessages((current) => [...current, { id: `assistant-${Date.now()}`, role: "assistant", text: assistantText, movies }]);
     } catch (cause) {
       setError(cause instanceof Error ? cause : new Error("Unable to generate an AI response"));
     } finally {
