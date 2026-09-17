@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { authOptions } from "@/lib/features/auth/config";
+import { MOVIRAE_AGENT_INSTRUCTIONS } from "@/lib/ai/instructions";
 import { AIProviderError } from "@/lib/ai/provider";
 import { aiProvider } from "@/lib/ai/gemini-provider";
 import { executeTool, toToolModelResponse, toolDefinitions } from "@/lib/ai/tools/registry";
@@ -41,6 +42,7 @@ const REQUEST_TIMEOUT_MS = 90_000;
 const MAX_TOOL_RESULT_BYTES = 32 * 1024;
 const MAX_DISPLAY_MOVIES = 20;
 const MAX_TOOL_CONTEXT_BYTES = 96 * 1024;
+const TOOL_INTENT_PATTERN = /\b(find|search|show|list|recommend|similar|add|remove|check|discover|watchlist|watched|ratings?|reviews?|preferences?|details|tell me about)\b/i;
 
 function getMaxToolIterations() {
   const configured = Number(process.env.AI_MAX_TOOL_ITERATIONS ?? DEFAULT_MAX_TOOL_ITERATIONS);
@@ -76,6 +78,9 @@ export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+  if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+    return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 415 });
   }
 
   const contentLength = Number(request.headers.get("content-length") ?? "0");
@@ -118,7 +123,8 @@ export async function POST(request: Request) {
 }
 
 async function runAgent({ requestId, session, parsed }: { requestId: string; session: Session; parsed: z.infer<typeof requestSchema> }) {
-  const messages = [...parsed.history, { role: "user" as const, content: parsed.message }];
+  const messages = [{ role: "system" as const, content: MOVIRAE_AGENT_INSTRUCTIONS }, ...parsed.history, { role: "user" as const, content: parsed.message }];
+  const toolsForRequest = TOOL_INTENT_PATTERN.test(parsed.message) ? toolDefinitions : undefined;
     const toolExchanges = [] as Array<NonNullable<Parameters<typeof aiProvider.generateText>[0]["toolExchanges"]>[number]>;
     const displayMovies = [] as NonNullable<Awaited<ReturnType<typeof executeTool>>["displayMovies"]>;
     const callCounts = new Map<string, number>();
@@ -135,7 +141,7 @@ async function runAgent({ requestId, session, parsed }: { requestId: string; ses
     };
 
     for (let iteration = 0; iteration < maxIterations && toolExchanges.length < MAX_TOOL_CALLS; iteration += 1) {
-      const result = await aiProvider.generateText({ messages, tools: toolDefinitions, toolExchanges });
+      const result = await aiProvider.generateText({ messages, tools: toolsForRequest, toolExchanges });
       if (!result.functionCall) {
         console.info("[ai] completed", { requestId, iterations: iteration, toolCalls: toolExchanges.length });
         return NextResponse.json({ response: result.text, movies: displayMovies });
