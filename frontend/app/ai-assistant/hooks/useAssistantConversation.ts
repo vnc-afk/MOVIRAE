@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import type { Movie } from "@/lib/types";
 import type { AssistantMessage } from "../lib/types";
 
@@ -10,31 +10,10 @@ const welcome: AssistantMessage = {
   text: "Tell me what you want to watch and I will find a strong match.",
 };
 
-export function useAssistantConversation(query: string, movies: Movie[], isLoading: boolean, loadedQuery: string) {
+export function useAssistantConversation() {
   const [messages, setMessages] = useState<AssistantMessage[]>([welcome]);
   const [error, setError] = useState<Error | null>(null);
   const [isSending, setIsSending] = useState(false);
-  const lastHandledQuery = useRef("");
-
-  useEffect(() => {
-    if (!query || lastHandledQuery.current === query || isLoading || loadedQuery !== query) return;
-    lastHandledQuery.current = query;
-    setMessages((current) => [...current, {
-      id: `assistant-${query}`,
-      role: "assistant",
-      text: `Here are recommendations for “${query}”:`,
-      movies,
-    }]);
-  }, [isLoading, loadedQuery, movies, query]);
-
-  useEffect(() => {
-    if (!query || isLoading || loadedQuery !== query) return;
-    setMessages((current) => {
-      const last = current[current.length - 1];
-      if (last?.role !== "assistant" || last.id !== `assistant-${query}`) return current;
-      return [...current.slice(0, -1), { ...last, movies }];
-    });
-  }, [isLoading, loadedQuery, movies, query]);
 
   const addUserMessage = useCallback(async (text: string) => {
     const history = messages
