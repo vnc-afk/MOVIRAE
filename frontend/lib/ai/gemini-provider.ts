@@ -4,6 +4,7 @@ import {
   AIProviderError,
   type AIMessage,
   type AIFunctionCall,
+  type AIToolExchange,
   type AIProvider,
   type AITextGenerationRequest,
   type AITextGenerationResponse,
@@ -12,7 +13,7 @@ import {
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
 const REQUEST_TIMEOUT_MS = 30_000;
 
-function toGeminiContents(messages: AIMessage[], functionCall?: AIFunctionCall, toolResult?: { name: string; response: Record<string, unknown> }) {
+function toGeminiContents(messages: AIMessage[], toolExchanges: AIToolExchange[] = [], functionCall?: AIFunctionCall, toolResult?: { name: string; response: Record<string, unknown> }) {
   const contents: Array<{ role: "user" | "model"; parts: Array<Record<string, unknown>> }> = messages
     .filter((message) => message.role !== "system")
     .map((message) => ({
@@ -20,13 +21,18 @@ function toGeminiContents(messages: AIMessage[], functionCall?: AIFunctionCall, 
       parts: [{ text: message.content }],
     }));
 
-  if (functionCall) {
+  for (const exchange of toolExchanges) {
+    contents.push({
+      role: "model",
+      parts: [{ functionCall: exchange.call, ...(exchange.call.thoughtSignature ? { thoughtSignature: exchange.call.thoughtSignature } : {}) }],
+    });
+    contents.push({ role: "user", parts: [{ functionResponse: exchange.result }] });
+  }
+  if (functionCall && toolResult) {
     contents.push({
       role: "model",
       parts: [{ functionCall, ...(functionCall.thoughtSignature ? { thoughtSignature: functionCall.thoughtSignature } : {}) }],
     });
-  }
-  if (toolResult) {
     contents.push({ role: "user", parts: [{ functionResponse: toolResult }] });
   }
 
@@ -64,7 +70,7 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
 }
 
 export class GeminiProvider implements AIProvider {
-  async generateText({ messages, tools, functionCall, toolResult }: AITextGenerationRequest): Promise<AITextGenerationResponse> {
+  async generateText({ messages, tools, toolExchanges, functionCall, toolResult }: AITextGenerationRequest): Promise<AITextGenerationResponse> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new AIProviderError("MISSING_API_KEY", "Gemini is not configured.");
@@ -79,7 +85,7 @@ export class GeminiProvider implements AIProvider {
       const ai = new GoogleGenAI({ apiKey });
       const response = await withTimeout(ai.models.generateContent({
         model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
-        contents: toGeminiContents(messages, functionCall, toolResult) as never,
+        contents: toGeminiContents(messages, toolExchanges, functionCall, toolResult) as never,
         config: {
           ...(systemInstruction ? { systemInstruction } : {}),
           ...(tools?.length ? { tools: [{ functionDeclarations: tools.map((tool) => ({ name: tool.name, description: tool.description, parametersJsonSchema: tool.parameters })) }] } : {}),
