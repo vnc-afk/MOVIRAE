@@ -11,13 +11,27 @@ export interface AIFunctionTool {
   parameters?: Record<string, unknown>;
 }
 
+export interface AIFunctionCall {
+  name: string;
+  args: Record<string, unknown>;
+  thoughtSignature?: string;
+}
+
+export interface AIToolResult {
+  name: string;
+  response: Record<string, unknown>;
+}
+
 export interface AITextGenerationRequest {
   messages: AIMessage[];
   tools?: AIFunctionTool[];
+  functionCall?: AIFunctionCall;
+  toolResult?: AIToolResult;
 }
 
 export interface AITextGenerationResponse {
   text: string;
+  functionCall?: AIFunctionCall;
 }
 
 export interface AIProvider {

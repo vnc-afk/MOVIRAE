@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import {
   AIProviderError,
   type AIMessage,
+  type AIFunctionCall,
   type AIProvider,
   type AITextGenerationRequest,
   type AITextGenerationResponse,
@@ -11,13 +12,25 @@ import {
 const DEFAULT_MODEL = "gemini-flash-lite-latest";
 const REQUEST_TIMEOUT_MS = 30_000;
 
-function toGeminiContents(messages: AIMessage[]) {
-  return messages
+function toGeminiContents(messages: AIMessage[], functionCall?: AIFunctionCall, toolResult?: { name: string; response: Record<string, unknown> }) {
+  const contents: Array<{ role: "user" | "model"; parts: Array<Record<string, unknown>> }> = messages
     .filter((message) => message.role !== "system")
     .map((message) => ({
       role: message.role === "assistant" ? "model" : "user",
       parts: [{ text: message.content }],
     }));
+
+  if (functionCall) {
+    contents.push({
+      role: "model",
+      parts: [{ functionCall, ...(functionCall.thoughtSignature ? { thoughtSignature: functionCall.thoughtSignature } : {}) }],
+    });
+  }
+  if (toolResult) {
+    contents.push({ role: "user", parts: [{ functionResponse: toolResult }] });
+  }
+
+  return contents;
 }
 
 function getProviderError(error: unknown): AIProviderError {
@@ -51,7 +64,7 @@ function withTimeout<T>(promise: Promise<T>): Promise<T> {
 }
 
 export class GeminiProvider implements AIProvider {
-  async generateText({ messages }: AITextGenerationRequest): Promise<AITextGenerationResponse> {
+  async generateText({ messages, tools, functionCall, toolResult }: AITextGenerationRequest): Promise<AITextGenerationResponse> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new AIProviderError("MISSING_API_KEY", "Gemini is not configured.");
@@ -66,9 +79,25 @@ export class GeminiProvider implements AIProvider {
       const ai = new GoogleGenAI({ apiKey });
       const response = await withTimeout(ai.models.generateContent({
         model: process.env.GEMINI_MODEL || DEFAULT_MODEL,
-        contents: toGeminiContents(messages),
-        config: systemInstruction ? { systemInstruction } : undefined,
+        contents: toGeminiContents(messages, functionCall, toolResult) as never,
+        config: {
+          ...(systemInstruction ? { systemInstruction } : {}),
+          ...(tools?.length ? { tools: [{ functionDeclarations: tools.map((tool) => ({ name: tool.name, description: tool.description, parametersJsonSchema: tool.parameters })) }] } : {}),
+        },
       }));
+
+      const functionPart = response.candidates?.[0]?.content?.parts?.find((part) => part.functionCall);
+      const responseFunctionCall = functionPart?.functionCall;
+      if (responseFunctionCall?.name) {
+        return {
+          text: "",
+          functionCall: {
+            name: responseFunctionCall.name,
+            args: responseFunctionCall.args ?? {},
+            thoughtSignature: functionPart?.thoughtSignature,
+          },
+        };
+      }
 
       const text = response.text?.trim();
       if (!text) {
