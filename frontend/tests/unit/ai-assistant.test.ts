@@ -17,6 +17,7 @@ const movie = (id: string): Movie => ({
   reviews: [],
   tags: [],
   streamingOn: [],
+  moods: [],
   runtime: 100,
   language: "English",
   country: "US",
