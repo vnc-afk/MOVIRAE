@@ -14,6 +14,25 @@ export function getRedisUrl() {
   return redisUrl;
 }
 
+export function describeRedisError(error: unknown) {
+  if (!(error instanceof Error)) return String(error);
+
+  const redisError = error as Error & {
+    code?: string;
+    address?: string;
+    port?: number;
+    syscall?: string;
+  };
+  const details = [
+    redisError.code && `code=${redisError.code}`,
+    redisError.syscall && `syscall=${redisError.syscall}`,
+    redisError.address && `address=${redisError.address}`,
+    redisError.port && `port=${redisError.port}`,
+  ].filter(Boolean);
+
+  return details.length > 0 ? `${redisError.message} (${details.join(", ")})` : redisError.message;
+}
+
 export function createBullMqConnection(role: BullMqConnectionRole = "queue") {
   const connection = new IORedis(getRedisUrl(), {
     maxRetriesPerRequest: null,

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Redis from "ioredis";
 import type { Message } from "@/lib/types";
+import { describeRedisError } from "@/lib/queues/redis";
 
 export type MessageSocketEvent = {
   type: "connected" | "message-created" | "message-read" | "typing-start" | "typing-stop";
@@ -62,7 +63,7 @@ export class MessageWebSocketHub {
     const reportRedisError = (error: Error) => {
       if (!redisWarningShown) {
         redisWarningShown = true;
-        console.warn("Message WebSocket Redis unavailable; retrying in the background:", error.message);
+        console.warn("Message WebSocket Redis unavailable; retrying in the background:", describeRedisError(error));
       }
     };
 
