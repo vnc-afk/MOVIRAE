@@ -2,25 +2,29 @@
 
 > **A full-stack social platform for cinephiles** — featuring real-time collaboration, optimistic UI patterns, and seamless third-party API integration.
 
-🌐 **[Live Demo: movirae.vercel.app](https://movirae.vercel.app/)** | Try it now!
+🌐 **[Live Demo: movirae.onrender.com](https://movirae.onrender.com/)** | Try it now!
 
 ## 🎯 Project Overview
 
-MOVIRAE is a **production-ready social network** built with modern full-stack technologies. It demonstrates:
+MOVIRAE is a **production-ready social network and movie intelligence platform** built with modern full-stack technologies. It demonstrates:
 
 - 🏗️ **Scalable Architecture** - Optimistic operations pattern for instant UI feedback with server synchronization
+- 🤖 **AI Movie Assistant** - Gemini-powered movie discovery, recommendations, and personalized watch guidance using the user's own watch history, ratings, and watchlist
+- 🎵 **Soundtrack Discovery** - Search and browse movie soundtracks with MusicBrainz + YouTube-backed track previews and favorites
 - 🔄 **Real-time Features** - Server-Sent Events (SSE) for live notifications and activity feeds
 - 🔐 **Enterprise Authentication** - Multi-provider auth (Email/Password + Google OAuth 2.0)
-- 📡 **Third-party Integrations** - TMDB for movie data, WatchMode for streaming availability
+- 📡 **Third-party Integrations** - TMDB for movie data, WatchMode for streaming availability, MusicBrainz/YouTube for soundtrack metadata, and Gemini AI for conversational recommendations
 - 🎨 **Modern Frontend** - TypeScript + React 18, fully accessible UI components
 - 💾 **Data Persistence** - Prisma ORM with relational database design
-- 🚀 **Developer Experience** - Type-safe API routes, automated migrations, linting
+- 🚀 **Developer Experience** - Type-safe API routes, automated migrations, linting, AI tool orchestration, and background workers
 
 ## 🌟 Key Highlights
 
 | Feature | Technology | Impact |
 |---------|-----------|--------|
 | **Instant UI Feedback** | Optimistic Operations Pattern | Zero perceived latency for user actions |
+| **AI Movie Assistant** | Gemini + TMDB + user data | Personalized movie discovery and watch guidance |
+| **Soundtrack Catalog** | MusicBrainz + YouTube + Prisma | Browse movie scores and music previews by film |
 | **Real-time Sync** | Server-Sent Events (SSE) | Live notifications without polling |
 | **Social Discovery** | TMDB + WatchMode APIs | Access to 500K+ movies with streaming info |
 | **Type Safety** | TypeScript + Prisma | Catch errors at compile time, not production |
@@ -44,12 +48,17 @@ MOVIRAE is a **production-ready social network** built with modern full-stack te
 ├─────────────────────────────────────────────────────────────┤
 │  API Routes (Next.js)                                       │
 │  ├─ /api/auth/[...nextauth]   → NextAuth.js              │
+│  ├─ /api/ai/chat              → Gemini-powered assistant │
 │  ├─ /api/movies/*             → Prisma Queries           │
 │  ├─ /api/reviews/*            → Business Logic + SSE     │
-│  └─ /api/activity             → Real-time Stream (SSE)   │
+│  ├─ /api/soundtracks/*        → Movie music catalog     │
+│  ├─ /api/activity             → Real-time Stream (SSE)   │
+│  └─ /api/notifications        → User event updates       │
 ├─────────────────────────────────────────────────────────────┤
-│  External Services                                          │
+│  AI + External Services                                      │
+│  ├─ Gemini AI Agent           → Personalized recs         │
 │  ├─ TMDB API (Movie Data)    → via /lib/tmdb.ts          │
+│  ├─ MusicBrainz + YouTube     → soundtrack lookup + play │
 │  ├─ WatchMode API (Streaming) → via /lib/watchmode.ts    │
 │  └─ Google OAuth (Auth)      → via NextAuth.js           │
 ├─────────────────────────────────────────────────────────────┤
@@ -107,7 +116,9 @@ User Action (e.g., Like Review)
 - **Social Interactions** - Follow friends, like reviews, and engage with the community
 - **Watch History & Watchlist** - Track what you've watched and plan what to watch next
 
-### Community Features
+### AI + Community Features
+- **AI Movie Assistant** - Chat with a Gemini-backed assistant to find movies by mood, genre, similar favorites, or your own history
+- **Soundtracks Library** - Explore soundtrack albums, movie score metadata, track previews, and favorites for film music discovery
 - **Group Creation & Management** - Create groups with friends to discuss movies
 - **Shared Lists** - Collaborate on curated movie lists with other users
 - **Real-time Messaging** - Chat with friends about movies in real-time
@@ -116,8 +127,9 @@ User Action (e.g., Like Review)
 
 ### Advanced Features
 - **Movie Comparisons** - Compare movie statistics and details side-by-side
-- **Recommendations** - Get personalized movie recommendations based on your taste
+- **Recommendations Engine** - Personalized movie recommendations based on your taste, ratings, and watch history
 - **Streaming Information** - Find where movies are available to stream
+- **Soundtrack Discovery** - Match movie music to film metadata with MusicBrainz and YouTube-backed playback
 - **Year Wrapped** - Annual summary of your movie watching stats
 - **Optimistic Operations** - Instant UI feedback with server synchronization
 
@@ -136,7 +148,9 @@ User Action (e.g., Like Review)
 ### Backend
 - **Database**: Prisma ORM + PostgreSQL
 - **API**: Next.js API Routes
+- **AI Layer**: Gemini-powered assistant with tool-based movie search and user-data access
 - **Movie Data**: TMDB API integration
+- **Soundtrack Data**: MusicBrainz + YouTube lookups with queued refresh workers and persisted favorites
 - **Authentication**: NextAuth.js with Prisma adapter
 
 ## 🚀 Getting Started
@@ -174,18 +188,24 @@ User Action (e.g., Like Review)
 
    # TMDB API
    TMDB_API_KEY=your_tmdb_api_key
-   
+
    # WatchMode API (optional)
    WATCHMODE_API_KEY=your_watchmode_api_key
-   
+
+   # Gemini AI (required for the movie assistant)
+   GEMINI_API_KEY=your_gemini_api_key
+   GEMINI_MODEL=gemini-flash-lite-latest
+
    # NextAuth.js
    NEXTAUTH_SECRET=your_secret_key
    NEXTAUTH_URL=http://localhost:3000
-   
+
    # Google OAuth (optional)
    GOOGLE_CLIENT_ID=your_google_client_id
    GOOGLE_CLIENT_SECRET=your_google_client_secret
    ```
+
+   The current system includes a Gemini-backed assistant at `/ai-assistant` that can search TMDB, inspect the signed-in user's watch history, ratings, reviews, and watchlist, and provide personalized recommendations without exposing raw database internals.
 
 4. **Set up the database**
    ```bash
@@ -330,6 +350,12 @@ Enables users to sign in using their Google account for seamless authentication.
 - `GET /api/movies` - List movies with filtering
 - `GET /api/movies/[id]` - Get movie details
 - `GET /api/tmdb/[endpoint]` - TMDB proxy endpoints
+
+### Soundtracks
+- `GET /api/soundtracks` - Browse the soundtrack catalog and search by movie or composer
+- `GET /api/soundtracks/[tmdbId]` - Get a movie's soundtrack details and queued refresh status
+- `POST /api/soundtracks/[tmdbId]/favorite` - Save or remove a soundtrack favorite
+- `GET /api/soundtracks/events` - Server-sent updates for soundtrack activity
 
 ### Reviews
 - `GET /api/reviews` - List reviews
