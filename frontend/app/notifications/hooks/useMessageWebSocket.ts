@@ -39,8 +39,9 @@ export function useMessageWebSocket(
     const connect = () => {
       if (disposed) return;
 
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const connectedSocket = new WebSocket(`${protocol}//${window.location.host}/api/messages/ws`);
+      const configuredBaseUrl = process.env.NEXT_PUBLIC_MESSAGE_WEBSOCKET_BASE_URL?.replace(/\/$/, "");
+      const baseUrl = configuredBaseUrl || `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+      const connectedSocket = new WebSocket(`${baseUrl}/api/messages/ws`);
       socket = connectedSocket;
       socketRef.current = connectedSocket;
 
