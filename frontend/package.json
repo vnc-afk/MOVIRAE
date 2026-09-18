@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tsx server.ts --dev",
     "build": "next build",
-    "start": "node --import tsx/esm server.ts",
+    "start": "node -r ./server-runtime.cjs -r tsx/cjs server.ts",
     "worker": "tsx workers/index.ts",
     "lint": "eslint .",
     "test": "vitest run tests/unit",
