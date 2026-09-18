@@ -53,19 +53,23 @@ export class MessageWebSocketHub {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       connectTimeout: 2_500,
-      retryStrategy: () => null,
+      retryStrategy: (attempts: number) => Math.min(attempts * 1_000, 10_000),
     };
     const publisher = new Redis(redisUrl, redisOptions);
     const subscriber = publisher.duplicate();
-    const disableRedis = (error: Error) => {
-      console.warn("Message WebSocket Redis unavailable; using local connections only:", error.message);
-      publisher.disconnect();
-      subscriber.disconnect();
+    let redisWarningShown = false;
+    const reportRedisError = (error: Error) => {
+      if (!redisWarningShown) {
+        redisWarningShown = true;
+        console.warn("Message WebSocket Redis unavailable; retrying in the background:", error.message);
+      }
     };
 
-    publisher.on("error", disableRedis);
-    subscriber.on("error", disableRedis);
-    void subscriber.subscribe(REDIS_CHANNEL).catch(disableRedis);
+    publisher.on("error", reportRedisError);
+    subscriber.on("error", reportRedisError);
+    subscriber.on("ready", () => {
+      void subscriber.subscribe(REDIS_CHANNEL).catch(reportRedisError);
+    });
     subscriber.on("message", (_channel, rawEnvelope) => {
       try {
         const envelope = JSON.parse(rawEnvelope) as RedisEnvelope;
