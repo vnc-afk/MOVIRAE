@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage } from "node:http";
-import next from "next";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { WebSocketServer, type RawData } from "ws";
 
 import { getMessageWebSocketUserId } from "@/lib/features/messages/websocket-auth";
@@ -9,10 +9,12 @@ const dev = process.argv.includes("--dev");
 const hostname = "0.0.0.0";
 const port = Number(process.env.PORT) || 3000;
 
-const app = next({ dev, hostname, port });
-const handle = app.getRequestHandler();
-
 async function startServer() {
+  (globalThis as typeof globalThis & { AsyncLocalStorage?: typeof AsyncLocalStorage }).AsyncLocalStorage ??= AsyncLocalStorage;
+  const { default: next } = await import("next");
+  const app = next({ dev, hostname, port });
+  const handle = app.getRequestHandler();
+
   await app.prepare();
 
   const upgradeHandler = app.getUpgradeHandler();
