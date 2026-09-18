@@ -19,6 +19,7 @@ export function createBullMqConnection(role: BullMqConnectionRole = "queue") {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     connectTimeout: 2_500,
+    family: 4,
     retryStrategy: (attempts) => {
       if (role === "queue") {
         return attempts <= 1 ? 500 : null;

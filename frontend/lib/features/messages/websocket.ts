@@ -53,6 +53,7 @@ export class MessageWebSocketHub {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       connectTimeout: 2_500,
+      family: 4,
       retryStrategy: (attempts: number) => Math.min(attempts * 1_000, 10_000),
     };
     const publisher = new Redis(redisUrl, redisOptions);
