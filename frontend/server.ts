@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { WebSocketServer, type RawData } from "ws";
 
 import { messageWebSocketHub } from "./lib/features/messages/websocket.ts";
+import { getMessageWebSocketUserId } from "./lib/features/messages/websocket-auth.ts";
 
 const dev = process.argv.includes("--dev");
 const hostname = "0.0.0.0";
@@ -11,7 +12,6 @@ const port = Number(process.env.PORT) || 3000;
 async function startServer() {
   (globalThis as typeof globalThis & { AsyncLocalStorage?: typeof AsyncLocalStorage }).AsyncLocalStorage ??= AsyncLocalStorage;
   const { default: next } = await import("next");
-  const { getMessageWebSocketUserId } = await import("./lib/features/messages/websocket-auth.ts");
   const app = next({ dev, hostname, port });
   const handle = app.getRequestHandler();
 
