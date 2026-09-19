@@ -6,13 +6,13 @@
 
 ## 🎯 Project Overview
 
-MOVIRAE is a **production-ready social network and movie intelligence platform** built with modern full-stack technologies. It demonstrates:
+MOVIRAE is a **production-oriented social network and movie intelligence platform** built with modern full-stack technologies. It demonstrates:
 
 - 🏗️ **Scalable Architecture** - Optimistic operations pattern for instant UI feedback with server synchronization
 - 🤖 **AI Movie Assistant** - Gemini-powered movie discovery, recommendations, and personalized watch guidance using the user's own watch history, ratings, and watchlist
 - 🎵 **Soundtrack Discovery** - Search and browse movie soundtracks with MusicBrainz + YouTube-backed track previews and favorites
 - 🔄 **Real-time Features** - Server-Sent Events (SSE) for live notifications and activity feeds
-- 🔐 **Enterprise Authentication** - Multi-provider auth (Email/Password + Google OAuth 2.0)
+- 🔐 **Multi-provider Authentication** - Email/Password + Google OAuth 2.0 with session management
 - 📡 **Third-party Integrations** - TMDB for movie data, WatchMode for streaming availability, MusicBrainz/YouTube for soundtrack metadata, and Gemini AI for conversational recommendations
 - 🎨 **Modern Frontend** - TypeScript + React 18, fully accessible UI components
 - 💾 **Data Persistence** - Prisma ORM with relational database design
@@ -22,51 +22,93 @@ MOVIRAE is a **production-ready social network and movie intelligence platform**
 
 | Feature | Technology | Impact |
 |---------|-----------|--------|
-| **Instant UI Feedback** | Optimistic Operations Pattern | Zero perceived latency for user actions |
+| **Instant UI Feedback** | Optimistic Operations Pattern | Near-instant perceived feedback for user actions |
 | **AI Movie Assistant** | Gemini + TMDB + user data | Personalized movie discovery and watch guidance |
 | **Soundtrack Catalog** | MusicBrainz + YouTube + Prisma | Browse movie scores and music previews by film |
-| **Real-time Sync** | Server-Sent Events (SSE) | Live notifications without polling |
-| **Social Discovery** | TMDB + WatchMode APIs | Access to 500K+ movies with streaming info |
+| **Real-time Sync** | SSE + Redis Pub/Sub | Live event delivery across supported application instances |
+| **Social Discovery** | TMDB + WatchMode APIs | Movie discovery with TMDB + WatchMode streaming information |
 | **Type Safety** | TypeScript + Prisma | Catch errors at compile time, not production |
 | **Performance** | React Query + Next.js caching | Automatic cache invalidation & pagination |
-| **Authentication** | NextAuth.js + OAuth | Industry-standard security patterns |
+| **Authentication** | NextAuth.js + OAuth | Email/password and Google OAuth session flows |
+| **Distributed API Architecture** | Cloudflare Worker + Vercel Next.js + Render Next.js | Programmable API routing across deployments |
+| **Cross-Instance Messaging** | Upstash Redis Pub/Sub | Communication between API deployments |
+| **Background Processing** | BullMQ + Render Worker | Asynchronous notifications and soundtrack processing |
+| **Shared Persistent Data** | Neon PostgreSQL | Shared source of truth for both API deployments |
 
 ## 🏗️ System Architecture
 
 ### Application Flow
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Next.js Application                      │
-├─────────────────────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │  React Components + TypeScript                          │ │
-│ │  ├─ UI State (Tailwind CSS + shadcn/ui)               │ │
-│ │  ├─ Server State (React Query)                        │ │
-│ │  └─ Optimistic State (Custom Context Provider)        │ │
-│ └─────────────────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────────────────┤
-│  API Routes (Next.js)                                       │
-│  ├─ /api/auth/[...nextauth]   → NextAuth.js              │
-│  ├─ /api/ai/chat              → Gemini-powered assistant │
-│  ├─ /api/movies/*             → Prisma Queries           │
-│  ├─ /api/reviews/*            → Business Logic + SSE     │
-│  ├─ /api/soundtracks/*        → Movie music catalog     │
-│  ├─ /api/activity             → Real-time Stream (SSE)   │
-│  └─ /api/notifications        → User event updates       │
-├─────────────────────────────────────────────────────────────┤
-│  AI + External Services                                      │
-│  ├─ Gemini AI Agent           → Personalized recs         │
-│  ├─ TMDB API (Movie Data)    → via /lib/tmdb.ts          │
-│  ├─ MusicBrainz + YouTube     → soundtrack lookup + play │
-│  ├─ WatchMode API (Streaming) → via /lib/watchmode.ts    │
-│  └─ Google OAuth (Auth)      → via NextAuth.js           │
-├─────────────────────────────────────────────────────────────┤
-│  Data Layer                                                 │
-│  ├─ Prisma ORM                                            │
-│  └─ PostgreSQL Database                                   │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────┐
+│          Users           │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│ Cloudflare Worker       │
+│ API routing layer       │
+└────────────┬─────────────┘
+             │
+       ┌─────┴─────┐
+       ▼           ▼
+┌────────────────┐ ┌────────────────┐
+│ Vercel Next.js │ │ Render Next.js │
+│ Frontend +     │ │ Frontend +     │
+│ /api/*         │ │ /api/*         │
+└───────┬────────┘ └───────┬────────┘
+      │              │
+      └──────┬───────┘
+             ▼
+             ┌──────────────┐
+             │ Upstash Redis│
+             └──────┬───────┘
+                ╱ ╲
+               ╱   ╲
+              ▼     ▼
+         Redis Pub/Sub  BullMQ Queue
+               │              │
+               │              ▼
+               │       ┌──────────────┐
+               │       │ Render Worker│
+               │       └──────────────┘
+               ▼
+            Cross-instance events
+
+Vercel Next.js ──┐
+                 ├──→ Neon PostgreSQL
+Render Next.js ───┘
+
+External services: TMDB · WatchMode · Gemini · MusicBrainz · YouTube · Google OAuth
 ```
+
+The Cloudflare Worker acts as the API routing layer, forwarding requests to either the
+Vercel or Render Next.js deployment according to the configured routing logic. Each
+deployment includes the Movirae frontend and `/api/*` routes; the diagram labels the
+API capability because that is the traffic being routed. Vercel deploys the Next.js
+application and its `app/api/**` routes, while Render provides the second Next.js
+runtime and separately hosts the background worker services.
+
+The dual-origin setup provides an additional API deployment and demonstrates multi-origin
+routing, shared state, cross-instance messaging, and failure-aware infrastructure design.
+
+Both API deployments connect to shared Neon PostgreSQL for persistent application data.
+Upstash Redis provides the shared Redis infrastructure used for transient Pub/Sub event
+distribution and BullMQ queues. Redis Pub/Sub is not persistent storage and does not
+replace PostgreSQL.
+
+### Distributed Real-Time Flow
+
+```text
+Client → API → Redis Pub/Sub → Other API deployment
+   → SSE or WebSocket delivery → Connected clients
+```
+
+SSE remains the primary documented stream for notifications, activity, reviews, groups,
+and shared-list updates. Redis Pub/Sub is implemented for cross-instance notification
+events and the message WebSocket hub, allowing events from one API deployment to reach
+connections on the other. Some feature-specific event emitters remain process-local.
+BullMQ is separate: it handles background jobs processed by Render workers.
 
 ### Optimistic Operations Pattern
 
@@ -84,7 +126,7 @@ User Action (e.g., Like Review)
 ```
 
 **Benefits:**
-- Zero perceived latency for user interactions
+- Near-instant perceived feedback for user interactions
 - Automatic rollback on failures
 - Seamless server synchronization via SSE
 - Excellent user experience
@@ -153,6 +195,15 @@ User Action (e.g., Like Review)
 - **Soundtrack Data**: MusicBrainz + YouTube lookups with queued refresh workers and persisted favorites
 - **Authentication**: NextAuth.js with Prisma adapter
 
+### Infrastructure
+- **Traffic Layer**: Cloudflare Worker API routing layer in front of both API origins
+- **Deployment #1**: Vercel Next.js frontend and `/api/*` functions
+- **Deployment #2**: Render Next.js frontend/runtime and `/api/*` service
+- **Persistent Database**: Neon PostgreSQL, accessed through Prisma
+- **Messaging and Caching**: Upstash Redis integrations
+- **Distributed Events**: Redis Pub/Sub for communication between the API deployments
+- **Background Jobs**: BullMQ queues with separate Render worker processes
+
 ## 🚀 Getting Started
 
 ### 🌐 Try the Live Demo
@@ -183,8 +234,11 @@ User Action (e.g., Like Review)
 3. **Set up environment variables**
    Create a `.env.local` file in the `frontend` directory:
    ```env
-   # Database
+   # Persistent database (Neon PostgreSQL in hosted environments)
    DATABASE_URL=postgresql://user:password@localhost:5432/movirae
+
+   # Upstash Redis TCP connection for cache, Pub/Sub, and BullMQ
+   REDIS_URL=rediss://default:password@host:6379
 
    # TMDB API
    TMDB_API_KEY=your_tmdb_api_key
@@ -261,9 +315,30 @@ The app uses a **centralized optimistic operations system** for instant UI feedb
 
 ### Real-time Updates via SSE
 - Polling-free architecture for notifications and activity feeds
-- Server-Sent Events for live updates across all connected clients
+- Server-Sent Events for live updates to connected clients
 - Automatic reconnection handling with exponential backoff
 - Integration: `hooks/use-event-source.ts`
+
+### Distributed API Architecture
+- The Cloudflare Worker acts as the API routing layer between the Vercel and Render Next.js deployments
+- Both deployments include the Movirae frontend and `/api/*` routes
+- Both API deployments share persistent state through Neon PostgreSQL and use the shared Redis infrastructure
+
+### Redis Pub/Sub
+- Upstash Redis Pub/Sub propagates transient events between the Vercel and Render Next.js deployments
+- This allows supported notification and message events generated by one API deployment to reach the other deployment
+- Pub/Sub is cross-instance event/message distribution, not persistent storage
+- SSE remains the client delivery mechanism for existing event streams; the message path also has a Redis-backed WebSocket hub
+
+### Background Job Processing
+- BullMQ queues asynchronous work separately from Redis Pub/Sub event delivery
+- The Render worker processes consume notification and soundtrack jobs using the shared Redis TCP connection
+- Workers persist durable results through Prisma/PostgreSQL
+
+### Shared Persistent State
+- Neon PostgreSQL is the persistent relational database and application source of truth for both API deployments
+- Vercel API, Render API, and workers access the shared database through Prisma
+- Redis may provide cache and transient messaging, but it does not replace PostgreSQL
 
 ### Type Safety Throughout
 - End-to-end TypeScript for frontend and API routes
@@ -326,12 +401,11 @@ Enables users to sign in using their Google account for seamless authentication.
 **Get Credentials:** [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
 
 **Setup Steps:**
-1. Go to [Google Cloud Console](https://console.cloud.google.com)
-2. Create a new project or select existing one
-3. Enable Google+ API
-4. Create OAuth 2.0 credentials (Web application)
-5. Add authorized redirect URIs: `http://localhost:3000/api/auth/callback/google`
-6. Copy Client ID and Client Secret to `.env.local`
+1. Create or select a Google Cloud project
+2. Configure the OAuth consent screen
+3. Create OAuth 2.0 credentials for a Web application
+4. Add the application's authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
+5. Copy the Client ID and Client Secret into the environment variables
 
 **Authentication Implementation** (`lib/features/auth/config.ts`):
 - Credentials Provider (email/password)
@@ -425,14 +499,45 @@ Key entities:
 ✅ Password hashing (bcrypt)  
 ✅ CORS and CSRF protection  
 ✅ Environment variable management  
-✅ OAuth 2.0 compliance  
+✅ Google OAuth 2.0 authentication
 
 ## 🚢 Deployment
 
-### Production-Ready Features
+The current deployment architecture separates traffic routing, API origins, persistent
+storage, messaging, and background processing:
+
+```text
+Cloudflare Worker
+   (API routing layer)
+      │
+   ┌────┴────┐
+   ▼         ▼
+Vercel      Render
+Next.js     Next.js
+Frontend +  Frontend/runtime +
+/api/*      /api/*
+   │         │
+   └────┬────┘
+      ▼
+   Neon PostgreSQL
+
+Vercel /api/* ↔ Upstash Redis ↔ Render /api/*
+                    ├─ Redis Pub/Sub → cross-instance events
+                    └─ BullMQ Queue → Render Worker
+```
+
+The Cloudflare Worker is the traffic entry point for API requests and can forward them
+between the Vercel and Render Next.js deployments according to its routing logic. Both deployments include the frontend and
+`/api/*` routes, use shared Neon PostgreSQL as the persistent source of truth, and use
+Upstash Redis for Pub/Sub and BullMQ infrastructure. Render hosts the worker services
+responsible for processing queued background jobs.
+The repository confirms cross-instance Pub/Sub for notification events and the message
+WebSocket hub; some feature-specific event emitters remain process-local.
+
+### Production-Oriented Features
 
 ✅ **Environment-based Configuration** - Separate configs for dev/staging/production  
-✅ **Database Migrations** - Automatic schema updates with Prisma  
+✅ **Database Migrations** - Versioned schema migrations managed with Prisma
 ✅ **Type Safety** - Compile-time checking prevents runtime errors  
 ✅ **Error Handling** - Comprehensive error boundaries and fallbacks  
 ✅ **Performance Optimizing** - Image optimization, code splitting, caching  
