@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
+  getCurrentUser,
   requireAuth,
   buildLogContext,
 } from "@/app/groups/lib/api-utils";
@@ -27,8 +28,8 @@ export async function GET(
   const logCtx = buildLogContext(_request);
 
   try {
-    const currentUser = await requireAuth(_request);
-    logCtx.userId = currentUser.id;
+    const currentUser = await getCurrentUser();
+    logCtx.userId = currentUser?.id;
 
     const group = await fetchGroupDetail(groupId, currentUser);
     if (!group) {

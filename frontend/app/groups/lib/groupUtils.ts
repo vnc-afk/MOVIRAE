@@ -1,6 +1,5 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import type { GroupRecord, Discussion, GroupEventRecord } from "./types";
-import { isGroupAdmin } from "@/services/groups/admin.server";
 
 const inFlightJsonRequests = new Map<string, Promise<FetchResult<unknown>>>();
 
@@ -203,7 +202,3 @@ export function formatDiscussionDate(date: string): string {
 export function makeOptimisticTempId(prefix = "temp"): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
-
-// Re-export from utils.ts for backward compatibility
-export { isGroupAdmin, isGroupAdminByStatus, checkAndPromoteGroupAdmin } from "@/services/groups/admin.server";
-
