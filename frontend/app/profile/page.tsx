@@ -12,6 +12,7 @@ import { StarRating } from "@/components/StarRating";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Movie, UserProfile } from "@/lib/types";
 import { queryKeys } from "@/lib/queryKeys";
+import { useAuthModal } from "@/components/AuthModal";
 
 interface ReviewSummary {
   movieId: string;
@@ -60,6 +61,7 @@ async function getMovieDetailsBatch(movieIds: string[]): Promise<Movie[]> {
 
 export default function ProfilePage() {
   const { data: session } = useSession();
+  const { requireAuth } = useAuthModal();
   const queryClient = useQueryClient();
   const profileQuery = useQuery<ProfileSnapshot>({
     queryKey: queryKeys.profile.current(),
@@ -174,7 +176,7 @@ export default function ProfilePage() {
               </div>
             </div>
             <div className="md:ml-auto flex flex-col gap-2">
-              <button className="rounded-full bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">Edit Profile</button>
+              <button onClick={() => requireAuth()} className="rounded-full bg-primary px-6 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition-opacity">Edit Profile</button>
               <div className="flex gap-2 justify-center">
                 <Link href="/stats" className="flex items-center gap-1 text-xs text-primary-foreground/60 hover:text-primary-foreground transition-colors"><BarChart3 className="h-3 w-3" /> Stats</Link>
                 <Link href="/compare" className="flex items-center gap-1 text-xs text-primary-foreground/60 hover:text-primary-foreground transition-colors"><ArrowLeftRight className="h-3 w-3" /> Compare</Link>
