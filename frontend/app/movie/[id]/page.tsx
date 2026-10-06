@@ -14,6 +14,7 @@ import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId } from "@/l
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import { TrailerModal } from "@/components/TrailerModal";
 import { toast } from "sonner";
+import { useAuthModal } from "@/components/AuthModal";
 
 import {
   useMovieDetail,
@@ -49,6 +50,7 @@ type MovieDetailPageProps = {
 export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const resolvedParams = use(params);
   const { data: session } = useSession();
+  const { requireAuth } = useAuthModal();
   const queryClient = useQueryClient();
   const { addInFlightOp, removeInFlightOp, isInFlight } = useOptimisticOps();
 
@@ -61,6 +63,14 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [trailerOpen, setTrailerOpen] = useState(false);
+
+  const guardedAction = (action: () => void) => () => {
+    if (!session?.user?.email) {
+      requireAuth(action);
+      return;
+    }
+    action();
+  };
 
   const trailerEnabledByQuery = searchParams.get("trailer") === "1";
 
@@ -350,11 +360,11 @@ export default function MovieDetailPage({ params }: MovieDetailPageProps) {
               loading={movieActions.loading}
               isAuthenticated={Boolean(session?.user?.email)}
               hasCurrentReview={Boolean(reviewsManager.currentUserReview)}
-              onToggleWatched={movieActions.toggleWatched}
-              onToggleWatchlist={movieActions.toggleWatchlist}
-              onToggleLiked={movieActions.toggleLiked}
+              onToggleWatched={guardedAction(movieActions.toggleWatched)}
+              onToggleWatchlist={guardedAction(movieActions.toggleWatchlist)}
+              onToggleLiked={guardedAction(movieActions.toggleLiked)}
               onPlayTrailer={() => setTrailerOpen(true)}
-              onReview={() => reviewDialog.open(reviewsManager.currentUserReview)}
+              onReview={guardedAction(() => reviewDialog.open(reviewsManager.currentUserReview))}
             />
 
             <StreamingSection

@@ -46,7 +46,7 @@ export function MovieActions({
         variant="secondary"
         className={`gap-2 ${isWatched ? "bg-primary text-primary-foreground" : ""}`}
         onClick={onToggleWatched}
-        disabled={!isAuthenticated || loading.watched || initializing}
+        disabled={loading.watched || initializing}
       >
         <Eye className="h-4 w-4" />
         {loading.watched || initializing ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatched ? "Watched" : "Mark Watched"}
@@ -56,7 +56,7 @@ export function MovieActions({
         variant="secondary"
         className={`gap-2 ${isWatchlist ? "bg-primary text-primary-foreground" : ""}`}
         onClick={onToggleWatchlist}
-        disabled={!isAuthenticated || loading.watchlist || initializing}
+        disabled={loading.watchlist || initializing}
       >
         <ListPlus className="h-4 w-4" />
         {loading.watchlist || initializing ? <Loader2 className="h-4 w-4 animate-spin" /> : isWatchlist ? "In Watchlist" : "Watchlist"}
@@ -66,7 +66,7 @@ export function MovieActions({
         variant="secondary"
         className={`gap-2 ${isLiked ? "bg-primary text-primary-foreground" : ""}`}
         onClick={onToggleLiked}
-        disabled={!isAuthenticated || loading.liked || initializing}
+        disabled={loading.liked || initializing}
       >
         <Heart className="h-4 w-4" />
         {loading.liked || initializing ? <Loader2 className="h-4 w-4 animate-spin" /> : isLiked ? "Liked" : "Like"}
@@ -76,7 +76,7 @@ export function MovieActions({
         variant="secondary"
         className="gap-2"
         onClick={onReview}
-        disabled={!isAuthenticated || (!isWatched && !hasCurrentReview) || initializing}
+        disabled={(isAuthenticated && !isWatched && !hasCurrentReview) || initializing}
       >
         <Star className="h-4 w-4" /> {hasCurrentReview ? "Edit Review" : "Write Review"}
       </Button>
