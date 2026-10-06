@@ -9,7 +9,7 @@ import { Navbar } from "@/components/Navbar";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Skeleton } from "@/components/ui/skeleton";
+import { AuthModalProvider } from "@/components/AuthModal";
 
 type ProvidersProps = {
   children: React.ReactNode;
@@ -42,11 +42,13 @@ export function Providers({ children }: ProvidersProps) {
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         <OptimisticProvider>
-          <TooltipProvider>
+          <AuthModalProvider>
+            <TooltipProvider>
             <Toaster />
             <Sonner />
             <AuthGuard>{children}</AuthGuard>
-          </TooltipProvider>
+            </TooltipProvider>
+          </AuthModalProvider>
         </OptimisticProvider>
       </QueryClientProvider>
     </SessionProvider>
@@ -65,7 +67,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!pathname) return;
 
     const currentSearch = window.location.search;
-    const callbackUrl = pathname + currentSearch;
 
     if (isLoginRoute && status === "authenticated") {
       const loginSearchParams = new URLSearchParams(currentSearch);
@@ -74,11 +75,6 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     }
 
     if (isLoginRoute) return;
-
-    if (status === "unauthenticated") {
-      console.debug("AuthGuard redirecting unauthenticated ->", callbackUrl);
-      router.replace(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
-    }
   }, [isLoginRoute, status, pathname, router]);
 
   if (isLoginRoute) {
@@ -86,23 +82,10 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  const showAuthSkeleton = status === "loading" || status === "unauthenticated";
-
   return (
     <>
       <Navbar />
-      {showAuthSkeleton ? (
-        <div className="container py-6 space-y-4">
-          <Skeleton className="h-10 w-56 rounded-full" />
-          <Skeleton className="h-56 w-full rounded-2xl" />
-          <div className="grid gap-4 md:grid-cols-3">
-            <Skeleton className="h-36 w-full rounded-2xl" />
-            <Skeleton className="h-36 w-full rounded-2xl" />
-            <Skeleton className="h-36 w-full rounded-2xl" />
-          </div>
-        </div>
-      ) : null}
-      {!showAuthSkeleton ? children : null}
+      {children}
     </>
   );
 }
