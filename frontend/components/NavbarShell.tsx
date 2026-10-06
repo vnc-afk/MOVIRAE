@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { usePathname, useRouter } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
 import { Home, User, Bell, Calendar, Music, Sparkles, Users, BarChart3, ArrowLeftRight, FileText, Gift, ListPlus, LogOut, LayoutGrid, ChevronDown, Menu, Compass, Film, Search, Bot } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import logo from "@/assets/logo.svg";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useAuthModal } from "@/components/AuthModal";
 
 const primaryNav = [
   { label: "Home", path: "/", icon: Home },
@@ -50,6 +51,9 @@ const utilityLinks = [
 
 export function NavbarShell() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const { requireAuth } = useAuthModal();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isActive = (path: string) => path === "/" ? pathname === "/" : pathname.startsWith(path);
 
@@ -77,6 +81,18 @@ export function NavbarShell() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            {!session && (
+              <button
+                type="button"
+                onClick={() => {
+                  const callbackUrl = `${pathname}${window.location.search}`;
+                  router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
+                }}
+                className="hidden rounded-full border border-primary/40 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10 sm:inline-flex"
+              >
+                Sign In
+              </button>
+            )}
             <DropdownMenu modal={false}>
               <DropdownMenuTrigger className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
                 <User className="h-4 w-4" />
@@ -84,19 +100,27 @@ export function NavbarShell() {
               <DropdownMenuContent align="end" className="w-44">
                 <DropdownMenuLabel>Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/profile" className="flex items-center gap-2">
-                    <User className="h-4 w-4" /> Profile
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    void signOut({ callbackUrl: "/login" });
-                  }}
-                  className="flex items-center gap-2 text-destructive focus:text-destructive"
-                >
-                  <LogOut className="h-4 w-4" /> Sign Out
-                </DropdownMenuItem>
+                {session ? (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/profile" className="flex items-center gap-2">
+                        <User className="h-4 w-4" /> Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        void signOut({ callbackUrl: "/" });
+                      }}
+                      className="flex items-center gap-2 text-destructive focus:text-destructive"
+                    >
+                      <LogOut className="h-4 w-4" /> Sign Out
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <DropdownMenuItem onClick={() => requireAuth()} className="flex items-center gap-2">
+                    <LogOut className="h-4 w-4 rotate-180" /> Sign In
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

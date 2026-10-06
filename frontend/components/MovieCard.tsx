@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Eye, Plus, Check, Play } from "lucide-react";
 import { StarRating } from "./StarRating";
 import type { Movie } from "@/lib/types";
+import { useAuthModal } from "@/components/AuthModal";
 
 interface MovieCardProps {
   movie: Movie;
@@ -26,6 +27,7 @@ export const MovieCard = memo(function MovieCard({
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { requireAuth } = useAuthModal();
   const prefetchTokenRef = useRef(`movie-card:${movie.id}`);
   const videoPrefetchTokenRef = useRef(`movie-card-video:${movie.id}`);
   const [loading, setLoading] = useState({ watched: false, watchlist: false });
@@ -71,7 +73,6 @@ export const MovieCard = memo(function MovieCard({
     queryKey: readonly unknown[]
   ) {
     if (!session?.user?.email) {
-      console.warn("Not authenticated");
       return;
     }
 
@@ -106,12 +107,20 @@ export const MovieCard = memo(function MovieCard({
   const handleToggleWatched = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!session?.user?.email) {
+      requireAuth(() => void toggleAction("user-watched-current", isWatched, "watched", watchedQueryKey));
+      return;
+    }
     await toggleAction("user-watched-current", isWatched, "watched", watchedQueryKey);
   };
 
   const handleToggleWatchlist = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!session?.user?.email) {
+      requireAuth(() => void toggleAction("user-watchlist-current", isWatchlist, "watchlist", watchlistQueryKey));
+      return;
+    }
     await toggleAction("user-watchlist-current", isWatchlist, "watchlist", watchlistQueryKey);
   };
 
@@ -183,7 +192,7 @@ export const MovieCard = memo(function MovieCard({
             <div className="mb-3 flex flex-wrap gap-2">
               <button
                 onClick={handleToggleWatched}
-                disabled={!session?.user?.email || loading.watched}
+                disabled={loading.watched}
                 className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed ${
                   isWatched
                     ? "bg-primary text-primary-foreground"
@@ -195,7 +204,7 @@ export const MovieCard = memo(function MovieCard({
               </button>
               <button
                 onClick={handleToggleWatchlist}
-                disabled={!session?.user?.email || loading.watchlist}
+                disabled={loading.watchlist}
                 className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-2 py-1.5 text-xs font-medium transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed ${
                   isWatchlist
                     ? "bg-primary text-primary-foreground"

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { generateOpId, attachOpToBody, attachOpToHeaders, makeTempId, reconcileTempItem } from "@/lib/optimistic";
 import { useOptimisticOps } from "@/hooks/useOptimisticOps";
 import type { Review } from "@/lib/types";
+import { useAuthModal } from "@/components/AuthModal";
 
 interface ReviewCardProps {
   review: Review;
@@ -32,6 +33,7 @@ function formatReviewDate(date: string) {
 
 export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardProps) {
   const { data: session } = useSession();
+  const { requireAuth } = useAuthModal();
   const { isInFlight, addInFlightOp, removeInFlightOp, getInFlightByItemId } = useOptimisticOps();
   
   const [showReplies, setShowReplies] = useState(false);
@@ -87,7 +89,11 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
   }
 
   async function handleLike() {
-    if (!session?.user?.email || likePending) {
+    if (!session?.user?.email) {
+      requireAuth(handleLike);
+      return;
+    }
+    if (likePending) {
       return;
     }
 
@@ -135,7 +141,11 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
   }
 
   async function handleHelpful() {
-    if (!session?.user?.email || helpfulPending) return;
+    if (!session?.user?.email) {
+      requireAuth(handleHelpful);
+      return;
+    }
+    if (helpfulPending) return;
 
     const previousHelpful = helpful;
     const previousCount = helpfulCount;
@@ -165,7 +175,11 @@ export function ReviewCard({ review, onEdit, onDelete, onRefresh }: ReviewCardPr
   async function handleReplySubmit() {
     const trimmedReply = replyText.trim();
 
-    if (!session?.user?.email || replyPending || !trimmedReply) {
+    if (!session?.user?.email) {
+      requireAuth(handleReplySubmit);
+      return;
+    }
+    if (replyPending || !trimmedReply) {
       return;
     }
 

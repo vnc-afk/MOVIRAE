@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuthModal } from "@/components/AuthModal";
+import { useSession } from "next-auth/react";
 
 interface FollowButtonProps {
   userId: string;
@@ -24,6 +26,8 @@ export function FollowButton({
 }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialFollowing);
   const [isPending, setIsPending] = useState(false);
+  const { data: session } = useSession();
+  const { requireAuth } = useAuthModal();
 
   useEffect(() => {
     setIsFollowing(initialFollowing);
@@ -31,6 +35,10 @@ export function FollowButton({
 
   const toggleFollow = async () => {
     if (isPending) return;
+    if (!session?.user?.email) {
+      requireAuth(toggleFollow);
+      return;
+    }
 
     const nextFollowing = !isFollowing;
     const method = nextFollowing ? "POST" : "DELETE";
