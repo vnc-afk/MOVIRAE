@@ -56,32 +56,37 @@ export class MessageWebSocketHub {
       connectTimeout: 10_000,
       retryStrategy: (attempts: number) => Math.min(attempts * 1_000, 10_000),
     };
-    const publisher = new Redis(redisUrl, redisOptions);
-    const subscriber = publisher.duplicate();
-    publisher.on("error", (error) => {
-      console.warn("WebSocket Redis PUBLISHER error:", describeRedisError(error));
-    });
+    try {
+      const publisher = new Redis(redisUrl, redisOptions);
+      const subscriber = publisher.duplicate();
+      publisher.on("error", (error) => {
+        console.warn("WebSocket Redis PUBLISHER error:", describeRedisError(error));
+      });
 
-    subscriber.on("error", (error) => {
-      console.warn("WebSocket Redis SUBSCRIBER error:", describeRedisError(error));
-    });
-    subscriber.on("ready", () => {
-      void subscriber.subscribe(REDIS_CHANNEL).catch((error: Error) => {
+      subscriber.on("error", (error) => {
         console.warn("WebSocket Redis SUBSCRIBER error:", describeRedisError(error));
       });
-    });
-    subscriber.on("message", (_channel, rawEnvelope) => {
-      try {
-        const envelope = JSON.parse(rawEnvelope) as RedisEnvelope;
-        if (envelope.sourceId !== this.sourceId && envelope.event) {
-          this.broadcastLocal(envelope.event);
+      subscriber.on("ready", () => {
+        void subscriber.subscribe(REDIS_CHANNEL).catch((error: Error) => {
+          console.warn("WebSocket Redis SUBSCRIBER error:", describeRedisError(error));
+        });
+      });
+      subscriber.on("message", (_channel, rawEnvelope) => {
+        try {
+          const envelope = JSON.parse(rawEnvelope) as RedisEnvelope;
+          if (envelope.sourceId !== this.sourceId && envelope.event) {
+            this.broadcastLocal(envelope.event);
+          }
+        } catch {
+          // Ignore malformed broker messages.
         }
-      } catch {
-        // Ignore malformed broker messages.
-      }
-    });
+      });
 
-    this.redisPublisher = publisher;
+      this.redisPublisher = publisher;
+    } catch (error) {
+      console.warn("Message WebSocket Redis disabled:", describeRedisError(error));
+      this.redisPublisher = null;
+    }
   }
 
   connect(userId: string, connection: MessageSocketConnection) {
