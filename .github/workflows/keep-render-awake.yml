@@ -1,0 +1,24 @@
+name: Keep Render service awake
+
+on:
+  schedule:
+    # Render free web services sleep after inactivity. GitHub may delay scheduled
+    # workflows, so this is a best-effort keep-alive rather than a guarantee.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping-render:
+    name: Ping Render health endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check Render service
+        run: |
+          curl --fail --silent --show-error --retry 2 --retry-delay 5 \
+            --connect-timeout 10 --max-time 30 \
+            "https://movirae.onrender.com/api/health"
