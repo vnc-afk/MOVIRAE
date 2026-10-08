@@ -1,0 +1,12 @@
+services:
+  frontend:
+    image: vnclander/movirae:latest
+    env_file:
+      - ./frontend/.env.local
+    ports:
+      - "3000:3000"
+    command: npm run dev
+
+volumes:
+  movirae_node_modules:
+  movirae_next:
