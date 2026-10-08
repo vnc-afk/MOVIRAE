@@ -2,7 +2,8 @@
 
 > **A full-stack social platform for cinephiles** — featuring real-time collaboration, optimistic UI patterns, and seamless third-party API integration.
 
-🌐 **[Live Demo: movirae.onrender.com](https://movirae.onrender.com/)** | Try it now!
+🌐 **[Live Demo: movirae.app](https://www.movirae.app)** | Try it now!   
+
 
 ## 🎯 Project Overview
 
