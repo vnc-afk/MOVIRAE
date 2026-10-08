@@ -1,0 +1,204 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs, but never cancel a run on main (it may be mid-deploy)
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  frontend:
+    name: Lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/movirae_test
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/movirae_test
+      REDIS_URL: redis://localhost:6379
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      postgres:
+        image: postgres:16-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: movirae_test
+        options: >-
+          --health-cmd "pg_isready -U ci -d movirae_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Run database tests
+        run: npm run test:db
+
+      - name: Worker smoke test
+        run: |
+          timeout 10s npm run worker || test $? -eq 124
+
+      - name: Build frontend
+        run: npm run build
+
+  npm-audit:
+    name: npm audit (production)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Production only: GHSA-vfj7-8cjw-p6xm (braces) currently affects dev tooling
+      # with no patched release. Remove --omit=dev once a fix is published.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  migrate:
+    name: Migrate production database
+    needs: [frontend, npm-audit]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply production migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma migrate deploy
+
+  deploy-vercel:
+    name: Deploy to Vercel
+    needs: [migrate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      # Run from the repo root: the Vercel project's Root Directory is set to "frontend"
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  deploy-render:
+    name: Deploy to Render
+    needs: [migrate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      # Deploys the exact commit that passed CI
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            "${RENDER_DEPLOY_HOOK_URL}&ref=${{ github.sha }}"
