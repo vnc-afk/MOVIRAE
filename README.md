@@ -213,8 +213,7 @@ User Action (e.g., Like Review)
 ### Installation
 
 #### Prerequisites
-- Node.js 18+ and npm/yarn
-- PostgreSQL database
+- Docker Desktop
 - TMDB API key (get one at [themoviedb.org](https://www.themoviedb.org/))
 
 ### Installation
@@ -229,6 +228,12 @@ User Action (e.g., Like Review)
    ```bash
    cd frontend
    npm install
+   ```
+
+   Or use Docker so Node.js and `node_modules` stay inside the container:
+   ```bash
+   cd ..
+   docker compose build
    ```
 
 3. **Set up environment variables**
@@ -274,6 +279,38 @@ User Action (e.g., Like Review)
 
    Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+### Docker development
+
+From the repository root, copy your environment file to `frontend/.env.local`, then
+build and start the app:
+
+```bash
+docker compose build
+docker compose up
+```
+
+The source directory is mounted into the container, so code changes are picked up
+by the development server. `node_modules` and `.next` use Docker-managed volumes,
+so the host computer does not need Node.js or npm installed.
+
+On another computer, clone the repository, install Docker Desktop, copy
+`frontend/.env.local`, and run `docker compose up --build`. Docker will install
+dependencies while building the image; you do not need to run `npm install`
+yourself. After changing `package.json` or `package-lock.json`, rebuild the image:
+
+```bash
+docker compose build
+docker compose up
+```
+
+To run Prisma migrations inside the container:
+
+```bash
+docker compose run --rm frontend npm run prisma:migrate
+```
+
+Stop the development container with `Ctrl+C`, or run `docker compose down`.
+
 
 ## 💻 Development
 
@@ -295,6 +332,21 @@ npm run lint
 # Prisma commands
 npm run prisma:generate    # Generate Prisma client
 npm run prisma:migrate     # Run database migrations
+
+### Browser smoke tests
+
+The frontend includes a small Playwright smoke suite covering public navigation, the
+login form, and an unauthenticated protected API request. From `frontend/`:
+
+```bash
+npm run test:e2e
+```
+
+By default Playwright starts the local app with `npm run dev` at
+`http://127.0.0.1:3000`. Set `PLAYWRIGHT_BASE_URL` to test an already-running local
+or deployed instance (the configured server is reused outside CI). The suite does
+not attempt sign-in, OAuth, CAPTCHA, or other flows requiring credentials or external
+services. Install a browser once with `npx playwright install chromium` if needed.
 ```
 
 ## 🎯 Core Patterns & Best Practices
