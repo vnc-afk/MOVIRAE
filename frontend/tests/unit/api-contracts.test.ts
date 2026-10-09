@@ -4,8 +4,15 @@ import {
   apiBadRequest,
   apiCreated,
   apiError,
+  apiForbidden,
+  apiInternalError,
   apiNotFound,
+  apiNotImplemented,
+  apiServiceUnavailable,
   apiSuccess,
+  apiUnauthorized,
+  apiValidationError,
+  apiConflict,
 } from "@/app/wrapped/lib/api-response";
 import { getClientIp } from "@/lib/rate-limit";
 
@@ -42,6 +49,32 @@ describe("API response contracts", () => {
       code: "CUSTOM",
       message: "Broken",
     });
+  });
+
+  it("returns JSON content types and preserves falsy payloads", async () => {
+    for (const payload of [null, false, 0, "", []]) {
+      const response = apiSuccess(payload);
+      expect(response.headers.get("content-type")).toContain("application/json");
+      await expect(response.json()).resolves.toEqual({ success: true, data: payload });
+    }
+
+    const error = apiBadRequest("Invalid", { field: "rating" });
+    expect(error.headers.get("content-type")).toContain("application/json");
+    await expect(error.json()).resolves.toEqual({
+      success: false,
+      error: { code: "BAD_REQUEST", message: "Invalid", details: { field: "rating" } },
+    });
+  });
+
+  it("maps every standard API helper to its contract status", () => {
+    expect(apiUnauthorized().status).toBe(401);
+    expect(apiForbidden().status).toBe(403);
+    expect(apiConflict().status).toBe(409);
+    expect(apiValidationError().status).toBe(400);
+    expect(apiInternalError().status).toBe(500);
+    expect(apiNotImplemented().status).toBe(501);
+    expect(apiServiceUnavailable().status).toBe(503);
+    expect(apiError("CUSTOM", "Unavailable", 418).status).toBe(418);
   });
 });
 

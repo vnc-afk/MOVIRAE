@@ -141,12 +141,12 @@ export function normalizeError(error: unknown): DiscoverError {
     return error;
   }
 
-  if (isTimeoutError(error)) {
-    return new TimeoutError("Request timed out");
-  }
-
   if (isAbortError(error)) {
     return new AbortedError();
+  }
+
+  if (isTimeoutError(error)) {
+    return new TimeoutError("Request timed out");
   }
 
   if (error instanceof TypeError && error.message.includes("fetch")) {

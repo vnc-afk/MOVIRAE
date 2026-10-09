@@ -66,4 +66,30 @@ describe("wrapped data utilities", () => {
   it("returns a fallback badge when no achievement is earned", () => {
     expect(computeEarnedBadges(stats())).toEqual(["👀 Explorer"]);
   });
+
+  it("awards badges at exact thresholds without awarding higher tiers early", () => {
+    expect(computeEarnedBadges(stats({ totalWatched: 10 }))).toContain("🎬 Moviegoer");
+    expect(computeEarnedBadges(stats({ totalWatched: 99 }))).toContain("🎬 Moviegoer");
+    expect(computeEarnedBadges(stats({ totalWatched: 100 }))).toContain("🎬 Cinephile");
+    expect(computeEarnedBadges(stats({ totalWatched: 100 }))).not.toContain("🎬 Moviegoer");
+    expect(computeEarnedBadges(stats({ longestStreak: 3 }))).toContain("🔥 Rising Streak");
+    expect(computeEarnedBadges(stats({ longestStreak: 14 }))).toContain("🔥 Streak Master");
+    expect(computeEarnedBadges(stats({ countriesExplored: 5 }))).toContain("🌍 World Explorer");
+  });
+
+  it("uses empty defaults when wrapped stats are unavailable", () => {
+    expect(processWrappedStats(null)).toMatchObject({
+      stats: { totalWatched: 0, totalHours: 0 },
+      derived: {
+        wrappedYear: new Date().getFullYear(),
+        activityStartLabel: null,
+        activityEndLabel: null,
+        peakWeekday: null,
+        maxPlatformCount: 1,
+        maxContextCount: 1,
+        summaryTitle: "You're a Curious Viewer",
+        badges: ["👀 Explorer"],
+      },
+    });
+  });
 });
